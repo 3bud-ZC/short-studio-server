@@ -261,10 +261,12 @@ export const SetupWizard: React.FC = () => {
               <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 620 }}>
                 {t("setup.welcomeBody")}
               </Typography>
-              {/* Arabic production is ElevenLabs. The previous copy told the
-                  customer Piper was the local Arabic path, which has not been
-                  true since v2.2 and would have them set up the wrong provider
-                  on their very first run. */}
+              {/* Arabic production is Local Voice (VoiceTut, or KemeTone on
+                  lighter hardware) by default; ElevenLabs is an explicit,
+                  opt-in premium alternative. An earlier version of this copy
+                  said Arabic required ElevenLabs, which stopped being true
+                  once VoiceTut shipped and would have pointed a new customer
+                  at the wrong setup step on their very first run. */}
               <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 620 }}>
                 {t("setup.welcomeBodyVoice")}
               </Typography>
@@ -530,7 +532,7 @@ Everything checks out
                 Ready to Create Your First Video
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600 }}>
-                Everything is set up. Describe the video you want and ABUD Shorts will produce it.
+                Everything is set up. Describe the video you want and Short Studio will produce it.
               </Typography>
               <Button variant="contained" size="large" onClick={() => navigate("/create")} sx={{ px: 4, py: 1.5 }}>
                 Create your first video

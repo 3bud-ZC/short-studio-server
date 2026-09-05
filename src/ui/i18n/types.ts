@@ -1,7 +1,7 @@
 /**
  * BILINGUAL PRODUCT FOUNDATION - TYPES
  * ------------------------------------
- * ABUD Shorts ships two first-class interface languages. The interface
+ * Short Studio ships two first-class interface languages. The interface
  * language is a *product* setting and is deliberately independent from the
  * language a video is narrated in: an Arabic-speaking operator producing
  * English content is a supported, ordinary case.

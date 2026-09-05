@@ -106,19 +106,30 @@ export class UpdateService {
 
   constructor(options: UpdateServiceOptions) {
     this.dataDir = options.dataDir;
+    // SHORT_STUDIO_UPDATE_MANIFEST_URL is the current variable; ABUD_UPDATE_MANIFEST_URL
+    // is read as a fallback so an installation upgraded from ABUD Shorts Engine 2.4
+    // that never rewrote its .env keeps using the manifest URL it already had.
     this.manifestUrl =
-      options.manifestUrl || process.env.ABUD_UPDATE_MANIFEST_URL || DEFAULT_MANIFEST_URL;
+      options.manifestUrl ||
+      process.env.SHORT_STUDIO_UPDATE_MANIFEST_URL ||
+      process.env.ABUD_UPDATE_MANIFEST_URL ||
+      DEFAULT_MANIFEST_URL;
     this.channel = options.channel || getReleaseChannel();
     this.timeoutMs = options.timeoutMs ?? 15000;
   }
 
   public getInstallationType(): InstallationType {
-    if (process.env.ABUD_INSTALL_TYPE === "docker_linux") return "docker_linux";
-    if (process.env.ABUD_INSTALL_TYPE === "docker_windows") return "docker_windows";
+    const installType = process.env.SHORT_STUDIO_INSTALL_TYPE || process.env.ABUD_INSTALL_TYPE;
+    if (installType === "docker_linux") return "docker_linux";
+    if (installType === "docker_windows") return "docker_windows";
     // The application always runs inside a Linux container, so the host platform
     // is supplied by the installer rather than inferred from process.platform,
     // which would report "linux" on a Windows Docker Desktop host.
-    const hostPlatform = (process.env.ABUD_HOST_PLATFORM || "").toLowerCase();
+    const hostPlatform = (
+      process.env.SHORT_STUDIO_HOST_PLATFORM ||
+      process.env.ABUD_HOST_PLATFORM ||
+      ""
+    ).toLowerCase();
     if (hostPlatform.startsWith("win")) return "docker_windows";
     if (hostPlatform === "linux" || hostPlatform === "darwin") return "docker_linux";
     return os.platform() === "win32" ? "docker_windows" : "unknown";
@@ -297,7 +308,9 @@ export class UpdateService {
     return {
       ...check,
       lastCheckedAt: this.readLastCheckedAt(),
-      automaticCheckEnabled: process.env.ABUD_AUTO_CHECK_UPDATES !== "false",
+      automaticCheckEnabled:
+        (process.env.SHORT_STUDIO_AUTO_CHECK_UPDATES ?? process.env.ABUD_AUTO_CHECK_UPDATES) !==
+        "false",
       automaticInstallEnabled: false,
       updateInProgress: hasIncompleteTransaction(state),
       lastAttempt: state.current || history[history.length - 1] || null,

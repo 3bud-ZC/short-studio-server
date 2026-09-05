@@ -1,10 +1,10 @@
 {
-  "name": "abud-shorts-engine-v2",
-  "version": "2.4.0",
-  "description": "Creates short videos for TikTok, Instagram Reels, and YouTube Shorts using the Model Context Protocol (MCP) and a REST API.",
+  "name": "short-studio-server",
+  "version": "2.5.0",
+  "description": "Short Studio Server: automated short-video production and publishing (Arabic + English), with a REST API and Model Context Protocol (MCP) interface.",
   "main": "index.js",
-  "bugs": "https://github.com/gyoridavid/short-video-maker/issues",
-  "homepage": "https://github.com/gyoridavid/short-video-maker",
+  "bugs": "https://github.com/3bud-ZC/Abud-Shorts-Engine/issues",
+  "homepage": "https://github.com/3bud-ZC/Abud-Shorts-Engine",
   "scripts": {
     "build": "npm run typecheck && rimraf dist && tsc --project tsconfig.build.json && vite build",
     "dev": "vite build --watch | node --watch -r ts-node/register src/index.ts ",

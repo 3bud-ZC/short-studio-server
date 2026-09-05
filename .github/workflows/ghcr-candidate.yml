@@ -1,5 +1,5 @@
 # ==============================================================================
-# ABUD Shorts Engine - GHCR candidate image workflow
+# Short Studio Server - GHCR candidate image workflow
 # ==============================================================================
 # Manual-only candidate gate. It uses the repository GITHUB_TOKEN with package
 # write permission, publishes only sha-<commit> candidate tags, and can later
@@ -176,7 +176,7 @@ jobs:
             --platform linux/amd64 \
             --file v2.Dockerfile \
             --tag "$IMAGE" \
-            --label "org.opencontainers.image.title=ABUD Shorts Engine" \
+            --label "org.opencontainers.image.title=Short Studio Server" \
             --label "org.opencontainers.image.description=Client-installed short-video production system" \
             --label "org.opencontainers.image.version=${{ steps.identity.outputs.version }}" \
             --label "org.opencontainers.image.revision=${{ steps.identity.outputs.sha }}" \

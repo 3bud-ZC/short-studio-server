@@ -1,4 +1,4 @@
-# Updating ABUD Shorts Engine
+# Updating Short Studio
 
 This is the operator guide. There is no Git in it, because updating an
 installation never involves Git, a source checkout or editing a compose file.
@@ -10,7 +10,7 @@ installation never involves Git, a source checkout or editing a compose file.
 Sign in to the server and run one command:
 
 ```bash
-sudo abud-shorts update
+sudo short-studio update
 ```
 
 That command does all of the following, in order, and stops at the first thing
@@ -41,48 +41,48 @@ again.
 ### Other commands
 
 ```bash
-sudo abud-shorts update --check
+sudo short-studio update --check
 ```
 
 Reports whether an update is available and changes nothing.
 
 ```bash
-sudo abud-shorts update --version 2.2.1
+sudo short-studio update --version 2.2.1
 ```
 
 Installs one specific version. The version must be the one published on this
 installation's channel; anything else is refused.
 
 ```bash
-sudo abud-shorts rollback
+sudo short-studio rollback
 ```
 
 Returns to the previous working version.
 
 ```bash
-abud-shorts status
+short-studio status
 ```
 
 Shows health and the installed version.
 
 ```bash
-sudo abud-shorts backup
-sudo abud-shorts diagnostics
-sudo abud-shorts restart
+sudo short-studio backup
+sudo short-studio diagnostics
+sudo short-studio restart
 ```
 
 ---
 
 ## Windows
 
-Use the Start Menu, under **ABUD Shorts**:
+Use the Start Menu, under **Short Studio**:
 
 | Shortcut | What it does |
 | --- | --- |
-| **ABUD Shorts - Update** | The full safe update above, including rollback |
-| **ABUD Shorts - Status** | Health and installed version |
-| **ABUD Shorts - Backup** | Creates a backup now |
-| **ABUD Shorts - Diagnostics** | Writes a support bundle |
+| **Short Studio - Update** | The full safe update above, including rollback |
+| **Short Studio - Status** | Health and installed version |
+| **Short Studio - Backup** | Creates a backup now |
+| **Short Studio - Diagnostics** | Writes a support bundle |
 
 No terminal and no Docker knowledge is needed. Double-click the shortcut and
 read the result.
@@ -106,10 +106,10 @@ one shortcut) to run instead.
 
 If the terminal is closed, the SSH session drops or the machine restarts during
 an update, the transaction record keeps the state it reached. The next
-`sudo abud-shorts update` reports it, and starts a fresh verified update that
+`sudo short-studio update` reports it, and starts a fresh verified update that
 ends either healthy on the new version or rolled back to the old one.
 
-`abud-shorts status` also reports an interrupted update.
+`short-studio status` also reports an interrupted update.
 
 ---
 
@@ -125,7 +125,9 @@ Code rollback alone is never presented as sufficient after an incompatible
 schema change.
 
 Pre-update backups are kept in `shared/backups` on Linux and in
-`%ProgramData%\AbudShorts\shared\backups` on Windows.
+`%ProgramData%\ShortStudio\shared\backups` on Windows (an installation
+upgraded from ABUD Shorts Engine 2.4 keeps using its existing
+`%ProgramData%\AbudShorts\shared\backups` instead).
 
 ---
 

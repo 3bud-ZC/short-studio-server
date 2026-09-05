@@ -1,5 +1,5 @@
 # ==============================================================================
-# ABUD Shorts Engine - release workflow
+# Short Studio Server - release workflow
 # ==============================================================================
 # Publishes the immutable application image to GitHub Container Registry and
 # attaches the client package plus the update manifest to a GitHub Release.
@@ -130,7 +130,7 @@ jobs:
             --platform linux/amd64 \
             --file v2.Dockerfile \
             --tag ${{ steps.identity.outputs.image }}:${{ steps.identity.outputs.version }} \
-            --label "org.opencontainers.image.title=ABUD Shorts Engine" \
+            --label "org.opencontainers.image.title=Short Studio Server" \
             --label "org.opencontainers.image.description=Client-installed short-video production system" \
             --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
             --label "org.opencontainers.image.version=${{ steps.identity.outputs.version }}" \
@@ -169,7 +169,7 @@ jobs:
       - name: Upload the artifacts for inspection
         uses: actions/upload-artifact@v4
         with:
-          name: abud-shorts-client-${{ steps.identity.outputs.version }}
+          name: short-studio-server-client-${{ steps.identity.outputs.version }}
           path: |
             ${{ runner.temp }}/dist-release/*.tar.gz
             ${{ runner.temp }}/dist-release/*.sha256
@@ -180,7 +180,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.identity.outputs.version }}
-          name: ABUD Shorts Engine ${{ steps.identity.outputs.version }}
+          name: Short Studio Server ${{ steps.identity.outputs.version }}
           draft: true
           files: |
             ${{ runner.temp }}/dist-release/*.tar.gz

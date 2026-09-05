@@ -1,3 +1,25 @@
+# Short Studio 2.5.0
+
+**Product:** Short Studio
+**Technical Product:** Short Studio Server
+**Release Version:** `2.5.0`
+**Release Channel:** stable (candidate)
+**Stage:** General Availability Candidate
+**Database Schema:** `2.13.0` (unchanged from v2.4.0 - branding release, no schema migration required)
+**Previous Product:** ABUD Shorts Engine `2.4.0`
+
+Short Studio is the renamed, commercially productized continuation of ABUD
+Shorts Engine. This release carries no functional change to video production,
+captions, or providers beyond the 2.4.0 baseline documented below - it
+establishes the Short Studio product identity, CLI, container/volume naming,
+and installer/updater flow, with an explicit compatibility path so an
+installation upgraded from ABUD Shorts Engine 2.4.0 keeps its existing
+database, videos, Provider Vault, backups, and n8n data without
+re-provisioning. `abud-shorts` remains available as a legacy CLI alias for
+upgraded installations.
+
+---
+
 # ABUD Shorts Engine v2.4.0
 
 **Product:** ABUD Shorts Engine

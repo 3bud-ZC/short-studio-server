@@ -1,5 +1,6 @@
-ABUD Shorts Engine 2.4.0
-========================
+Short Studio 2.5.0
+==================
+(formerly ABUD Shorts Engine)
 
 Windows
 -------

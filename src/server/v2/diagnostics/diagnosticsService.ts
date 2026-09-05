@@ -268,7 +268,7 @@ export class DiagnosticsService {
     const report = await this.generateReport();
     const sanitizedJson = redactSecrets(JSON.stringify(report, null, 2));
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `abud_diagnostics_${timestamp}.json`;
+    const filename = `short_studio_diagnostics_${timestamp}.json`;
 
     return {
       filename,

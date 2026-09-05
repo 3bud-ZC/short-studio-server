@@ -1,4 +1,10 @@
-# Installing ABUD Shorts Engine on a server
+# Installing Short Studio on a server
+
+Short Studio is the renamed, commercially productized continuation of ABUD
+Shorts Engine 2.4.0. The paths and commands below are unchanged for this
+release - `install.sh` and the `abud-shorts` command have not been renamed
+yet, so a fresh install still lands under `/opt/abud-shorts` and installs
+the `abud-shorts` binary.
 
 For a Linux VPS reached at a real domain. For a Windows workstation, see
 `CLIENT_QUICK_START.md`.

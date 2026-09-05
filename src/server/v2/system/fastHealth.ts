@@ -191,8 +191,14 @@ async function timedItem(
  * own.
  */
 export type ProviderConfigurationSnapshot = {
-  /** Voice: ElevenLabs is the Arabic production route; Kokoro is local English. */
+  /**
+   * Voice: Local Voice (VoiceTut, or KemeTone as the lightweight fallback) is
+   * the default Arabic route; ElevenLabs is an explicit, opt-in premium
+   * alternative, never a requirement. Kokoro is local English.
+   */
   elevenLabsConfigured: boolean;
+  /** True when VoiceTut or KemeTone is installed and ready for Arabic production. */
+  localVoiceConfigured: boolean;
   /** Media: Pexels is the stock footage route. */
   pexelsConfigured: boolean;
   /** AI script generation. */
@@ -287,21 +293,33 @@ export async function getFastHealth(
     }),
 
     // ----------------------------------------------------------- providers
-    // Configuration only. Whether ElevenLabs answers a request right now is a
-    // deep-diagnostics question, and asking it here is exactly what used to
-    // stall the page.
+    // Configuration only. Whether ElevenLabs or Local Voice answers a request
+    // right now is a deep-diagnostics question, and asking it here is exactly
+    // what used to stall the page. Local Voice (VoiceTut/KemeTone) is the
+    // default Arabic route, so its readiness - not ElevenLabs' - is what
+    // decides whether Arabic is reported ready here.
     timedItem("voice", "providers", false, "voice-providers", async () => {
+      if (providers.localVoiceConfigured) {
+        return {
+          status: "healthy" as const,
+          message: providers.elevenLabsConfigured
+            ? "Local English and Local Voice Arabic narration are ready; ElevenLabs is also configured as a premium option."
+            : "Local English and Local Voice Arabic narration are ready.",
+          messageKey: "health.msg.voiceReady",
+        };
+      }
       if (providers.elevenLabsConfigured) {
         return {
           status: "healthy" as const,
-          message: "Local English narration is available and ElevenLabs is configured for Arabic.",
-          messageKey: "health.msg.voiceReady",
+          message:
+            "Local English narration is available and ElevenLabs is configured for Arabic. Local Voice (VoiceTut) is not installed.",
+          messageKey: "health.msg.voiceReadyElevenLabsOnly",
         };
       }
       return {
         status: "healthy" as const,
         message:
-          "Local English narration is available. Arabic narration requires ElevenLabs, which is not configured.",
+          "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone) - or an optional ElevenLabs connection.",
         messageKey: "health.msg.voiceEnglishOnly",
       };
     }),
@@ -343,7 +361,7 @@ export async function getFastHealth(
           }
         : {
             status: "not_configured" as const,
-            message: "Optional. Connect a channel to publish directly from ABUD Shorts.",
+            message: "Optional. Connect a channel to publish directly from Short Studio.",
             messageKey: "health.msg.publishingNotConfigured",
           },
     ),

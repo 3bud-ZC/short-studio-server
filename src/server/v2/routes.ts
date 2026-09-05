@@ -2866,6 +2866,11 @@ export function createV2PublicRouter(
       const vaultByProvider = new Map(vaultCredentials.map((credential) => [credential.providerId, credential]));
       const snapshot: ProviderConfigurationSnapshot = {
         elevenLabsConfigured: new ElevenLabsVoiceProvider().isConfigured(),
+        // Local Voice (VoiceTut, or KemeTone as the lightweight fallback) is
+        // the default Arabic route - the same signal job creation uses (see
+        // the local_voice_setup_required check above) so this health check
+        // never claims Arabic is broken while local voice is actually ready.
+        localVoiceConfigured: new VoiceRegistry({} as any).isArabicProductionConfigured(),
         pexelsConfigured: Boolean(
           vaultByProvider.has("pexels") ||
           (config.pexelsApiKey &&
@@ -3867,7 +3872,10 @@ export function createV2PublicRouter(
           languages: ["multilingual", "ar", "en"],
           model: ELEVENLABS_DEFAULT_MODEL_ID,
           arabicProduction: true,
-          arabicSupport: elevenLabsConfigured ? "canonical_arabic_production_provider" : "not_configured",
+          // VoiceTut, not ElevenLabs, is the canonical/default Arabic production
+          // provider (see the "voicetut" entry above, isDefault: true) -
+          // ElevenLabs is an explicit, opt-in premium alternative.
+          arabicSupport: elevenLabsConfigured ? "premium_opt_in_arabic_option" : "not_configured",
           // Accent quality is a human judgement; the API does not certify it.
           egyptianSupport: "human_listening_required",
           voicePresets: ELEVENLABS_PRESET_IDS,
@@ -5130,9 +5138,25 @@ export function createV2PublicRouter(
     const liveVerified = configured && req.query.verify === "true"
       ? (await provider.validate().catch(() => undefined))?.healthy === true
       : false;
-    res.status(200).json(
-      capabilityManager.checkArabicProductionReadiness({ configured, liveVerified }),
-    );
+    // checkArabicProductionReadiness() is deliberately ElevenLabs-specific
+    // (see its accepted contract and arabicVoicePolicy.test.ts) - it answers
+    // "is the ElevenLabs route ready", not "is Arabic ready overall". Local
+    // Voice (VoiceTut, or KemeTone as the lightweight fallback) is the actual
+    // default Arabic route, so the response this endpoint returns is widened
+    // here with that signal rather than by changing the narrower function.
+    const elevenLabsReadiness = capabilityManager.checkArabicProductionReadiness({ configured, liveVerified });
+    const localVoiceConfigured = new VoiceRegistry({} as any).isArabicProductionConfigured();
+    res.status(200).json({
+      ...elevenLabsReadiness,
+      localVoiceConfigured,
+      ready: elevenLabsReadiness.ready || localVoiceConfigured,
+      statusText: localVoiceConfigured
+        ? "READY — LOCAL VOICE CONFIGURED"
+        : elevenLabsReadiness.statusText,
+      message: localVoiceConfigured
+        ? "Local Voice (VoiceTut or KemeTone) is ready for Arabic narration."
+        : elevenLabsReadiness.message,
+    });
   });
 
   router.get("/system/readiness", (req, res) => {

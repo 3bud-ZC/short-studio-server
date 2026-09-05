@@ -1,27 +1,32 @@
 # ==============================================================================
-# ABUD Shorts Engine V2 - CLIENT / PRODUCTION COMPOSE
+# SHORT STUDIO SERVER - CLIENT / PRODUCTION COMPOSE
 # ==============================================================================
 # This is the file a customer installation runs. It never builds from source:
 # every service references an immutable, published image, so installing and
 # updating are a pull rather than a multi-gigabyte compile on the customer's
 # machine.
 #
-#   ABUD_IMAGE          the released application image, pinned by digest by the
-#                       updater (ghcr.io/3bud-zc/abud-shorts-engine@sha256:...)
-#   ABUD_DATA_DIR       the persistent data directory on the host. It lives
-#                       outside every release directory, so upgrading the code
-#                       never touches videos, uploads, brands or backups.
+#   SHORT_STUDIO_IMAGE     the released application image, pinned by digest by
+#                          the updater (ghcr.io/3bud-zc/short-studio-server@sha256:...)
+#   SHORT_STUDIO_DATA_DIR  the persistent data directory on the host. It lives
+#                          outside every release directory, so upgrading the
+#                          code never touches videos, uploads, brands or backups.
+#
+# Every SHORT_STUDIO_* identity variable below falls back to the legacy ABUD_*
+# name when unset, so a .env carried forward from an ABUD Shorts Engine 2.4
+# installation keeps working unchanged. A fresh Short Studio install only ever
+# sets the SHORT_STUDIO_* names - see .env.example.
 #
 # Developers keep using docker-compose.v2.yml, which builds from the working
 # tree. Nothing here replaces that.
 # ==============================================================================
 
 services:
-  abud-shorts-postgres:
+  short-studio-postgres:
     # Pinned to an exact patch release. A floating tag would let an unrelated
     # PostgreSQL upgrade ride along with an application update.
     image: postgres:16.10-alpine
-    container_name: ${ABUD_CONTAINER_PREFIX:-abud-shorts}-postgres
+    container_name: ${SHORT_STUDIO_CONTAINER_PREFIX:-${ABUD_CONTAINER_PREFIX:-short-studio}}-postgres
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -29,28 +34,33 @@ services:
         max-size: "20m"
         max-file: "5"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-abud_shorts}
-      POSTGRES_USER: ${POSTGRES_USER:-abud_shorts}
+      # Fresh installs get short_studio; an installation upgraded from ABUD
+      # Shorts Engine 2.4 has these already set explicitly in its .env to the
+      # database's real existing name/owner, which always wins over this default.
+      POSTGRES_DB: ${POSTGRES_DB:-short_studio}
+      POSTGRES_USER: ${POSTGRES_USER:-short_studio}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set by the installer}
     volumes:
       # A named volume, never removed by the updater and never subject to
-      # `down -v` in any normal path.
-      - abud-shorts-postgres-data:/var/lib/postgresql/data
+      # `down -v` in any normal path. The external volume name is pinned via
+      # `name:` below so an upgraded install can reattach to its existing
+      # abud-shorts-postgres-data volume instead of a new empty one.
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
     networks:
-      abud-shorts-v2:
+      short-studio-v2:
         aliases:
           - postgres
 
-  abud-shorts-n8n:
+  short-studio-n8n:
     # Pinned. n8n changes workflow semantics between minor versions, so a
-    # floating tag could break the control plane without any ABUD release.
+    # floating tag could break the control plane without any Short Studio release.
     image: n8nio/n8n:1.76.1
-    container_name: ${ABUD_CONTAINER_PREFIX:-abud-shorts}-n8n
+    container_name: ${SHORT_STUDIO_CONTAINER_PREFIX:-${ABUD_CONTAINER_PREFIX:-short-studio}}-n8n
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -66,8 +76,9 @@ services:
       N8N_USER_MANAGEMENT_DISABLED: "true"
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Africa/Cairo}
     volumes:
-      - abud-shorts-n8n-data:/home/node/.n8n
-      - ${ABUD_RELEASE_DIR:-.}/integrations/n8n:/workflows:ro
+      # External volume name pinned via `name:` below - see the postgres note above.
+      - n8n-data:/home/node/.n8n
+      - ${SHORT_STUDIO_RELEASE_DIR:-${ABUD_RELEASE_DIR:-.}}/integrations/n8n:/workflows:ro
     entrypoint: ["/bin/sh", "-c"]
     # n8n 1.76's import:workflow reads the file and calls .map() on it, so a
     # single-workflow object fails with "workflows.map is not a function" and a
@@ -77,12 +88,12 @@ services:
     # exports, so they are concatenated into one JSON array here instead.
     # publish:workflow does not exist in this version and only logged an error.
     command: >
-      "printf '[' > /tmp/abud-workflows.json;
-      cat /workflows/abud-shorts-v2-control-plane-workflow.json >> /tmp/abud-workflows.json;
-      printf ',' >> /tmp/abud-workflows.json;
-      cat /workflows/abud-shorts-v2-publishing-workflow.json >> /tmp/abud-workflows.json;
-      printf ']' >> /tmp/abud-workflows.json;
-      n8n import:workflow --input=/tmp/abud-workflows.json || true;
+      "printf '[' > /tmp/short-studio-workflows.json;
+      cat /workflows/abud-shorts-v2-control-plane-workflow.json >> /tmp/short-studio-workflows.json;
+      printf ',' >> /tmp/short-studio-workflows.json;
+      cat /workflows/abud-shorts-v2-publishing-workflow.json >> /tmp/short-studio-workflows.json;
+      printf ']' >> /tmp/short-studio-workflows.json;
+      n8n import:workflow --input=/tmp/short-studio-workflows.json || true;
       n8n update:workflow --id=abud-shorts-v2-control-plane --active=true || true;
       n8n update:workflow --id=abud-shorts-v2-publishing --active=true || true;
       n8n start"
@@ -92,14 +103,14 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      abud-shorts-v2:
+      short-studio-v2:
         aliases:
           - n8n
 
   # Local Voice (VoiceTut/KemeTone) is host-native, not containerized: it needs
   # real NVIDIA/CUDA access, which Docker Desktop for Windows does not reliably
   # pass through for arbitrary consumer GPUs. install.ps1 and
-  # scripts\host\abud-shorts.ps1's `local-voice` command run it directly on
+  # scripts\host\short-studio.ps1's `local-voice` command run it directly on
   # the Windows host (see scripts\host\local-voice-lib.ps1) and the app/
   # render-worker below reach it over host.docker.internal. A previous
   # revision of this file defined a containerized abud-shorts-local-tts
@@ -113,9 +124,9 @@ services:
   # The render worker and the application are the same immutable image running
   # in two roles, which is what SERVICE_ROLE already selects. One image to pull,
   # one digest to verify, one thing to roll back.
-  abud-shorts-render-worker:
-    image: ${ABUD_IMAGE:?ABUD_IMAGE must be set by the installer or updater}
-    container_name: ${ABUD_CONTAINER_PREFIX:-abud-shorts}-render-worker
+  short-studio-render-worker:
+    image: ${SHORT_STUDIO_IMAGE:-${ABUD_IMAGE:?SHORT_STUDIO_IMAGE (or legacy ABUD_IMAGE) must be set by the installer or updater}}
+    container_name: ${SHORT_STUDIO_CONTAINER_PREFIX:-${ABUD_CONTAINER_PREFIX:-short-studio}}-render-worker
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -134,14 +145,14 @@ services:
       MIN_FREE_DISK_BYTES: ${MIN_FREE_DISK_BYTES:-536870912}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN must be set by the installer}
       PROVIDER_VAULT_MASTER_KEY: ${PROVIDER_VAULT_MASTER_KEY:-}
-      DATABASE_URL: postgres://${POSTGRES_USER:-abud_shorts}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abud_shorts}
+      DATABASE_URL: postgres://${POSTGRES_USER:-short_studio}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-short_studio}
       DATA_DIR_PATH: /app/data
       DOCKER: "true"
       DEV: "false"
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       KOKORO_MODEL_PRECISION: ${KOKORO_MODEL_PRECISION:-q4}
       # Local Voice (VoiceTut/KemeTone) is the default Arabic route and runs
-      # host-native on Windows (see the note above abud-shorts-render-worker);
+      # host-native on Windows (see the note above short-studio-render-worker);
       # host.docker.internal is how a container reaches it. ElevenLabs is an
       # optional premium alternative, configured from the app UI and held
       # encrypted in the provider vault - never a silent fallback.
@@ -151,12 +162,12 @@ services:
       CONCURRENCY: ${CONCURRENCY:-1}
       VIDEO_CACHE_SIZE_IN_BYTES: ${VIDEO_CACHE_SIZE_IN_BYTES:-2097152000}
     volumes:
-      - ${ABUD_DATA_DIR:?ABUD_DATA_DIR must be set by the installer}:/app/data
+      - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}:/app/data
       # LocalModelManager checks Local Voice model readiness from this
       # filesystem view (metadata.json), not from a live call to the
       # host-native service, so this must be the same physical directory
       # install.ps1's Local Voice setup writes the model cache into.
-      - ${ABUD_DATA_DIR:?ABUD_DATA_DIR must be set by the installer}/models:/models
+      - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}/models:/models
     entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper; fi && node dist/index.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3125/health >/dev/null || exit 1"]
@@ -168,13 +179,13 @@ services:
       # Linux Docker Engine (>=20.10), which also loads this same compose file.
       - "host.docker.internal:host-gateway"
     networks:
-      abud-shorts-v2:
+      short-studio-v2:
         aliases:
           - render-worker
 
-  abud-shorts-app:
-    image: ${ABUD_IMAGE:?ABUD_IMAGE must be set by the installer or updater}
-    container_name: ${ABUD_CONTAINER_PREFIX:-abud-shorts}-app
+  short-studio-app:
+    image: ${SHORT_STUDIO_IMAGE:-${ABUD_IMAGE:?SHORT_STUDIO_IMAGE (or legacy ABUD_IMAGE) must be set by the installer or updater}}
+    container_name: ${SHORT_STUDIO_CONTAINER_PREFIX:-${ABUD_CONTAINER_PREFIX:-short-studio}}-app
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -182,17 +193,17 @@ services:
         max-size: "20m"
         max-file: "5"
     depends_on:
-      abud-shorts-postgres:
+      short-studio-postgres:
         condition: service_healthy
-      abud-shorts-n8n:
+      short-studio-n8n:
         condition: service_started
-      abud-shorts-render-worker:
+      short-studio-render-worker:
         condition: service_started
     environment:
       SERVICE_ROLE: app
       V2_ENABLED: "true"
       PORT: 3123
-      # Local Voice is host-native (see the note above abud-shorts-render-worker)
+      # Local Voice is host-native (see the note above short-studio-render-worker)
       # and is never a hard startup dependency: if it is not installed or not
       # reachable, Arabic jobs report Local Voice setup is required instead of
       # blocking the whole application from starting.
@@ -205,7 +216,7 @@ services:
       MIN_FREE_DISK_BYTES: ${MIN_FREE_DISK_BYTES:-536870912}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN must be set by the installer}
       PROVIDER_VAULT_MASTER_KEY: ${PROVIDER_VAULT_MASTER_KEY:-}
-      DATABASE_URL: postgres://${POSTGRES_USER:-abud_shorts}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abud_shorts}
+      DATABASE_URL: postgres://${POSTGRES_USER:-short_studio}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-short_studio}
       N8N_BASE_URL: http://n8n:5678
       N8N_WEBHOOK_PATH: /webhook/abud-v2/jobs/start
       RENDER_WORKER_BASE_URL: http://render-worker:3125
@@ -217,10 +228,10 @@ services:
       # Unset means forwarded headers are ignored. Set to 1 (or a CIDR list)
       # only when nginx or Cloudflare really is in front.
       TRUSTED_PROXY: ${TRUSTED_PROXY:-}
-      ABUD_RELEASE_CHANNEL: ${ABUD_RELEASE_CHANNEL:-stable}
-      ABUD_HOST_PLATFORM: ${ABUD_HOST_PLATFORM:-linux}
-      ABUD_INSTALL_TYPE: ${ABUD_INSTALL_TYPE:-docker_linux}
-      ABUD_UPDATE_MANIFEST_URL: ${ABUD_UPDATE_MANIFEST_URL:-}
+      SHORT_STUDIO_RELEASE_CHANNEL: ${SHORT_STUDIO_RELEASE_CHANNEL:-${ABUD_RELEASE_CHANNEL:-stable}}
+      SHORT_STUDIO_HOST_PLATFORM: ${SHORT_STUDIO_HOST_PLATFORM:-${ABUD_HOST_PLATFORM:-linux}}
+      SHORT_STUDIO_INSTALL_TYPE: ${SHORT_STUDIO_INSTALL_TYPE:-${ABUD_INSTALL_TYPE:-docker_linux}}
+      SHORT_STUDIO_UPDATE_MANIFEST_URL: ${SHORT_STUDIO_UPDATE_MANIFEST_URL:-${ABUD_UPDATE_MANIFEST_URL:-}}
       DATA_DIR_PATH: /app/data
       DOCKER: "true"
       DEV: "false"
@@ -235,10 +246,10 @@ services:
       # stay on the internal network with no host port at all.
       - "${HOST_PORT:-3130}:3123"
     volumes:
-      - ${ABUD_DATA_DIR:?ABUD_DATA_DIR must be set by the installer}:/app/data
+      - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}:/app/data
       # Same physical directory as render-worker's /models mount - see the
       # comment there.
-      - ${ABUD_DATA_DIR:?ABUD_DATA_DIR must be set by the installer}/models:/models
+      - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}/models:/models
     entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper; fi && node dist/index.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3123/health >/dev/null || exit 1"]
@@ -248,14 +259,30 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      abud-shorts-v2:
+      short-studio-v2:
         aliases:
           - app
 
 volumes:
-  abud-shorts-postgres-data:
-  abud-shorts-n8n-data:
+  # `name:` pins the real external Docker volume name. Fresh installs get
+  # short-studio-*-data. An installation upgraded from ABUD Shorts Engine 2.4
+  # must have its installer/updater set SHORT_STUDIO_POSTGRES_VOLUME and
+  # SHORT_STUDIO_N8N_VOLUME (or the legacy ABUD_POSTGRES_VOLUME /
+  # ABUD_N8N_VOLUME) to its real existing volume names - the pre-2.5 compose
+  # file never set `name:` here, so Docker Compose's own default naming
+  # applies: "<compose project name>_abud-shorts-postgres-data" and
+  # "<compose project name>_abud-shorts-n8n-data", NOT the bare key. Getting
+  # this wrong reattaches to nothing and `docker compose up` silently creates
+  # empty new volumes instead - this is the single highest-risk spot in the
+  # whole migration and must never be left to the bare default. install.ps1
+  # computes and writes the correct prefixed name for a detected legacy
+  # installation; see the comment there for the reasoning.
+  postgres-data:
+    name: ${SHORT_STUDIO_POSTGRES_VOLUME:-${ABUD_POSTGRES_VOLUME:-short-studio-postgres-data}}
+  n8n-data:
+    name: ${SHORT_STUDIO_N8N_VOLUME:-${ABUD_N8N_VOLUME:-short-studio-n8n-data}}
 
 networks:
-  abud-shorts-v2:
+  short-studio-v2:
+    name: ${SHORT_STUDIO_NETWORK:-${ABUD_NETWORK:-short-studio-v2}}
     driver: bridge

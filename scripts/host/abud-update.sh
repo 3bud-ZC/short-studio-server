@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ABUD Shorts Engine - online updater (host side)
+# Short Studio Server - online updater (host side)
 # ==============================================================================
-# Invoked by `abud-shorts update`. Never called by the web application: applying
+# Invoked by `short-studio update` (or the legacy `abud-shorts update` alias).
+# Never called by the web application: applying
 # an update requires Docker control, and the application container is
 # deliberately not given the Docker socket.
 #
@@ -53,8 +54,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-MANIFEST_URL="${ABUD_UPDATE_MANIFEST_URL:-$DEFAULT_MANIFEST_URL}"
-CHANNEL="${ABUD_RELEASE_CHANNEL:-stable}"
+MANIFEST_URL="${SHORT_STUDIO_UPDATE_MANIFEST_URL:-${ABUD_UPDATE_MANIFEST_URL:-$DEFAULT_MANIFEST_URL}}"
+CHANNEL="${SHORT_STUDIO_RELEASE_CHANNEL:-${ABUD_RELEASE_CHANNEL:-stable}}"
 
 require_docker
 require_jq
@@ -103,7 +104,11 @@ REL_SCHEMA_COMPATIBLE="$(jq -r '.schemaBackwardsCompatible // false' <<<"$RELEAS
 
 # Every field the updater acts on must be present and well formed. A truncated
 # or hand-edited manifest is rejected before anything is stopped.
-[ "$REL_PRODUCT" = "ABUD Shorts Engine" ] || die "The manifest does not describe this product."
+# Accepts either the current or the pre-rebrand product label: a manifest
+# published right after the 2.5.0 cutover must still be installable by an
+# ABUD Shorts Engine 2.4 install whose own updater has not run this file yet.
+[ "$REL_PRODUCT" = "Short Studio Server" ] || [ "$REL_PRODUCT" = "ABUD Shorts Engine" ] ||
+  die "The manifest does not describe this product."
 [ "$REL_CHANNEL" = "$CHANNEL" ] || die "The published release is not on the $CHANNEL channel. Nothing has been changed."
 printf '%s' "$REL_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || die "The manifest carries an invalid version."
 printf '%s' "$REL_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || die "The manifest carries an invalid image digest."
@@ -118,7 +123,7 @@ if [ -z "$CURRENT_VERSION" ]; then
   CURRENT_VERSION="$(running_version)"
 fi
 [ -n "$CURRENT_VERSION" ] ||
-  die "Could not determine the installed version. Run 'abud-shorts status' first."
+  die "Could not determine the installed version. Run 'short-studio status' first."
 
 # Numeric semver comparison. String comparison would rank 2.10.0 below 2.9.0 and
 # offer the customer a downgrade.
@@ -162,7 +167,7 @@ fi
 
 if [ "$CHECK_ONLY" = true ]; then
   ok "An update is available: $REL_VERSION"
-  echo "  Install it with: sudo abud-shorts update"
+  echo "  Install it with: sudo short-studio update"
   exit 0
 fi
 
@@ -273,11 +278,11 @@ if [ "$(find "$EXTRACT_DIR" -maxdepth 1 -mindepth 1 -type d | wc -l)" = "1" ] &&
    [ "$(find "$EXTRACT_DIR" -maxdepth 1 -mindepth 1 | wc -l)" = "1" ]; then
   PACKAGE_ROOT="$(find "$EXTRACT_DIR" -maxdepth 1 -mindepth 1 -type d)"
 fi
-for required in docker-compose.prod.yml scripts/host/abud-update.sh; do
+for required in docker-compose.prod.yml scripts/host/short-studio.sh; do
   [ -e "$PACKAGE_ROOT/$required" ] || {
     txn_set error "The release package is missing $required."
     write_transaction FAILED
-    die "The downloaded update is not a valid ABUD Shorts client package. Nothing has been changed."
+    die "The downloaded update is not a valid Short Studio client package. Nothing has been changed."
   }
 done
 ok "Package contents verified."
@@ -304,7 +309,7 @@ step "[5/9] Installing version $REL_VERSION..."
 PREVIOUS_RELEASE_DIR="$(readlink -f "$ABUD_CURRENT" 2>/dev/null || true)"
 PREVIOUS_IMAGE="$(installation_field image)"
 # The version that preceded the one running now. Kept so a rollback can restore
-# the record exactly as it was, rather than leaving `abud-shorts rollback` with
+# the record exactly as it was, rather than leaving `short-studio rollback` with
 # no target even though that release is still on disk.
 PRIOR_VERSION="$(previous_version)"
 NEW_RELEASE_DIR="$ABUD_RELEASES/$REL_VERSION"
@@ -316,7 +321,7 @@ rm -rf "$NEW_RELEASE_DIR"
 mv "$NEW_RELEASE_DIR.incoming" "$NEW_RELEASE_DIR"
 chmod +x "$NEW_RELEASE_DIR"/scripts/host/*.sh 2>/dev/null || true
 
-# Each release directory records the exact image it runs, so `abud-shorts
+# Each release directory records the exact image it runs, so `short-studio
 # rollback` can restore a version without consulting the network.
 jq -n \
   --arg version "$REL_VERSION" \
@@ -335,7 +340,7 @@ write_transaction APPLYING
 
 # Only the two services whose image changes are stopped. PostgreSQL and n8n keep
 # running, so no data volume is detached at any point.
-compose stop abud-shorts-app abud-shorts-render-worker >/dev/null 2>&1 || true
+compose stop short-studio-app short-studio-render-worker >/dev/null 2>&1 || true
 
 # The image reference lives in the environment file, so a rollback is a matter of
 # putting the previous value back.
@@ -347,6 +352,7 @@ set_env_value() {
     printf '%s=%s\n' "$key" "$value" >> "$ABUD_ENV_FILE"
   fi
 }
+set_env_value SHORT_STUDIO_IMAGE "$PINNED_IMAGE"
 set_env_value ABUD_IMAGE "$PINNED_IMAGE"
 
 ln -sfn "$NEW_RELEASE_DIR" "$ABUD_CURRENT"
@@ -367,6 +373,7 @@ rollback() {
     ln -sfn "$PREVIOUS_RELEASE_DIR" "$ABUD_CURRENT"
   fi
   if [ -n "$PREVIOUS_IMAGE" ]; then
+    set_env_value SHORT_STUDIO_IMAGE "$PREVIOUS_IMAGE"
     set_env_value ABUD_IMAGE "$PREVIOUS_IMAGE"
   fi
   write_installation_record "$CURRENT_VERSION" "${PRIOR_VERSION:-}" "${PREVIOUS_IMAGE:-}" "$CHANNEL"
@@ -378,7 +385,7 @@ rollback() {
   if [ "$REL_SCHEMA_COMPATIBLE" != "true" ]; then
     warn "This release changed the database in a way the previous version cannot read."
     step "    Restoring the pre-upgrade database backup..."
-    compose stop abud-shorts-app abud-shorts-render-worker >/dev/null 2>&1 || true
+    compose stop short-studio-app short-studio-render-worker >/dev/null 2>&1 || true
     if restore_pre_upgrade_backup "$BACKUP_ID"; then
       db_restored=true
       ok "Database restored from the pre-upgrade backup."
@@ -389,7 +396,7 @@ rollback() {
 
   compose up -d >/dev/null 2>&1 || true
 
-  if wait_for_endpoint "$(app_base_url)/health/ready" 60 "ABUD Shorts"; then
+  if wait_for_endpoint "$(app_base_url)/health/ready" 60 "Short Studio"; then
     rollback_result="succeeded"
     ok "Rolled back to version $CURRENT_VERSION and the system is healthy again."
     # Same reason as after a successful update: Docker re-runs its own
@@ -430,9 +437,9 @@ write_transaction VERIFYING
 # 14-15. Health
 # ---------------------------------------------------------------------------
 step "[7/9] Waiting for the system to come back..."
-wait_for_endpoint "$(app_base_url)/health/live" 90 "ABUD Shorts" ||
+wait_for_endpoint "$(app_base_url)/health/live" 90 "Short Studio" ||
   rollback "Version $REL_VERSION never finished starting."
-wait_for_endpoint "$(app_base_url)/health/ready" 90 "ABUD Shorts" ||
+wait_for_endpoint "$(app_base_url)/health/ready" 90 "Short Studio" ||
   rollback "Version $REL_VERSION started but never became ready."
 ok "The application is live and ready."
 
@@ -469,7 +476,7 @@ ok "Video engine healthy."
 # The application answered /health/ready several steps ago, but Docker only
 # re-runs its own healthcheck on an interval, so the container can still be
 # marked "starting" here. Without this wait the success banner prints
-# "ABUD Shorts: Problem" immediately after a verified successful update, which
+# "Short Studio: Problem" immediately after a verified successful update, which
 # reads as a failure to the operator.
 wait_for_container_settle
 
@@ -481,10 +488,10 @@ write_transaction SUCCESS
 
 echo ""
 echo "================================================================="
-echo "  ABUD Shorts Engine updated to version $REL_VERSION"
+echo "  Short Studio Server updated to version $REL_VERSION"
 echo "================================================================="
 print_health_summary || true
 echo "  Previous version $CURRENT_VERSION is kept for rollback:"
-echo "      sudo abud-shorts rollback"
+echo "      sudo short-studio rollback"
 echo "  Pre-update backup: $BACKUP_ID"
 echo ""

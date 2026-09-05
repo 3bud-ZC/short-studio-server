@@ -1,4 +1,7 @@
 import express from "express";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Config } from "../../config";
@@ -228,6 +231,12 @@ describe("Arabic production API gate", () => {
   it("refuses to create an Arabic job before execution when local voice is not installed", async () => {
     delete process.env.ELEVENLABS_API_KEY;
     delete process.env.ABUD_LOCAL_TTS_ASSUME_READY;
+    // See the identical note in "reports Arabic readiness separately..."
+    // below: LocalEgyptianTtsProvider reads real on-disk model state from
+    // ABUD_MODEL_CACHE_DIR (default: ./data-dev/models), so on a machine
+    // with VoiceTut/KemeTone genuinely installed there this test needs its
+    // own empty cache dir to actually exercise "not installed".
+    vi.stubEnv("ABUD_MODEL_CACHE_DIR", fs.mkdtempSync(path.join(os.tmpdir(), "arabic-job-gate-test-")));
     const { app } = makeArabicRouterApp();
 
     const response = await request(app)
@@ -286,6 +295,16 @@ describe("Arabic production API gate", () => {
 
   it("reports Arabic readiness separately from overall system health", async () => {
     delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.ABUD_LOCAL_TTS_ASSUME_READY;
+    // /system/arabic-readiness reports ready when EITHER Local Voice or
+    // ElevenLabs is usable, not ElevenLabs alone, and LocalEgyptianTtsProvider
+    // reads real on-disk model state from ABUD_MODEL_CACHE_DIR (default:
+    // ./data-dev/models). On a machine that has VoiceTut/KemeTone actually
+    // installed there for real production use, isConfigured() would
+    // genuinely - and correctly - return true, making this test depend on
+    // host state instead of the scenario it means to exercise. Point it at an
+    // empty directory so "neither provider configured" is deterministic.
+    vi.stubEnv("ABUD_MODEL_CACHE_DIR", fs.mkdtempSync(path.join(os.tmpdir(), "arabic-readiness-test-")));
     const { app } = makeArabicRouterApp();
 
     const readiness = await request(app).get("/api/v2/system/arabic-readiness").set(AUTH_HEADER).expect(200);

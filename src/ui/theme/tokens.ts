@@ -1,6 +1,6 @@
 /**
- * ABUD DESIGN TOKENS
- * ------------------
+ * SHORT STUDIO DESIGN TOKENS
+ * --------------------------
  * The single source of colour, radius, spacing and elevation for the whole
  * dashboard. Components read from here (or from the MUI theme built on top of
  * it) and never hardcode a hex value, so the product reads as one system.
@@ -39,7 +39,7 @@ export type AbudPalette = {
   glow: string;
 };
 
-/** Canonical ABUD dark theme. */
+/** Canonical Short Studio dark theme. */
 export const abudDark: AbudPalette = {
   background: "#07070C",
   backgroundAlt: "#0B0B14",
@@ -65,7 +65,7 @@ export const abudDark: AbudPalette = {
   textSecondary: "#A9A9C4",
   // Raised from #6E6E8C, which browser QA measured at 3.8:1 against the
   // sidebar - below the 4.5:1 WCAG AA floor for small text. This value clears
-  // AA on every ABUD dark surface.
+  // AA on every Short Studio dark surface.
   muted: "#8E8EAC",
   focus: "#A78BFA",
   shadow: "0 18px 40px rgba(0, 0, 0, 0.55)",

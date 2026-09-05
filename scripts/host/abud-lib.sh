@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ABUD Shorts Engine - shared host-side helpers
+# Short Studio Server - shared host-side helpers
 # ==============================================================================
-# Sourced by abud-shorts.sh (the operator CLI) and abud-update.sh (the updater).
+# Sourced by short-studio.sh (the operator CLI) and abud-update.sh (the updater).
 # These run on the HOST, not inside a container: applying an update means
 # controlling Docker, and the web application is deliberately never given that
 # privilege.
@@ -125,7 +125,7 @@ write_installation_record() {
     --arg updatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg home "$ABUD_HOME" \
     '{
-       product: "ABUD Shorts Engine",
+       product: "Short Studio Server",
        currentVersion: $current,
        previousVersion: (if $previous == "" then null else $previous end),
        image: $image,
@@ -202,7 +202,7 @@ container_health() {
 #
 # The app answers /health/ready as soon as it is up, but Docker only re-runs its
 # own healthcheck on an interval. Without this pause the summary printed straight
-# after a state change reports "ABUD Shorts: Problem" on an installation that is
+# after a state change reports "Short Studio: Problem" on an installation that is
 # in fact healthy, which reads as a failed update to the operator.
 wait_for_container_settle() {
   local attempts="${1:-20}" i=0
@@ -243,7 +243,7 @@ print_health_summary() {
   [ -n "$url" ] || url="$(app_base_url)"
 
   echo ""
-  echo "  ABUD Shorts:   $overall"
+  echo "  Short Studio:  $overall"
   echo "  Application:   $(friendly "$app")"
   echo "  Video Engine:  $(friendly "$worker")"
   echo "  Database:      $(friendly "$db")"

@@ -45,6 +45,7 @@ function makeDb(overrides: Partial<{ enabled: boolean; ok: boolean; hang: boolea
 
 const CONFIGURED: ProviderConfigurationSnapshot = {
   elevenLabsConfigured: true,
+  localVoiceConfigured: true,
   pexelsConfigured: true,
   aiConfigured: true,
   publishingAccountCount: 2,
@@ -52,6 +53,18 @@ const CONFIGURED: ProviderConfigurationSnapshot = {
 
 const NOTHING_CONFIGURED: ProviderConfigurationSnapshot = {
   elevenLabsConfigured: false,
+  localVoiceConfigured: false,
+  pexelsConfigured: false,
+  aiConfigured: false,
+  publishingAccountCount: 0,
+};
+
+// Local Voice (VoiceTut/KemeTone) is the default Arabic route; this fixture is
+// the "not installed, but the opt-in premium alternative is" state, which must
+// still report healthy rather than claiming Arabic is broken.
+const ELEVENLABS_ONLY: ProviderConfigurationSnapshot = {
+  elevenLabsConfigured: true,
+  localVoiceConfigured: false,
   pexelsConfigured: false,
   aiConfigured: false,
   publishingAccountCount: 0,
@@ -127,12 +140,33 @@ describe("fast health", () => {
     expect(report.attentionCount).toBe(0);
   });
 
-  it("keeps English production healthy when ElevenLabs is absent, and says why", async () => {
+  it("keeps English production healthy when Local Voice and ElevenLabs are both absent, and says why", async () => {
     const report = await getFastHealth(makeConfig(), makeDb(), NOTHING_CONFIGURED);
     const voice = report.items.find((item) => item.id === "voice")!;
     expect(voice.status).toBe("healthy");
+    expect(voice.message).toMatch(/Local Voice/);
     expect(voice.message).toMatch(/ElevenLabs/);
-    expect(voice.message).toMatch(/not configured/i);
+  });
+
+  it("reports Arabic ready from Local Voice alone, without requiring ElevenLabs", async () => {
+    const report = await getFastHealth(
+      makeConfig(),
+      makeDb(),
+      { ...NOTHING_CONFIGURED, localVoiceConfigured: true },
+      { bypassCache: true },
+    );
+    const voice = report.items.find((item) => item.id === "voice")!;
+    expect(voice.status).toBe("healthy");
+    expect(voice.message).not.toMatch(/requires ElevenLabs/i);
+    expect(voice.messageKey).toBe("health.msg.voiceReady");
+  });
+
+  it("keeps Arabic healthy on ElevenLabs alone but says Local Voice is not installed", async () => {
+    const report = await getFastHealth(makeConfig(), makeDb(), ELEVENLABS_ONLY, { bypassCache: true });
+    const voice = report.items.find((item) => item.id === "voice")!;
+    expect(voice.status).toBe("healthy");
+    expect(voice.message).toMatch(/ElevenLabs/);
+    expect(voice.message).toMatch(/Local Voice/);
   });
 
   it("marks the installation unhealthy when the database is down", async () => {

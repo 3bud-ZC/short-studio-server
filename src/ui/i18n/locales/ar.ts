@@ -5,7 +5,7 @@ import type { TranslationCatalog } from "../types";
  * ----------------
  * Professional Modern Standard Arabic written for an operator running a
  * production tool, not a word-for-word transliteration of the English. Where a
- * term is a product or provider name (ABUD Shorts, ElevenLabs, Kokoro) it stays
+ * term is a product or provider name (Short Studio, ElevenLabs, Kokoro) it stays
  * in Latin script: those are identifiers, and translating them would make the
  * interface disagree with the provider's own screens.
  *
@@ -14,7 +14,7 @@ import type { TranslationCatalog } from "../types";
  */
 export const ar: TranslationCatalog = {
   // ---------------------------------------------------------------- common
-  "common.appName": "ABUD Shorts",
+  "common.appName": "Short Studio",
   "common.appTagline": "محرك إنتاج الفيديو",
   "common.refresh": "تحديث",
   "common.refreshing": "جارٍ التحديث…",
@@ -56,7 +56,7 @@ export const ar: TranslationCatalog = {
   "common.openNavigation": "فتح قائمة التنقل",
   "common.mainNavigation": "التنقل الرئيسي",
   "common.pageNotFound": "الصفحة غير موجودة",
-  "common.pageNotFoundBody": "هذا العنوان لا يطابق أي صفحة في ABUD Shorts.",
+  "common.pageNotFoundBody": "هذا العنوان لا يطابق أي صفحة في Short Studio.",
   "common.nothingAtPath": "لا يوجد شيء على المسار {path}",
   "common.nothingAtPathBody":
     "قد يكون الرابط قديمًا. استخدم القائمة للانتقال إلى مقاطع الفيديو أو الإنتاجات أو الإعدادات.",
@@ -139,9 +139,9 @@ export const ar: TranslationCatalog = {
   "dashboard.alerts.serviceUnavailable": "{service} غير متاح",
   "dashboard.alerts.serviceUnavailableAction": "فتح حالة النظام",
   "dashboard.alerts.serviceAttention": "{service} يحتاج إلى مراجعة",
-  "dashboard.alerts.elevenLabsMissing": "لم يتم إعداد ElevenLabs",
+  "dashboard.alerts.elevenLabsMissing": "الصوت العربي يحتاج إلى إعداد",
   "dashboard.alerts.elevenLabsMissingBody":
-    "التعليق الصوتي العربي يتطلب ElevenLabs. الإنتاج بالإنجليزية غير متأثر.",
+    "التعليق الصوتي العربي يحتاج إلى إعداد الصوت المحلي (VoiceTut أو KemeTone) أو ربط ElevenLabs الاختياري. الإنتاج بالإنجليزية غير متأثر.",
   "dashboard.alerts.configure": "إعداد",
   "dashboard.alerts.lowStorage": "المساحة التخزينية توشك على النفاد",
   "dashboard.alerts.lowStorageBody": "استُخدم {used} من أصل {total}.",
@@ -449,7 +449,7 @@ export const ar: TranslationCatalog = {
   "publishing.connect.choose": "اختر الوجهة التي تريد إرسال فيديوهاتك المكتملة إليها.",
   "publishing.connect.oauthIntro":
     "{blurb} سيُنقَل بك إلى {destination} للموافقة على الوصول، ثم تُعاد إلى هنا مباشرةً.",
-  "publishing.connect.noPassword": "لا يطّلع ABUD Shorts على كلمة مرورك إطلاقًا.",
+  "publishing.connect.noPassword": "لا يطّلع Short Studio على كلمة مرورك إطلاقًا.",
   "publishing.connect.oauthSetupFailed": "تعذّر تحميل تفاصيل إعداد OAuth.",
   "publishing.connect.oauthStartFailed": "تعذّر بدء الاتصال.",
   "publishing.connect.oauthConfigMissing":
@@ -476,7 +476,7 @@ export const ar: TranslationCatalog = {
   "publishing.connect.dest.uploadPost.label": "Upload-Post",
   "publishing.connect.dest.uploadPost.blurb": "انشر إلى عدّة منصّات عبر خدمة واحدة.",
   "publishing.connect.field.displayName": "الاسم المعروض",
-  "publishing.connect.field.displayNameHelp": "يُستخدَم فقط لتسمية هذا الاتصال داخل ABUD Shorts.",
+  "publishing.connect.field.displayNameHelp": "يُستخدَم فقط لتسمية هذا الاتصال داخل Short Studio.",
   "publishing.connect.field.channelChat": "القناة أو المحادثة",
   "publishing.connect.field.channelChatHelp":
     "اسم مستخدم القناة، أو معرّف المحادثة الرقمي لمجموعة خاصة.",
@@ -492,7 +492,7 @@ export const ar: TranslationCatalog = {
   "integrations.title": "التكاملات",
   "integrations.eyebrow": "الإعداد",
   "integrations.description":
-    "اربط الخدمات التي يستخدمها ABUD Shorts. كل ما هو مُعلَّم كاختياري يمكن تخطّيه، فالمحرّك يعمل بدونه.",
+    "اربط الخدمات التي يستخدمها Short Studio. كل ما هو مُعلَّم كاختياري يمكن تخطّيه، فالمحرّك يعمل بدونه.",
   "integrations.storageUnavailable":
     "التخزين الآمن غير متاح، لذا لا يمكن حفظ التكاملات الآن. تواصل مع جهة التثبيت.",
 
@@ -838,7 +838,7 @@ export const ar: TranslationCatalog = {
 
   "settings.security.title": "رموز الوصول",
   "settings.security.description":
-    "رموز لربط أدوات أخرى بـ ABUD Shorts. غير لازمة للاستخدام العادي.",
+    "رموز لربط أدوات أخرى بـ Short Studio. غير لازمة للاستخدام العادي.",
   "settings.token.newOnce": "رمز جديد، يُعرَض مرة واحدة:",
   "settings.token.name": "اسم الرمز",
   "settings.token.create": "إنشاء",
@@ -953,10 +953,10 @@ export const ar: TranslationCatalog = {
   "health.queueDepth": "طول قائمة الانتظار",
   "health.activeRenders": "عمليات معالجة نشطة",
   "health.arabicReady": "الإنتاج بالعربية جاهز",
-  "health.arabicNotReady": "الإنتاج بالعربية يتطلب ElevenLabs",
+  "health.arabicNotReady": "الإنتاج بالعربية يحتاج إلى إعداد الصوت",
   "health.arabicNotReadyBody":
-    "التعليق الصوتي العربي يتطلب ElevenLabs. الإنتاج بالإنجليزية والإنتاج المحلي ما زالا متاحين.",
-  "health.configureElevenLabs": "إعداد ElevenLabs",
+    "التعليق الصوتي العربي يحتاج إلى إعداد الصوت المحلي (VoiceTut أو KemeTone) أو ربط ElevenLabs الاختياري. الإنتاج بالإنجليزية والإنتاج المحلي ما زالا متاحين.",
+  "health.configureElevenLabs": "إعداد الصوت العربي",
 
   // Health check detail lines.
   "health.msg.applicationHealthy": "التطبيق يعمل ويستجيب للطلبات.",
@@ -975,7 +975,7 @@ export const ar: TranslationCatalog = {
   "health.msg.mediaConfigured": "تم إعداد مزوّد للقطات المخزون.",
   "health.msg.mediaNotConfigured": "اختياري. أضِف مزوّدًا للقطات المخزون لجلب المشاهد تلقائيًا.",
   "health.msg.publishingConnected": "قنوات النشر متصلة.",
-  "health.msg.publishingNotConfigured": "اختياري. اربط قناة لتنشر مباشرةً من ABUD Shorts.",
+  "health.msg.publishingNotConfigured": "اختياري. اربط قناة لتنشر مباشرةً من Short Studio.",
   "health.msg.storageWritable": "يمكن الكتابة في مساحة تخزين الفيديو.",
   "health.msg.quickCheckTimedOut": "لم يستجب خلال الفحص السريع.",
   "health.msg.optionalUnreachable": "اختياري. تعذّر الوصول إليه خلال الفحص السريع.",
@@ -1006,7 +1006,7 @@ export const ar: TranslationCatalog = {
   "updates.availableHeading": "الإصدار {version} متاح الآن",
   "updates.publishedOn": "صدر في {date}",
   "updates.installWindows":
-    "لتثبيته، افتح قائمة ابدأ واختر \"ABUD Shorts ← ABUD Shorts - Update\".",
+    "لتثبيته، افتح قائمة ابدأ واختر \"Short Studio ← Short Studio Update\".",
   "updates.installServer": "لتثبيته، سجّل الدخول إلى هذا الخادم ونفّذ:",
   "updates.safetyNote":
     "تُؤخذ نسخة احتياطية أولًا. إذا حدث أي خلل بعد التحديث، يُستعاد الإصدار السابق تلقائيًا.",
@@ -1055,16 +1055,16 @@ export const ar: TranslationCatalog = {
 
   // ----------------------------------------------------------------- setup
   "setup.title": "الإعداد",
-  "setup.wizardTitle": "ABUD Shorts Engine",
+  "setup.wizardTitle": "Short Studio",
   "setup.wizardSubtitle": "إعداد التشغيل الأول",
   "setup.versionLabel": "الإصدار {version}",
   "setup.stepCounter": "الخطوة {current} من {total}",
   "setup.welcome": "مرحبًا",
-  "setup.welcomeHeading": "مرحبًا بك في ABUD Shorts Engine",
+  "setup.welcomeHeading": "مرحبًا بك في Short Studio",
   "setup.welcomeBody":
     "يجهّز هذا المعالج محرك الفيديو، وحساب المسؤول، وإعدادات الإنتاج الافتراضية، وقنوات النشر الاختيارية. تتم المعالجة على هذا الجهاز، وتبقى الخدمات السحابية اختيارية.",
   "setup.welcomeBodyVoice":
-    "التعليق الصوتي الإنجليزي يعمل محليًا عبر Kokoro. أما التعليق الصوتي العربي فيستخدم ElevenLabs، ويمكنك ربطه الآن أو لاحقًا من صفحة التكاملات.",
+    "التعليق الصوتي الإنجليزي يعمل محليًا عبر Kokoro. والتعليق الصوتي المصري أيضًا يعمل محليًا افتراضيًا عبر VoiceTut (أو KemeTone الأخف على الأجهزة المتواضعة)؛ وElevenLabs بديل مدفوع اختياري يمكنك ربطه الآن أو لاحقًا من صفحة التكاملات.",
   "setup.localFirst": "إنتاج فيديو محلي أولًا",
   "setup.systemCheck": "فحص النظام",
   "setup.systemCheckHeading": "فحص النظام",
@@ -1090,7 +1090,7 @@ export const ar: TranslationCatalog = {
   "setup.defaultNarrationLanguageHint":
     "اللغة المنطوقة في المقاطع الجديدة، وهي منفصلة عن لغة الواجهة التي تقرأها الآن.",
   "setup.arabicRequiresElevenLabs":
-    "التعليق الصوتي العربي يتطلب ElevenLabs. أضِف المفتاح في هذا المعالج، أو اربطه لاحقًا من صفحة التكاملات.",
+    "التعليق الصوتي المصري يعمل محليًا افتراضيًا (VoiceTut، أو KemeTone على الأجهزة الأخف). وElevenLabs بديل مدفوع اختياري — أضِف المفتاح في هذا المعالج، أو اربطه لاحقًا من صفحة التكاملات.",
 
   // ---------------------------------------------------------------- errors
   "errors.generic": "حدث خطأ ما.",

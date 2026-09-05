@@ -1,10 +1,10 @@
 # ==============================================================================
-# ABUD Shorts Engine - Local Voice (VoiceTut / KemeTone) lifecycle library
+# Short Studio Server - Local Voice (VoiceTut / KemeTone) lifecycle library
 # ==============================================================================
 # One canonical implementation of the host-native Local Voice lifecycle, dot-
 # sourced by both entry points so there is a single place that knows how to
 # detect hardware, install the Python runtime, install a model, and run the
-# service - install.ps1 (first-run setup) and scripts\host\abud-shorts.ps1
+# service - install.ps1 (first-run setup) and scripts\host\short-studio.ps1
 # (the `local-voice` command family: install/start/stop/restart/status/repair/
 # uninstall).
 #
@@ -35,13 +35,19 @@ $script:LocalVoicePinned = [ordered]@{
 $script:LocalVoiceHighQualityMinVramMb = 4096
 $script:LocalVoiceHighQualityMinDiskGb = 10
 $script:LocalVoiceLightweightMinDiskGb = 2
-$script:LocalVoiceTaskName = "ABUD Shorts - Local Voice"
+$script:LocalVoiceTaskName = "Short Studio - Local Voice"
+# The scheduled task / Startup shortcut name used by every ABUD Shorts Engine
+# 2.4 installation. Detection and cleanup below always check both names, so an
+# upgraded install's existing registration is found (instead of reporting
+# "not registered" next to one that is, in fact, already running) and never
+# duplicated under the new name.
+$script:LegacyLocalVoiceTaskName = "ABUD Shorts - Local Voice"
 
 <#
 Runs a native executable (py, python, pip, nvidia-smi, schtasks...) and
 returns its stdout+stderr, with $LASTEXITCODE set to its real exit code.
 
-Both install.ps1 and abud-shorts.ps1 set $ErrorActionPreference = "Stop"
+Both install.ps1 and short-studio.ps1 set $ErrorActionPreference = "Stop"
 before dot-sourcing this file. Under that preference, Windows PowerShell
 wraps ANY text a native executable writes to stderr in an ErrorRecord and
 throws - the `py` launcher's own "no matching runtime" message, or pip's
@@ -483,7 +489,7 @@ function Install-LocalVoiceAutoStartLauncher {
     $abudHome = Split-Path $AbudShared -Parent
     $escapedHome = $abudHome.Replace("'", "''")
     $content = @"
-# ABUD Shorts Engine - stable Local Voice autostart launcher.
+# Short Studio Server - stable Local Voice autostart launcher.
 # Regenerated on every install/repair - do not edit by hand. Re-resolves
 # current.txt on every run so it always starts whichever release is
 # actually current, never a specific (and eventually obsolete) one.
@@ -492,7 +498,7 @@ function Install-LocalVoiceAutoStartLauncher {
 `$currentFile = Join-Path `$abudHome "current.txt"
 if (-not (Test-Path `$currentFile)) { exit 0 }
 `$releaseDir = (Get-Content `$currentFile -Raw).Trim()
-`$cli = Join-Path `$releaseDir "scripts\host\abud-shorts.ps1"
+`$cli = Join-Path `$releaseDir "scripts\host\short-studio.ps1"
 if (-not (Test-Path `$cli)) { exit 0 }
 `$env:ABUD_HOME = `$abudHome
 & `$cli local-voice start
@@ -502,8 +508,9 @@ if (-not (Test-Path `$cli)) { exit 0 }
 }
 
 function Get-LocalVoiceStartupShortcutPath {
+    param([string]$Name = $script:LocalVoiceTaskName)
     $startupDir = [System.Environment]::GetFolderPath("Startup")
-    return Join-Path $startupDir "$($script:LocalVoiceTaskName).lnk"
+    return Join-Path $startupDir "$Name.lnk"
 }
 
 function Register-LocalVoiceStartupFolderFallback {
@@ -515,7 +522,7 @@ function Register-LocalVoiceStartupFolderFallback {
         $shortcut.TargetPath = "powershell.exe"
         $shortcut.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$LauncherPath`""
         $shortcut.WorkingDirectory = Split-Path $LauncherPath -Parent
-        $shortcut.Description = "Starts ABUD Shorts Local Voice at login"
+        $shortcut.Description = "Starts Short Studio Local Voice at login"
         $shortcut.Save()
         return (Test-Path $shortcutPath)
     } catch {
@@ -524,8 +531,10 @@ function Register-LocalVoiceStartupFolderFallback {
 }
 
 function Unregister-LocalVoiceStartupFolderFallback {
-    $shortcutPath = Get-LocalVoiceStartupShortcutPath
-    if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force -ErrorAction SilentlyContinue }
+    foreach ($name in @($script:LocalVoiceTaskName, $script:LegacyLocalVoiceTaskName)) {
+        $shortcutPath = Get-LocalVoiceStartupShortcutPath -Name $name
+        if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force -ErrorAction SilentlyContinue }
+    }
     return $true
 }
 
@@ -544,6 +553,10 @@ function Register-LocalVoiceAutoStart {
 
     Invoke-LocalVoiceNative "schtasks" @("/create", "/tn", $script:LocalVoiceTaskName, "/tr", "powershell.exe $action", "/sc", "onlogon", "/rl", "limited", "/f") | Out-Null
     if ($LASTEXITCODE -eq 0) {
+        # Registering under the new name never leaves an installation with two
+        # competing autostart entries: an ABUD Shorts Engine 2.4 install's
+        # legacy-named task/shortcut is cleaned up as part of the same call.
+        Invoke-LocalVoiceNative "schtasks" @("/delete", "/tn", $script:LegacyLocalVoiceTaskName, "/f") | Out-Null
         Unregister-LocalVoiceStartupFolderFallback | Out-Null
         return [ordered]@{ registered = $true; mechanism = "scheduled_task" }
     }
@@ -557,7 +570,9 @@ function Register-LocalVoiceAutoStart {
 
 function Unregister-LocalVoiceAutoStart {
     param([Parameter(Mandatory = $true)][string]$AbudShared)
-    Invoke-LocalVoiceNative "schtasks" @("/delete", "/tn", $script:LocalVoiceTaskName, "/f") | Out-Null
+    foreach ($name in @($script:LocalVoiceTaskName, $script:LegacyLocalVoiceTaskName)) {
+        Invoke-LocalVoiceNative "schtasks" @("/delete", "/tn", $name, "/f") | Out-Null
+    }
     Unregister-LocalVoiceStartupFolderFallback | Out-Null
     $launcherPath = Get-LocalVoiceAutoStartLauncherPath -AbudShared $AbudShared
     if (Test-Path $launcherPath) { Remove-Item $launcherPath -Force -ErrorAction SilentlyContinue }
@@ -567,13 +582,21 @@ function Unregister-LocalVoiceAutoStart {
 function Test-LocalVoiceAutoStartRegistered {
     Invoke-LocalVoiceNative "schtasks" @("/query", "/tn", $script:LocalVoiceTaskName) | Out-Null
     $scheduledTask = ($LASTEXITCODE -eq 0)
-    $startupFolder = Test-Path (Get-LocalVoiceStartupShortcutPath)
+    if (-not $scheduledTask) {
+        # Detects an ABUD Shorts Engine 2.4 install's still-registered legacy
+        # task, so this reports "registered" truthfully instead of a false
+        # "none" next to Local Voice actually auto-starting.
+        Invoke-LocalVoiceNative "schtasks" @("/query", "/tn", $script:LegacyLocalVoiceTaskName) | Out-Null
+        $scheduledTask = ($LASTEXITCODE -eq 0)
+    }
+    $startupFolder = (Test-Path (Get-LocalVoiceStartupShortcutPath -Name $script:LocalVoiceTaskName)) -or
+                      (Test-Path (Get-LocalVoiceStartupShortcutPath -Name $script:LegacyLocalVoiceTaskName))
     $mechanism = if ($scheduledTask) { "scheduled_task" } elseif ($startupFolder) { "startup_folder" } else { "none" }
     return [ordered]@{ scheduledTask = $scheduledTask; startupFolder = $startupFolder; any = ($scheduledTask -or $startupFolder); mechanism = $mechanism }
 }
 
 # ---------------------------------------------------------------------------
-# Orchestration - the single entry point install.ps1 and abud-shorts.ps1 both
+# Orchestration - the single entry point install.ps1 and short-studio.ps1 both
 # call, so the two never duplicate the setup sequence itself.
 # ---------------------------------------------------------------------------
 function Invoke-LocalVoiceSetup {

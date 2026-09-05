@@ -10,7 +10,7 @@ import {
 } from "./tokens";
 
 /**
- * Builds the MUI theme from ABUD tokens.
+ * Builds the MUI theme from Short Studio tokens.
  *
  * Everything visual is derived here so a component never needs a literal
  * colour or font size. Where a component does need a token directly it reads

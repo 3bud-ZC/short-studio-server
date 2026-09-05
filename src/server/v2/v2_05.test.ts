@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { getProductInfo, PRODUCT_VERSION, PRODUCT_STAGE, DATABASE_SCHEMA_VERSION } from "../../version";
+import { getProductInfo, PRODUCT_NAME, PRODUCT_VERSION, PRODUCT_STAGE, DATABASE_SCHEMA_VERSION } from "../../version";
 import { AuthService } from "./auth/authService";
 import { BackupService } from "./backup/backupService";
 import { DiagnosticsService, redactSecrets } from "./diagnostics/diagnosticsService";
@@ -162,7 +162,7 @@ describe("V2-05 Release-Gate Engine Suites", () => {
     // Pinned to the version this branch builds. The updater compares this
     // constant against a published release, so it must describe the running
     // code rather than the newest version that exists.
-    expect(PRODUCT_VERSION).toBe("2.4.0");
+    expect(PRODUCT_VERSION).toBe("2.5.0");
   });
 
   it("2. Local Admin Authentication & Password Security", async () => {
@@ -200,7 +200,7 @@ describe("V2-05 Release-Gate Engine Suites", () => {
 
     const backup = await backupService.createBackup({ type: "config_db" });
     expect(backup.id).toBeTruthy();
-    expect(backup.manifest.product).toBe("ABUD Shorts Engine V2");
+    expect(backup.manifest.product).toBe(PRODUCT_NAME);
     expect(backup.manifest.version).toBe(PRODUCT_VERSION);
     expect(backup.checksumSha256).toHaveLength(64);
     expect(fs.existsSync(backup.filepath)).toBe(true);
@@ -214,7 +214,7 @@ describe("V2-05 Release-Gate Engine Suites", () => {
     const backupService = new BackupService(db, mockConfig);
     const configExport = backupService.exportConfiguration();
 
-    expect(configExport.product).toBe("ABUD Shorts Engine V2");
+    expect(configExport.product).toBe(PRODUCT_NAME);
     expect(configExport.version).toBe(PRODUCT_VERSION);
     expect(configExport.defaults).toBeTruthy();
     expect(JSON.stringify(configExport)).not.toContain("password");

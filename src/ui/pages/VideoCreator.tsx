@@ -228,8 +228,8 @@ const defaultConfig: RenderConfig = {
   orientation: OrientationEnum.portrait,
   musicVolume: MusicVolumeEnum.high,
   brandKit: {
-    brandName: "ABUD Demo",
-    watermarkText: "ABUD",
+    brandName: "Short Studio Demo",
+    watermarkText: "Short Studio",
     primaryColor: "#24545a",
     accentColor: "#d28b4c",
     captionStyle: "bold",

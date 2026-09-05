@@ -422,7 +422,7 @@ const SettingsPage: React.FC = () => {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `abud_config_export_${Date.now()}.json`;
+                    a.download = `short_studio_config_export_${Date.now()}.json`;
                     a.click();
                   } catch {
                     setError(tr("settings.backup.exportFailed"));
