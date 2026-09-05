@@ -1,4 +1,4 @@
-# ABUD Shorts Engine V2 — Status
+# Short Studio Server — Status
 
 > **Canonical status file.** This file, at the repository root
 > (`source/ABUD_SHORTS_ENGINE_STATUS.md`), is the single status document used for
@@ -9,9 +9,62 @@
 > the repository are snapshots and are not maintained. Everything under "Current
 > Product State" describes the state right now; every section below it is a
 > historical milestone record, preserved as written at the time, including
-> superseded Piper and provider evidence.
+> superseded Piper and provider evidence. It keeps its historical filename
+> through the Short Studio rebrand for continuity.
 
 ## Current Product State
+
+Product: Short Studio
+
+Technical Product: Short Studio Server
+
+Version: 2.5.0
+
+Stage: GENERAL AVAILABILITY CANDIDATE — the code/CLI/installer/UI rebrand from
+ABUD Shorts Engine 2.4.0 is complete and verified (full test suite, typecheck
+and build all green — see the closure ledger near the end of this file), but
+commercial closure is not yet complete: the isolated Docker fresh-install and
+ABUD→Short Studio migration rehearsals, the real Arabic/English video gates,
+Upload-Post connection and test publication, backup/restore and restart
+rehearsals, full browser QA, client package assembly and the GitHub repository
+rename have not been run yet. Do not read this entry as GA.
+
+Legacy: Formerly ABUD Shorts Engine. Built from `main` at commit `be44afe3`
+("V2.4 client delivery closure & operational freeze") on branch
+`v2.5-short-studio`; `main`, the `v2.4.0` tag and the V2.4 GitHub Release are
+untouched by this work.
+
+Video: Production Ready — FFmpeg/Remotion pipeline carried over unchanged from
+2.4, no rendering-path changes in this pass.
+
+Arabic Voice: VoiceTut Local High Quality is the production default
+(`ARABIC_PRODUCTION_PROVIDER` in `src/server/v2/voice-providers/types.ts`),
+KemeTone Local Lightweight is the CPU fallback, ElevenLabs is an explicit
+opt-in premium alternative — never a silent default or requirement. This pass
+found and fixed several UI/health surfaces (Setup Wizard copy, system health
+messages, dashboard alerts) that had drifted back to a stale "Arabic requires
+ElevenLabs" framing predating VoiceTut; they now correctly report local-voice
+readiness first.
+
+Publishing: Upload-Post is the customer-supported publishing gateway per
+product decision; historical direct-provider adapters remain in the codebase
+as internal/legacy extension points, not in default routing. Not re-verified
+in this pass.
+
+Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
+migration; no database migration was added or required for branding alone).
+
+Client Delivery: IN PROGRESS. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
+CLOSURE" near the end of this file for the live gate ledger.
+
+---
+
+## V2.4 Historical Record (superseded by "Current Product State" above)
+
+_Everything below this point, through the end of this section, is the
+"Current Product State" record as it stood at the end of V2.4 development,
+before the Short Studio 2.5.0 rebrand. It is preserved verbatim as historical
+evidence, not re-verified or corrected for the ABUD→Short Studio rename._
 
 Product: ABUD Shorts Engine V2
 
@@ -11307,3 +11360,93 @@ documentation covers the full real lifecycle. 0 P0, 0 P1, 0 blocking P2. The dis
 items in Section 5 are real gaps in *this pass's own live verification*, not defects
 found in the product - they are flagged so the owner can decide whether to close them
 with real credentials/tooling this session did not have, not hidden.
+
+---
+
+## SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT CLOSURE
+
+Rebrand of ABUD Shorts Engine 2.4.0 → Short Studio Server 2.5.0, on branch
+`v2.5-short-studio` off `main` at `be44afe3`. Recorded here as work proceeds;
+this section is updated again at actual GA promotion, not pre-marked passed.
+
+### Done and verified in this pass
+
+- **Branch**: `v2.5-short-studio`, created off `main`. `main`, the `v2.4.0`
+  tag and the V2.4 GitHub Release are untouched.
+- **Code/package/CLI/installer rebrand**: `src/version.ts` (single source of
+  truth for `PRODUCT_NAME`/`PRODUCT_VERSION`/`getProductInfo()`),
+  `package.json`, `docker-compose.prod.yml`, `.env.example`, `install.ps1/.sh`,
+  `uninstall.ps1/.sh`, `upgrade.ps1/.sh`, the lifecycle CLI
+  (`scripts/host/short-studio.ps1/.sh` canonical, `abud-shorts.ps1/.sh` a thin
+  legacy-alias forwarder, not advertised to new customers), UI copy/i18n
+  (English + Arabic), README/RELEASE_NOTES/CLIENT_HANDOFF/CLIENT_QUICK_START/
+  docs, GitHub Actions labels, and the client packaging script are all Short
+  Studio Server 2.5.0. Every identity variable (image, data dir, container
+  prefix, Postgres/n8n volume and network names, release channel, install
+  type, update manifest URL) falls back to its legacy `ABUD_*` name, so an
+  .env carried forward from ABUD Shorts Engine 2.4 keeps working unchanged.
+  n8n workflow IDs/filenames were deliberately left `abud-shorts-v2-*` -
+  those are n8n's own persisted identifiers and renaming them would desync
+  from already-imported workflow data on an upgraded installation.
+- **Migration-safety correction caught before it could cause harm**: the
+  pre-2.5 `docker-compose.prod.yml` never set an explicit external `name:` on
+  the Postgres/n8n volumes or the network, so Docker Compose's own default
+  naming applied (`<compose project name>_abud-shorts-postgres-data`, not the
+  bare key). This was caught by cross-checking `uninstall.ps1` against the
+  first draft of the new compose file, which had assumed the bare key.
+  `install.ps1/.sh` and `uninstall.ps1/.sh` now compute and pin the real
+  project-prefixed name for a detected legacy installation before ever
+  calling `docker compose up`/`down`.
+- **Real, pre-existing defect fixed (found during this pass, unrelated to
+  branding)**: several UI/health surfaces (Setup Wizard welcome copy, system
+  health messages, dashboard alerts, `fastHealth.ts`, `routes.ts`,
+  `dashboardMetrics.ts`) said or implied Arabic narration "requires
+  ElevenLabs", contradicting the actual production policy established in a
+  later pass (VoiceTut local is the default, ElevenLabs is opt-in premium).
+  Fixed to report local-voice-first readiness; also fixed a provider-card
+  field (`arabicSupport: "canonical_arabic_production_provider"` on the
+  ElevenLabs card, rendered raw to the customer) that mislabeled ElevenLabs
+  as canonical when VoiceTut is `isDefault: true`.
+- **Local Voice autostart bug fixed**: the Windows Scheduled Task/Startup
+  autostart entry name for Local Voice was a bare literal
+  (`"ABUD Shorts - Local Voice"`); renaming it outright would have made every
+  upgraded install report "not registered" and `repair` would have created a
+  duplicate. Both the legacy and new names are now recognized, with the
+  legacy entry cleaned up on successful re-registration.
+- **4 pre-existing test failures fixed** (verified via `git stash` against
+  the unmodified baseline - not caused by this pass): `arabicVoicePolicy.test.ts`
+  and `voiceProviders.test.ts` read this real machine's actual installed
+  VoiceTut/KemeTone model-cache state (`ABUD_MODEL_CACHE_DIR`, default
+  `./data-dev/models`) instead of an isolated one, so `isConfigured()`
+  returned `true` unexpectedly in tests written to exercise "not installed".
+  Isolated with a temp cache directory per affected test.
+- **Full suite green**: `npx vitest run` — 73/73 test files, 1119/1119 tests.
+  `npm run typecheck` — clean (server + UI). `npm run build` — clean.
+
+### Not yet done or verified (do not treat as passed)
+
+- Isolated Docker fresh-install rehearsal (Short Studio identities).
+- Isolated ABUD Shorts Engine 2.4 → Short Studio 2.5 migration rehearsal
+  against a real cloned legacy installation, proving the owner, jobs, videos,
+  Provider Vault, backups, n8n data and VoiceTut cache all survive.
+- Real Arabic (VoiceTut, no paid AI) and English (Kokoro) video production
+  gates with owner review.
+- Upload-Post connection, health verification and one owner-authorized test
+  publication.
+- Backup/restore and restart rehearsals.
+- Full browser QA (desktop + mobile, Arabic + English UI).
+- Linux `install.sh`/`uninstall.sh`/`upgrade.sh` received the same
+  migration-safe identity treatment as the Windows scripts in this pass, but
+  have not been executed against a real Linux/VPS installation.
+- Client package assembly and exclusion audit (`scripts/release/verify-package.mjs`).
+- GitHub repository rename (deliberately last, pending owner action/permissions).
+
+No paid AI call, no ElevenLabs call and no real social publication was made
+during this pass.
+
+**FINAL: SHORT STUDIO COMMERCIAL CLOSURE BLOCKED — every gate above except the
+code/package/CLI/installer rebrand and its automated verification is still
+pending real infrastructure (Docker rehearsal), real credentials (Pexels,
+Upload-Post) and owner review (video acceptance, publication authorization,
+GitHub permissions). This entry will be replaced with the actual pass/fail
+result of each remaining gate as it is run.**
