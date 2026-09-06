@@ -96,12 +96,13 @@ export function detectGenericFiller(fullText: string, topicConcepts: string[]): 
   return computeTopicRelevanceScore(fullText, topicConcepts) < MIN_TOPIC_RELEVANCE_SCORE;
 }
 
-const ENGLISH_DANGLING_ENDINGS = /\b(and|or|but|with|to)\W*$/i;
-// و (and) as a trailing standalone token, أو (or), لكن (but), مع (with).
+const ENGLISH_DANGLING_WORDS = new Set(["and", "or", "but", "with", "to"]);
+// و (and), أو (or), لكن (but), مع (with) as a trailing STANDALONE token.
 // Arabic commonly prefixes "to" (ل/إلى) rather than trailing it, so a
 // standalone trailing preposition is a much stronger incompleteness signal
-// there than in English.
-const ARABIC_DANGLING_ENDINGS = /(^|\s)(و|أو|او|لكن|مع|إلى|الى)\W*$/;
+// there than in English. "إلى"/"الى" are included for prompts that do use
+// them as a trailing word.
+const ARABIC_DANGLING_WORDS = new Set(["و", "أو", "او", "لكن", "مع", "إلى", "الى"]);
 
 export type CompletenessResult = { complete: boolean; reason?: string };
 
@@ -112,13 +113,27 @@ export type CompletenessResult = { complete: boolean; reason?: string };
  * require terminal punctuation on its own: a CTA like "Follow for more
  * details" with no period is a real, accepted style, not an unfinished
  * sentence - punctuation absence alone is not a reliable signal here.
+ *
+ * Compares the exact LAST WHITESPACE-DELIMITED TOKEN (punctuation-stripped)
+ * against a fixed word list, rather than a regex ending in `\W*$`: in
+ * JavaScript regex, `\w`/`\W` only recognize ASCII letters, so Arabic text
+ * counts entirely as "non-word" - a naive `\W*$` pattern would treat any
+ * Arabic sentence ending after a `\s(و|...)` as a match regardless of what
+ * actually follows (e.g. "بكل سهولة وسرعة." - "and-speed", a normal
+ * attached prefix conjunction+noun - would wrongly match as dangling "و").
  */
 export function validateSentenceCompleteness(text: string, language: "en" | "ar" = "en"): CompletenessResult {
   const trimmed = text.trim();
   if (!trimmed) return { complete: false, reason: "Narration is empty." };
 
-  const danglingPattern = language === "ar" ? ARABIC_DANGLING_ENDINGS : ENGLISH_DANGLING_ENDINGS;
-  if (danglingPattern.test(trimmed)) {
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  const lastToken = tokens[tokens.length - 1] || "";
+  // Strip leading/trailing punctuation (Unicode-aware) to compare the bare word.
+  const bareLastWord = lastToken.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, "");
+  const dangling = language === "ar"
+    ? ARABIC_DANGLING_WORDS.has(bareLastWord)
+    : ENGLISH_DANGLING_WORDS.has(bareLastWord.toLowerCase());
+  if (dangling) {
     return { complete: false, reason: `Ends on a dangling conjunction/preposition: "${trimmed.slice(-40)}"` };
   }
 

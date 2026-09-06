@@ -89,6 +89,15 @@ describe("validateSentenceCompleteness", () => {
     const result = validateSentenceCompleteness("احمي ملفات شركتك الصغيرة من الضياع كل يوم.", "ar");
     expect(result.complete).toBe(true);
   });
+
+  test("does not flag an Arabic word that merely CONTAINS a dangling connector as a prefix (e.g. \"وسرعة\" = and-speed)", () => {
+    // Regression: a naive `\W*$`-based regex treats Arabic letters as
+    // "non-word" in JS, so "... سهولة وسرعة." (ending in the attached
+    // prefix conjunction + noun "and-speed", not a bare dangling "و") was
+    // wrongly flagged as incomplete.
+    const result = validateSentenceCompleteness("إليك أسهل طريقة للاهتمام بكل سهولة وسرعة.", "ar");
+    expect(result.complete).toBe(true);
+  });
 });
 
 describe("validateScriptQuality (full gate)", () => {
