@@ -11508,6 +11508,36 @@ this section is updated again at actual GA promotion, not pre-marked passed.
     - Build: clean production compilation via `npm run build`
     - Python: 8/8 tests passed in `services\local-tts` virtualenv (`pytest 9.1.1`)
     - Pester: 21/21 tests passed for host scripts and local-voice lifecycle
+- **DOCKER CONSOLIDATION**: PASS
+  - **Canonical compose project**: `short-studio`
+  - **Containers**:
+    - `short-studio-app` (healthy, `127.0.0.1:3145->3123/tcp`)
+    - `short-studio-render-worker` (healthy, internal only, no host port)
+    - `short-studio-postgres` (healthy, internal only, no host port, `5432/tcp`)
+    - `short-studio-n8n` (healthy, internal only, no host port, `5678/tcp`)
+  - **App port**: `3145` (loopback bound `127.0.0.1:3145`)
+  - **Removed obsolete projects**:
+    - `abud-v24-rc2-fresh`
+    - `abud-v24-rc2-upgrade`
+    - `ss25-fresh-c60efe8`
+    - `ss25-migrate-c60efe8`
+  - **Removed standalone containers**:
+    - `suspicious_mendel`
+    - `sweet_shaw`
+    - `nervous_gagarin`
+  - **Persistent volumes preserved**: YES (`ss25-migrate-final-a_abud-shorts-postgres-data`, `ss25-migrate-final-a_abud-shorts-n8n-data`, `source_abud-shorts-postgres-data`, `source_abud-shorts-n8n-data`)
+  - **Data loss**: 0
+  - **Backup**:
+    - ID: `cmtp5i2sz000007mp3wczebbq`
+    - Checksum: `2bc1bd351d34a9e4c4dae5f1ffbcd3336c8740dfe23e69fb5b7b6126c3507727`
+    - Path: `shared\data\backups\abud_backup_config_db_2026-09-06T01-46-33-779Z_czebbq.abudbak`
+    - Type: `config_db` (includesSecrets=false)
+  - **3130 primary**: PRESERVED (historical ABUD V2.4 primary with 167 jobs, 47 videos, 3 vault credentials, 38 publications, 7 backups; left running safely without data disturbance)
+  - **3145 rehearsal**: CONSOLIDATED into canonical compose project `short-studio`
+  - **Verification**:
+    - `short-studio status`: All components Healthy
+    - `short-studio doctor`: 15 passed, 1 warning (Local Voice intentionally skipped in rehearsal), 0 failed
+    - Browser QA: Direct dashboard load, no login wall, 0 logout buttons, Pexels ready (key `nqjW••••3nvt`)
 
 ### Not yet done or verified (do not treat as passed)
 
