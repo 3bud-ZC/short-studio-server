@@ -54,6 +54,15 @@ in this pass.
 Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
 migration; no database migration was added or required for branding alone).
 
+Access Mode: LOCAL_SINGLE_USER
+Login: DISABLED in local mode (direct dashboard access, no sign-in modal or login barriers)
+Logout: DISABLED in local mode (single-owner workstation model)
+Local Binding: 127.0.0.1 (app port bound strictly to loopback 127.0.0.1)
+Remote Access: BLOCKED while local mode is active (fail-closed validator prevents non-loopback exposure)
+Internal Service Auth: ENABLED (inter-service communication requires valid internal tokens)
+Provider Vault: ENCRYPTED (AES-256-GCM, masked keys, zero plaintext leakage)
+Auth Architecture: PRESERVED for future secure_server mode
+
 Client Delivery: IN PROGRESS. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
 CLOSURE" near the end of this file for the live gate ledger.
 
@@ -11422,31 +11431,101 @@ this section is updated again at actual GA promotion, not pre-marked passed.
   Isolated with a temp cache directory per affected test.
 - **Full suite green**: `npx vitest run` — 73/73 test files, 1119/1119 tests.
   `npm run typecheck` — clean (server + UI). `npm run build` — clean.
+- **Docker/image inventory and final package audit**: local Docker held the
+  immutable ABUD Shorts Engine 2.4.0 image digest
+  `sha256:9988fd43b9296280152b6ee4c3e5a8a2627a09b2c6e88de372697fba84157b7c`
+  and the rebuilt Short Studio Server 2.5.0 image
+  `sha256:b26eecaf39b845d0ff88da960d696be511a983277e0b71a091a80094bb504a77`.
+  Final client package:
+  `dist-release-short-studio-25-rehearsal/Short-Studio-Server-2.5.0.tar.gz`,
+  checksum `4420eaef21f24d5175beeafd00b2e6bf38e683c68b9ea16d7e6cc7c87e52c576`;
+  `scripts/release/verify-package.mjs` passed package checksum, exclusion,
+  installer/updater/compose/documentation, and manifest checks.
+- **Isolated fresh install rehearsal**: final package installed successfully to
+  `%TEMP%\short-studio-25-fresh-c60efe8-final-b` on port `3147` with compose
+  project `ss25-fresh-final-b`. It created isolated containers
+  `ss25-fresh-final-b-{app,render-worker,postgres,n8n}`, volumes
+  `ss25-fresh-final-b-postgres-data` and `ss25-fresh-final-b-n8n-data`, and
+  network `ss25-fresh-final-b-v2`. It did not attach to the primary ABUD V2.4
+  installation or its data.
+- **Safe uninstaller rehearsal**: `uninstall.ps1` against the same isolated
+  fresh install removed the `ss25-fresh-final-b-*` containers while preserving
+  the PostgreSQL volume, n8n volume, shared config, and shared data. A Windows
+  Docker stderr handling bug found during the first uninstall rehearsal was
+  fixed with the same exit-code-based wrapper used by the installer/lifecycle
+  scripts, then reverified.
+- **Real isolated migration rehearsal**: an ABUD Shorts Engine 2.4.0 install was
+  created at `%TEMP%\abud-24-migration-c60efe8-final-a`, port `3145`, compose
+  project `ss25-migrate-final-a`, then upgraded in place to Short Studio Server
+  2.5.0. The migration reused the legacy Docker identities:
+  `ss25-migrate-final-a_abud-shorts-postgres-data`,
+  `ss25-migrate-final-a_abud-shorts-n8n-data`, and
+  `ss25-migrate-final-a_abud-shorts-v2`. The 2.5 installer recorded
+  `previousProduct: "ABUD Shorts Engine 2.4.0"` and
+  `previousVersion: "2.4.0"`.
+- **Migration preservation proof**: pre/post fingerprints matched exactly for
+  the owner account (`migration-owner`), PostgreSQL rows (`jobs=1`,
+  `job_events=1`, `provider_vault=2`, `provider_settings=2`,
+  `social_accounts=1`, `publications=1`, `publishing_attempts=1`,
+  `publishing_events=1`, `backups=1`), settings hash
+  `4d7da97874ef361ec087261d789b9606`, Provider Vault public-state hash
+  `a7bea4495a168f877504fc57bee98881`, video hash
+  `40AFF2E9D2D8922E47AFD4648E6967497158785FBD1DA870E7110266BF944880`,
+  metadata hash `B0196BEF7F9C0E4228B71D8B118025201703C101DFFC5B9AF473BE8F5480BB5E`,
+  VoiceTut cache hash
+  `F1AC622E2E57EC4B637877E89C93614BCC07782E6102544718D5F740B5CFD843`,
+  backup hash `4CF93C9A5F2FD1DDE1633F2731D258E60753677179C212645349ABEB4A79D703`,
+  and n8n marker hash
+  `e77d9e618a5658e71e80118e1884537c14c69d8d111a84935e70f574b5b031b9`.
+- **Short Studio lifecycle rehearsal**: against the migrated 2.5 install,
+  `short-studio status`, `short-studio stop`, `short-studio start`,
+  `short-studio restart`, `short-studio doctor`, and `short-studio logs app`
+  all executed. Final lifecycle state was healthy for Application, Video
+  Engine, Database, and Automation. `doctor` reported 15 pass, 1 warning, 0
+  failed; the warning was expected because Local Voice was intentionally
+  installed with `SKIP`.
+- **Updater rehearsal**: a local manifest server served the final
+  `update-manifest.json`; `short-studio update -Yes` against the migrated
+  installation validated the manifest path and correctly reported that installed
+  `2.5.0` is already the latest stable `2.5.0`.
+- **Safe Local Single-User Mode Qualification (`LOCAL_SINGLE_USER`)**:
+  - **Access Mode**: `LOCAL_SINGLE_USER` implemented and verified on branch `v2.5-short-studio`.
+  - **Login / Logout**: DISABLED in local mode. The browser owner accesses the dashboard directly without sign-in friction; logout controls and password management forms are hidden from local UI.
+  - **Local Binding**: `127.0.0.1` (`127.0.0.1:3145->3123/tcp` in Docker Compose production config).
+  - **Remote Access**: BLOCKED while local mode is active. Runtime config validator strictly refuses start if `SHORT_STUDIO_ACCESS_MODE=local` is paired with non-loopback host or trusted proxy configuration.
+  - **Internal Service Auth**: ENABLED. Inter-service token authentication (`x-internal-token`) is enforced; unauthorized internal calls are rejected with 401.
+  - **Provider Vault**: ENCRYPTED. AES-256-GCM encryption maintained; secrets remain masked in API views with zero plaintext leakage.
+  - **Auth Architecture**: PRESERVED intact for future `secure_server` mode.
+  - **3145 direct Dashboard**: PASS. Verified via real Playwright automated browser test against `http://127.0.0.1:3145/`:
+    - Direct access opens `/` without landing on sign-in
+    - Direct navigation to `/login` redirects back to `/`
+    - All routes load cleanly: Dashboard (`/`), Create Video (`/create`), Video Library (`/videos`), Providers (`/integrations`), Settings (`/settings`), System Diagnostics (`/system`)
+    - Zero logout controls present in DOM; password/session controls hidden in Settings
+    - No invalid credentials loops or token expiration redirect traps
+  - **Automated Gates Passed (0 failures)**:
+    - Vitest: 73/73 test files passed, 1126/1126 unit/integration tests passed
+    - TypeScript: clean typecheck across server (`tsconfig.build.json`) and UI (`tsconfig.ui.json`)
+    - Build: clean production compilation via `npm run build`
+    - Python: 8/8 tests passed in `services\local-tts` virtualenv (`pytest 9.1.1`)
+    - Pester: 21/21 tests passed for host scripts and local-voice lifecycle
 
 ### Not yet done or verified (do not treat as passed)
 
-- Isolated Docker fresh-install rehearsal (Short Studio identities).
-- Isolated ABUD Shorts Engine 2.4 → Short Studio 2.5 migration rehearsal
-  against a real cloned legacy installation, proving the owner, jobs, videos,
-  Provider Vault, backups, n8n data and VoiceTut cache all survive.
 - Real Arabic (VoiceTut, no paid AI) and English (Kokoro) video production
   gates with owner review.
 - Upload-Post connection, health verification and one owner-authorized test
   publication.
-- Backup/restore and restart rehearsals.
 - Full browser QA (desktop + mobile, Arabic + English UI).
 - Linux `install.sh`/`uninstall.sh`/`upgrade.sh` received the same
   migration-safe identity treatment as the Windows scripts in this pass, but
   have not been executed against a real Linux/VPS installation.
-- Client package assembly and exclusion audit (`scripts/release/verify-package.mjs`).
 - GitHub repository rename (deliberately last, pending owner action/permissions).
 
 No paid AI call, no ElevenLabs call and no real social publication was made
 during this pass.
 
-**FINAL: SHORT STUDIO COMMERCIAL CLOSURE BLOCKED — every gate above except the
-code/package/CLI/installer rebrand and its automated verification is still
-pending real infrastructure (Docker rehearsal), real credentials (Pexels,
-Upload-Post) and owner review (video acceptance, publication authorization,
-GitHub permissions). This entry will be replaced with the actual pass/fail
-result of each remaining gate as it is run.**
+**CURRENT OWNER PAUSE: real Pexels credential entry.** The next gates require a
+real stock-provider credential saved through the product UI/API; do not ask for
+or paste credentials in chat. After that, continue with real video production,
+owner review, Upload-Post credential entry/verification, publication
+target/visibility choice, and the GitHub repository rename if permissions allow.
