@@ -11670,6 +11670,29 @@ this section is updated again at actual GA promotion, not pre-marked passed.
     - Download GET `/api/videos/:id/download`: `200 OK`, attachment filename **`short-studio-11-cmtq3cifl00010ap638bc43lv.mp4`** (rebranded, per item 7 above)
   - **Owner Review**: PENDING human inspection.
 
+- **FINAL ENGLISH CANDIDATE PRODUCTION**: PASS (OWNER REVIEW PENDING)
+  - Produced by the same exact candidate runtime as the Final Arabic Candidate above - Git SHA `048f19cffa09424f44a27acf687692d4a8b454bb`, image digest `sha256:708d9b46c160478e3166a39c03099e91ac85220301fcf0409e739bdf7de62bc7` (app and worker both re-verified running this identical image immediately before this production run; the one commit ahead of it at the time, `488672d`, only edited this status file and does not affect the built image).
+  - **Job ID / Video ID**: `cmtq6za9s000d0ap6h98ecf0v`
+  - **Topic / Prompt**: "A quick 11-second ad about the importance of cloud backup for small businesses, to protect files and data from loss easily."
+  - **Content Style**: `advertisement`, planner `LocalContentAIProvider` (deterministic, no LLM configured, `contentProvenance: DETERMINISTIC`, `contentConfidence: high`)
+  - **Real finding along the way (not a runtime defect - reported per section 11, not worked around by touching product code)**: two earlier attempts at this same topic, worded as "A fast-paced 11-second professional video for small business owners about backing up their files..." (the phrasing given in the request), both produced generic filler narration ("Here's something worth seeing" / "Here is what makes it worth your attention" / "Follow for more") that never mentioned backup, files, or small businesses - despite still reporting `contentProvenance: DETERMINISTIC` / `high` confidence. That thin narration left one scene under-filled, which is what caused `captionTimingSources: ["whisper","synthetic"]` (Whisper legitimately transcribed nothing for a near-silent scene, correctly falling through this project's own 3-tier caption fallback - confirmed via `render-worker` logs showing no `SIGILL`/exception, so **not** a recurrence of the earlier Whisper crash bug) and a non-critical `mixedSilenceGate` warning both times. Rewording the prompt to mirror the structure of the accepted Arabic backup prompt ("A quick N-second ad about the importance of X, to protect Y from Z easily") - itself a normal, valid product input, not a code or config change - produced genuinely topical, curated-sounding narration and a fully clean result below. The local deterministic (no-LLM) content planner's sensitivity to prompt phrasing for topics outside its curated fact-pack/business-vertical set is a real, observed product characteristic worth the owner's awareness, not something this pass fixed or should have fixed unilaterally.
+  - **Target / Rendered Duration**: 11s target, 11.051s rendered (variance 0.051s / 0.46%)
+  - **Aspect Ratio & Resolution**: `9:16`, 1080x1920, 25 fps
+  - **Video Stream**: H.264, 1080x1920, 25 fps
+  - **Audio Stream**: AAC, 48 kHz, stereo
+  - **Container & File Size**: MP4, 10,323,414 bytes (10.3 MB), bitrate ~7.47 Mbps
+  - **Voice Provider**: Kokoro Local (`kokoro`, voice `af_heart`, en-US) - zero ElevenLabs, zero paid AI, zero cloud TTS. **Paid voice calls: 0.**
+  - **Stock Provider**: Real Pexels footage (`visualProvidersUsed: ["pexels"]`, `providerMix: {"pexels":6}`), `budgetMode: free_only`. 6 unique real assets, 0 repeated: `28709421` (server room), `5377775` (cyber security tech), `6998342` + `6763403` (modern clinic/office reception), `38993329` (cloud computing data), `7165668` (technology team success). `averageSemanticScore: 100`, `minimumSemanticScore: 100`, `blackFramePercent: 0`.
+  - **Captions**: style `bold`, renderer `remotion`, timing source **`whisper`** only (no synthetic component this time) - real whisper.cpp transcription of the full narration.
+  - **Technical QA**: `technicalScore: 100`, `mediaPlanScore: 100`, `creativeScore: 97` (`creativeGrade: A`). `audioQa`: `pass: true`, 0 issues, LUFS -23.71, true peak -8.91 dBTP, clipping detected: false, effectively silent: false. `mixedSilenceGate`: `pass: true`, 0 issues. `rawPromptLeakCount: 0`, `inventedClaimRiskCount: 0`. `professionalReady: true`, job status `ready`.
+  - **Media Delivery QA**:
+    - Thumbnail GET `/api/videos/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Preview stream GET `/api/short-video/:id`: `200 OK` (video/mp4, 10,323,414 bytes)
+    - Range request (`Range: bytes=0-1023`): `206 Partial Content`
+    - Download GET `/api/videos/:id/download`: `200 OK`, attachment filename **`short-studio-ai-production-a-quick-11s-ad-about-cmtq6za9s000d0ap6h98ecf0v.mp4`** (rebranded, no `abud-short-` regression)
+  - **Post-production health**: `short-studio status` - Application/Video Engine/Database/Automation all Healthy. `short-studio doctor` - 16 passed, 1 warning (`Recent failed jobs`, all pre-dating this run and already explained above), 0 failed. Pexels healthy/configured (unchanged). **Social publications created: 0.** Upload-Post remains unconfigured (`Publishing providers: 0 configured, 0 healthy, 5 total`), as expected.
+  - **Owner Review**: PENDING human inspection.
+
 ### Short Studio 2.5 Live Gate Ledger
 
 | Gate | Status |
@@ -11686,14 +11709,14 @@ this section is updated again at actual GA promotion, not pre-marked passed.
 | Real Arabic video production (pre-integrity-closure) | TECHNICALLY PASSING / SUPERSEDED |
 | Runtime integrity closure (docker cp, token rotation, self-containment, secrets) | PASS |
 | Final Arabic candidate production | PASS (OWNER REVIEW PENDING) |
-| Real English video + owner review | PENDING |
+| Final English candidate production | PASS (OWNER REVIEW PENDING) |
 | Upload-Post live activation/publication | PENDING |
 | Final GA promotion | PENDING |
 
 ### Remaining Pre-GA Commercial Closure Tasks
 
 1. Owner review and human approval of the final Arabic candidate video (`cmtq3cifl00010ap638bc43lv`, produced by commit `048f19c` / image `sha256:708d9b46c1...`).
-2. Real English video (Kokoro) + owner review.
+2. Owner review and human approval of the final English candidate video (`cmtq6za9s000d0ap6h98ecf0v`, same commit/image).
 3. Upload-Post live activation and one owner-authorized test publication.
 4. Full browser QA (desktop + mobile, Arabic + English UI).
 5. Linux script execution against a real Linux target.
