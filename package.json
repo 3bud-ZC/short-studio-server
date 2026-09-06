@@ -3,6 +3,7 @@
   "version": "2.5.0",
   "description": "Short Studio Server: automated short-video production and publishing (Arabic + English), with a REST API and Model Context Protocol (MCP) interface.",
   "main": "index.js",
+  "packageManager": "pnpm@11.7.0",
   "bugs": "https://github.com/3bud-ZC/Abud-Shorts-Engine/issues",
   "homepage": "https://github.com/3bud-ZC/Abud-Shorts-Engine",
   "scripts": {
