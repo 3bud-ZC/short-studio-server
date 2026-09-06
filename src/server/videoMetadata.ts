@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import type { VideoStatus } from "../types/shorts";
+import { PRODUCT_SLUG } from "../version";
 
 export interface VideoMetadata {
   videoId: string;
@@ -271,7 +272,7 @@ export function buildDownloadFilename(
   const brandSource = metadata?.brandName || metadata?.watermarkText;
   const brandPart = brandSource ? sanitizeFilenameSegment(brandSource) : null;
 
-  const parts = ["abud-short"];
+  const parts = [PRODUCT_SLUG];
   if (templatePart) parts.push(templatePart);
   if (brandPart) parts.push(brandPart);
   parts.push(safeId);

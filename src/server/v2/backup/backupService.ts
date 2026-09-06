@@ -5,7 +5,7 @@ import path from "path";
 import zlib from "zlib";
 import { Config } from "../../../config";
 import { logger } from "../../../logger";
-import { PRODUCT_NAME, PRODUCT_VERSION, DATABASE_SCHEMA_VERSION } from "../../../version";
+import { PRODUCT_NAME, PRODUCT_VERSION, DATABASE_SCHEMA_VERSION, PRODUCT_SLUG } from "../../../version";
 import { V2Database } from "../db";
 
 export type BackupType = "config_only" | "config_db" | "full";
@@ -139,7 +139,10 @@ export class BackupService {
     const includeSecrets = Boolean(options.includeSecrets);
     const backupId = cuid();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `abud_backup_${type}_${timestamp}_${backupId.slice(-6)}.abudbak`;
+    // Extension stays `.abudbak` on purpose: listLocalBackupFiles() scans for
+    // it, and historical ABUD Shorts Engine backups on an upgraded install
+    // must keep being recognized. Only the customer-visible prefix is rebranded.
+    const filename = `${PRODUCT_SLUG.replace(/-/g, "_")}_backup_${type}_${timestamp}_${backupId.slice(-6)}.abudbak`;
     const filepath = path.join(this.backupDir, filename);
 
     logger.info({ backupId, type, includeSecrets }, "Starting backup creation");

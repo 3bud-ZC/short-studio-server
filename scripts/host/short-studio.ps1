@@ -878,7 +878,11 @@ function Invoke-Doctor {
         if ($bundle.providers) {
             $healthy = @($bundle.providers | Where-Object { $_.healthy }).Count
             $configured = @($bundle.providers | Where-Object { $_.configured }).Count
-            $results += Write-DoctorLine "PASS" "Providers: $configured configured, $healthy healthy, $($bundle.providers.Count) total"
+            # Precise on purpose: $bundle.providers only ever holds publishing/
+            # social adapters (Upload-Post, Telegram, YouTube, Meta, TikTok).
+            # Pexels and VoiceTut are tracked separately in the Provider Vault
+            # (/api/v2/providers) and must never be implied unhealthy by this line.
+            $results += Write-DoctorLine "PASS" "Publishing providers: $configured configured, $healthy healthy, $($bundle.providers.Count) total"
         }
         if ($null -ne $bundle.recentFailedJobs) {
             $failedCount = @($bundle.recentFailedJobs).Count

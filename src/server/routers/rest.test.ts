@@ -31,13 +31,13 @@ describe("delivery API safety", () => {
 
   test("sanitizeDownloadFilename strips special characters", () => {
     expect(sanitizeDownloadFilename("cmqwpasli000007mr9q1ee506")).toBe(
-      "abud-short-cmqwpasli000007mr9q1ee506.mp4",
+      "short-studio-cmqwpasli000007mr9q1ee506.mp4",
     );
   });
 
   test("sanitizeDownloadFilename removes path traversal from input", () => {
-    expect(sanitizeDownloadFilename("../etc/passwd")).toBe("abud-short-etcpasswd.mp4");
-    expect(sanitizeDownloadFilename("../../../etc/passwd")).toBe("abud-short-etcpasswd.mp4");
+    expect(sanitizeDownloadFilename("../etc/passwd")).toBe("short-studio-etcpasswd.mp4");
+    expect(sanitizeDownloadFilename("../../../etc/passwd")).toBe("short-studio-etcpasswd.mp4");
   });
 
   test("sanitizeDownloadFilename never produces extensionless output", () => {
@@ -141,7 +141,7 @@ describe("metadata sidecar helpers", () => {
 describe("download filename builder", () => {
   test("buildDownloadFilename uses fallback when no metadata", () => {
     const filename = buildDownloadFilename("abc123", null);
-    expect(filename).toBe("abud-short-abc123.mp4");
+    expect(filename).toBe("short-studio-abc123.mp4");
   });
 
   test("buildDownloadFilename includes template and brand when available", () => {
@@ -153,7 +153,7 @@ describe("download filename builder", () => {
       brandName: "Abud",
     };
     const filename = buildDownloadFilename("vid1", meta);
-    expect(filename).toBe("abud-short-product-ad-abud-vid1.mp4");
+    expect(filename).toBe("short-studio-product-ad-abud-vid1.mp4");
   });
 
   test("buildDownloadFilename sanitizes unsafe characters", () => {
@@ -165,7 +165,7 @@ describe("download filename builder", () => {
       brandName: "Brand & Co",
     };
     const filename = buildDownloadFilename("vid2", meta);
-    expect(filename).toBe("abud-short-my-template-brand-co-vid2.mp4");
+    expect(filename).toBe("short-studio-my-template-brand-co-vid2.mp4");
   });
 
   test("buildDownloadFilename never produces extensionless output", () => {

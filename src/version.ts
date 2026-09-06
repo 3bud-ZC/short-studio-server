@@ -5,6 +5,8 @@
  */
 export const PRODUCT_NAME = "Short Studio Server";
 export const PRODUCT_BRAND = "Short Studio";
+/** Filename-safe slug for customer-facing artifact names (downloads, backups). */
+export const PRODUCT_SLUG = "short-studio";
 /** Shown only in migration/history contexts (e.g. "Upgraded from ABUD Shorts Engine 2.4"). */
 export const PREVIOUS_PRODUCT_NAME = "ABUD Shorts Engine";
 export const PREVIOUS_PRODUCT_VERSION = "2.4.0";
