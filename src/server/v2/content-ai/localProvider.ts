@@ -21,6 +21,7 @@ import {
 } from "../creative/ctaPolicy";
 import { matchFactPack, type FactPackEntry } from "./factPacks";
 import { detectContentStyle } from "./contentStyleDetector";
+import { extractTopicConcepts } from "./scriptQuality";
 
 function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
@@ -931,14 +932,22 @@ export class LocalContentAIProvider implements ContentAIProvider {
     dur: number,
     brand?: string,
   ): ProductionSceneSpec[] {
-    const cleanPrompt = prompt.replace(/[^\w\s\u0600-\u06FF]/gi, "").slice(0, 40);
+    // Previously spliced an arbitrarily-truncated raw substring of the
+    // user's own prompt straight into the narration (sliced to 40 chars with
+    // no regard for word boundaries - a genuine raw-prompt-leak defect).
+    // Replaced with the same deterministic topic-concept extraction the
+    // script-quality gate itself uses, so this fallback (used whenever the
+    // prompt matches no curated Arabic vertical) stays about the customer's
+    // actual subject regardless of what it is.
+    const topicConcepts = extractTopicConcepts(prompt, "ar").slice(0, 3);
+    const topicPhrase = topicConcepts.length > 0 ? topicConcepts.join(" \u0648") : "\u0627\u062D\u062A\u064A\u0627\u062C\u0627\u062A\u0643";
     return [
       {
         sceneIndex: 0,
         purpose: "hook",
         durationSeconds: dur,
-        narration: `هل تبحث عن أفضل طريقة للوصول إلى ${cleanPrompt} بكل سهولة وسرعة؟`,
-        onScreenText: cleanPrompt,
+        narration: `إليك أسهل طريقة للاهتمام بـ ${topicPhrase} بكل سهولة وسرعة.`,
+        onScreenText: topicPhrase,
         stockSearchTerms: ["modern technology", "business meeting", "lifestyle"],
         visualPrompt: "Dynamic modern visual scene representing progress and success",
         visualSource: "stock",
@@ -949,7 +958,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         sceneIndex: 1,
         purpose: "solution",
         durationSeconds: dur,
-        narration: "نقدم لك حلولاً مصممة خصيصاً لتمنحك أعلى جودة وأفضل تجربة.",
+        narration: `نقدم لك حلولاً حقيقية تساعدك في ${topicPhrase} بأعلى جودة وأفضل تجربة.`,
         onScreenText: "أعلى جودة وأفضل تجربة",
         stockSearchTerms: ["quality service", "happy customer", "innovation"],
         visualPrompt: "Focused modern professional delivering high quality results",
@@ -1139,12 +1148,21 @@ export class LocalContentAIProvider implements ContentAIProvider {
     dur: number,
     brand?: string,
   ): ProductionSceneSpec[] {
+    // This fallback runs whenever the prompt matched no curated English
+    // vertical (web design/cafe/fitness/tech). It used to be pure filler
+    // with zero connection to what was actually asked for ("Here's
+    // something worth seeing... Here is what makes it worth your
+    // attention.") - topic-anchored with the same deterministic concept
+    // extraction the script-quality gate itself uses, so this template
+    // stays about the customer's actual subject regardless of what it is.
+    const topicConcepts = extractTopicConcepts(prompt, "en").slice(0, 3);
+    const topicPhrase = topicConcepts.length > 0 ? topicConcepts.join(", ") : "what matters most here";
     return [
       {
         sceneIndex: 0,
         purpose: "hook",
         durationSeconds: dur,
-        narration: "Here's something worth seeing.",
+        narration: `Here's what you need to know about ${topicPhrase}.`,
         stockSearchTerms: ["cinematic hero shot", "modern lifestyle", "close up detail"],
         visualPrompt: "High energy cinematic establishing shot introducing the subject",
         visualSource: "stock",
@@ -1155,7 +1173,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         sceneIndex: 1,
         purpose: "solution",
         durationSeconds: dur,
-        narration: "Here is what makes it worth your attention.",
+        narration: `When it comes to ${topicPhrase}, it's easier to get right than you'd expect - and worth doing today.`,
         stockSearchTerms: ["quality craftsmanship", "detail shot", "modern technology"],
         visualPrompt: "Close up detail showcasing quality and craft",
         visualSource: "stock",

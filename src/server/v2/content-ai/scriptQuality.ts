@@ -34,6 +34,9 @@ const ARABIC_STOPWORDS = new Set([
   "في", "من", "على", "عن", "الى", "إلى", "و", "او", "أو", "ان", "أن",
   "هذا", "هذه", "ذلك", "التي", "الذي", "مع", "كل", "يوم", "سريع", "ثانية",
   "ثواني", "اعلان", "إعلان", "فيديو",
+  // Meta-words describing the AD FORMAT/framing, not its topic - same
+  // exclusion spirit as "quick"/"professional"/"create" in English.
+  "أهمية", "اهمية", "عمل", "عشان", "بسهولة", "سهولة",
 ]);
 
 /**
