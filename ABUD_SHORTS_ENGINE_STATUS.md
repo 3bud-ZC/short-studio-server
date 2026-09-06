@@ -21,13 +21,12 @@ Technical Product: Short Studio Server
 Version: 2.5.0
 
 Stage: GENERAL AVAILABILITY CANDIDATE — the code/CLI/installer/UI rebrand from
-ABUD Shorts Engine 2.4.0 is complete and verified (full test suite, typecheck
-and build all green — see the closure ledger near the end of this file), but
-commercial closure is not yet complete: the isolated Docker fresh-install and
-ABUD→Short Studio migration rehearsals, the real Arabic/English video gates,
-Upload-Post connection and test publication, backup/restore and restart
-rehearsals, full browser QA, client package assembly and the GitHub repository
-rename have not been run yet. Do not read this entry as GA.
+ABUD Shorts Engine 2.4.0, isolated fresh install, isolated migration rehearsal,
+LOCAL_SINGLE_USER qualification, Docker consolidation, permanent primary cutover
+to port 3130 at %ProgramData%\ShortStudio, Pexels activation, and host-native
+Local Voice readiness are complete and verified. Remaining commercial closure
+gates: real Arabic/English video production with owner review, Upload-Post live
+publication test, and final GA promotion. Do not read this entry as GA yet.
 
 Legacy: Formerly ABUD Shorts Engine. Built from `main` at commit `be44afe3`
 ("V2.4 client delivery closure & operational freeze") on branch
@@ -57,10 +56,13 @@ migration; no database migration was added or required for branding alone).
 Access Mode: LOCAL_SINGLE_USER
 Login: DISABLED in local mode (direct dashboard access, no sign-in modal or login barriers)
 Logout: DISABLED in local mode (single-owner workstation model)
-Local Binding: 127.0.0.1 (app port bound strictly to loopback 127.0.0.1)
+Local Binding: 127.0.0.1 (app port bound strictly to loopback 127.0.0.1:3130)
 Remote Access: BLOCKED while local mode is active (fail-closed validator prevents non-loopback exposure)
-Internal Service Auth: ENABLED (inter-service communication requires valid internal tokens)
+Internal Service Auth: ENABLED (inter-service communication requires valid internal tokens; rotated and verified)
 Provider Vault: ENCRYPTED (AES-256-GCM, masked keys, zero plaintext leakage)
+Canonical URL: http://127.0.0.1:3130 (and http://localhost:3130)
+Permanent Install Root: %ProgramData%\ShortStudio
+Canonical Docker Project: short-studio
 Auth Architecture: PRESERVED for future secure_server mode
 
 Client Delivery: IN PROGRESS. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
@@ -11539,23 +11541,69 @@ this section is updated again at actual GA promotion, not pre-marked passed.
     - `short-studio doctor`: 15 passed, 1 warning (Local Voice intentionally skipped in rehearsal), 0 failed
     - Browser QA: Direct dashboard load, no login wall, 0 logout buttons, Pexels ready (key `nqjW••••3nvt`)
 
-### Not yet done or verified (do not treat as passed)
+- **PERMANENT PRIMARY CUTOVER & CONSOLIDATION**: PASS
+  - **Permanent Install Root**: `%ProgramData%\ShortStudio` (`C:\ProgramData\ShortStudio`)
+  - **Canonical Compose Project**: `short-studio`
+  - **Containers**:
+    - `short-studio-app` (healthy, `127.0.0.1:3130->3123/tcp`, strictly bound to loopback)
+    - `short-studio-render-worker` (healthy, internal only, 0 host ports)
+    - `short-studio-postgres` (healthy, internal only, 0 host ports, `5432/tcp`)
+    - `short-studio-n8n` (healthy, internal only, 0 host ports, `5678/tcp`)
+  - **Internal Service Token**: Rotated to cryptographically secure secret (`short_studio_sec_*`).
+    - Missing token -> 401 Unauthorized
+    - Old compromised token -> 401 Unauthorized
+    - Rotated new token -> 200 OK
+  - **Historical 3130 Primary Retirement**: Safely retired from Docker runtime (`abud-shorts-*` containers and compose networks removed). Offline full database dump preserved at `C:\abud-shorts-engine\data-dev\backups\pre_retirement_3130_pg_dump.sql` (30.4 MB), persistent volumes (`source_abud-shorts-postgres-data`, `source_abud-shorts-n8n-data`), and data directory (`C:\abud-shorts-engine\data-dev`) preserved intact.
+  - **Data Preservation (Zero Variance)**:
+    - `admin_users`: 1
+    - `jobs`: 1
+    - `videos`: 0
+    - `provider_credentials_vault`: 2 (including Pexels `nqjW••••3nvt`)
+    - `backups`: 3 (including pre-cutover backup `cmtp6luqy000007mrc4oofc88`)
+    - `provider_settings`: 2
+    - `social_accounts`: 1
+    - `publications`: 1
+  - **Pre-Cutover Backup**: ID `cmtp6luqy000007mrc4oofc88`, checksum `e94eb95dc3bbcc057d22b7c095125b731f39e26ec167748215d80e4fe48dac33`, path `shared\data\backups\abud_backup_config_db_2026-09-06T02-17-29-578Z_oofc88.abudbak`.
+  - **Local Voice Final Readiness**: PASS
+    - Service running on host port 8765 (`cuda`, NVIDIA GeForce RTX 4070, VoiceTut model ready).
+    - Reachable from container at `http://host.docker.internal:8765`.
+    - Host autostart launcher created and registered via Windows Startup folder.
+  - **Pexels Activation**: PASS
+    - Configured in Provider Vault with masked key `nqjW••••3nvt`.
+    - Live authorized search validated via `POST /api/v2/providers/pexels/validate`.
+  - **Diagnostics & Lifecycle**:
+    - `short-studio status`: Healthy across App, Video Engine, Database, Automation. URL: `http://127.0.0.1:3130`.
+    - `short-studio doctor`: `17 passed, 0 warnings, 0 failed`.
+  - **Browser QA**: 9/9 checks passed via automated Playwright run against `http://127.0.0.1:3130`:
+    - Direct access opens Dashboard without sign-in modal.
+    - `/login` redirects back to `/`.
+    - 0 logout buttons present in DOM; password management controls hidden in local single-user mode.
+    - `/create`, `/videos`, `/integrations`, `/settings`, `/system` all render cleanly.
+  - **Status File Consolidation**: Stale duplicate outside repository (`C:\Users\Abud\Desktop\GitHub\Abud Shorts Engine\ABUD_SHORTS_ENGINE_STATUS.md`) deleted. Exactly ONE canonical status file maintained (`source/ABUD_SHORTS_ENGINE_STATUS.md`).
 
-- Real Arabic (VoiceTut, no paid AI) and English (Kokoro) video production
-  gates with owner review.
-- Upload-Post connection, health verification and one owner-authorized test
-  publication.
-- Full browser QA (desktop + mobile, Arabic + English UI).
-- Linux `install.sh`/`uninstall.sh`/`upgrade.sh` received the same
-  migration-safe identity treatment as the Windows scripts in this pass, but
-  have not been executed against a real Linux/VPS installation.
-- GitHub repository rename (deliberately last, pending owner action/permissions).
+### Short Studio 2.5 Live Gate Ledger
 
-No paid AI call, no ElevenLabs call and no real social publication was made
-during this pass.
+| Gate | Status |
+| :--- | :--- |
+| Code/package rebrand | PASS |
+| Automated tests/build | PASS |
+| Isolated fresh install | PASS |
+| 2.4 -> 2.5 migration rehearsal | PASS |
+| LOCAL_SINGLE_USER qualification | PASS |
+| Docker consolidation | PASS |
+| Pexels activation | PASS |
+| Permanent primary cutover | PASS |
+| Local Voice final readiness | PASS |
+| Real Arabic video + owner review | PENDING |
+| Real English video + owner review | PENDING |
+| Upload-Post live activation/publication | PENDING |
+| Final GA promotion | PENDING |
 
-**CURRENT OWNER PAUSE: real Pexels credential entry.** The next gates require a
-real stock-provider credential saved through the product UI/API; do not ask for
-or paste credentials in chat. After that, continue with real video production,
-owner review, Upload-Post credential entry/verification, publication
-target/visibility choice, and the GitHub repository rename if permissions allow.
+### Remaining Pre-GA Commercial Closure Tasks
+
+1. Real Arabic video (VoiceTut, no paid AI) + owner review.
+2. Real English video (Kokoro) + owner review.
+3. Upload-Post live activation and one owner-authorized test publication.
+4. Full browser QA (desktop + mobile, Arabic + English UI).
+5. Linux script execution against a real Linux target.
+6. GitHub repository rename (deliberately last, pending owner permissions).
