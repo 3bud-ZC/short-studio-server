@@ -98,17 +98,24 @@ RUN pnpm build
 
 FROM base
 COPY static /app/static
-# /app/data is a host bind mount (docker-compose.prod.yml:
-# ${SHORT_STUDIO_DATA_DIR}:/app/data), so anything the image places directly
-# under /app/data/libs/whisper is invisible at runtime - the mount fully
-# shadows it from the very first container start, on every install. The
-# compose entrypoint already anticipates this and seeds the volume from
-# /app/bootstrap/whisper on first run (`if [ ! -f
-# /app/data/libs/whisper/models/ggml-small.bin ]; then ... cp -R
-# /app/bootstrap/whisper /app/data/libs/whisper; fi`) - that path must
-# actually exist in the image for a genuinely fresh install to come up at
-# all, instead of the entrypoint's `cp` failing and the container never
-# reaching `node dist/index.js`.
+# Populated in two places, for two different consumers:
+#
+# 1. /app/data/libs/whisper - `RUN node dist/scripts/install.js` below runs
+#    Whisper.init(), which checks this exact path and skips reinstalling
+#    (downloading a whisper.cpp build over the network) when it is already
+#    present. Without this copy, the image build itself tries to install
+#    whisper.cpp fresh here and fails.
+# 2. /app/bootstrap/whisper - /app/data is a host bind mount at runtime
+#    (docker-compose.prod.yml: ${SHORT_STUDIO_DATA_DIR}:/app/data), which
+#    fully shadows whatever the image put under /app/data/libs/whisper from
+#    the very first container start, on every install. The compose
+#    entrypoint already anticipates this and seeds the volume from
+#    /app/bootstrap/whisper on first run (`if [ ! -f
+#    /app/data/libs/whisper/models/ggml-small.bin ]; then ... cp -R
+#    /app/bootstrap/whisper /app/data/libs/whisper; fi`) - that path must
+#    actually exist in the image for a genuinely fresh install to come up,
+#    instead of the entrypoint's `cp` failing.
+COPY --from=install-whisper /whisper /app/data/libs/whisper
 COPY --from=install-whisper /whisper /app/bootstrap/whisper
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build /app/dist /app/dist
