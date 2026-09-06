@@ -332,6 +332,17 @@ function Install-LocalVoiceRuntime {
     if ($LASTEXITCODE -ne 0) { throw "Could not create the Local Voice Python 3.11 environment." }
 
     $python = Join-Path $Paths.VenvDir "Scripts\python.exe"
+    # `python -m venv` is supposed to bootstrap pip itself, but some standalone/
+    # portable CPython builds (e.g. python-build-standalone, as installed by
+    # `uv python install`) silently skip that step - the venv is created (exit
+    # 0, real pyvenv.cfg) with no pip module at all. `pip install --upgrade
+    # pip` then fails with "No module named pip", and its exit code was never
+    # checked here, so that failure was previously invisible until the next
+    # step also failed. `ensurepip` is the one operation guaranteed to work
+    # against a pip-less venv's own bundled wheels, so run it unconditionally
+    # before ever invoking `-m pip`.
+    Invoke-LocalVoiceNative $python @("-m", "ensurepip", "--upgrade") | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not bootstrap pip inside the Local Voice Python environment." }
     Invoke-LocalVoiceNative $python @("-m", "pip", "install", "--upgrade", "pip", "--quiet") | Out-Null
     Invoke-LocalVoiceNative $python @("-m", "pip", "install", "-r", (Join-Path $AppSourceDir "requirements.txt"), "--quiet") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not install the Local Voice service's base dependencies." }
