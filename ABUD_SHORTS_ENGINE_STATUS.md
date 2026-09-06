@@ -11581,6 +11581,38 @@ this section is updated again at actual GA promotion, not pre-marked passed.
     - `/create`, `/videos`, `/integrations`, `/settings`, `/system` all render cleanly.
   - **Status File Consolidation**: Stale duplicate outside repository (`C:\Users\Abud\Desktop\GitHub\Abud Shorts Engine\ABUD_SHORTS_ENGINE_STATUS.md`) deleted. Exactly ONE canonical status file maintained (`source/ABUD_SHORTS_ENGINE_STATUS.md`).
 
+- **REAL CUSTOMER-FACING ARABIC VIDEO PRODUCTION**: PASS (OWNER REVIEW PENDING)
+  - **Job ID**: `cmtpagwt2000d07ogg5ld9wd7`
+  - **Video ID**: `cmtpagwt2000d07ogg5ld9wd7`
+  - **Topic / Prompt**: "ليه المشاريع الصغيرة محتاجة تعمل نسخة احتياطية من ملفاتها؟" ("اعلان سريع 11 ثانية عن أهمية النسخ الاحتياطي السحابي للمشاريع الصغيرة لحماية الملفات والبيانات من الضياع بكل سهولة.")
+  - **Content Style**: `advertisement` (deterministic provenance, commercial short)
+  - **Canonical URL**: `http://127.0.0.1:3130`
+  - **Target Duration**: 11 seconds
+  - **Rendered Duration**: 11.01 seconds (variance 0.01s / 0.1%)
+  - **Aspect Ratio & Resolution**: `9:16` vertical portrait (1080x1920)
+  - **Video Stream**: H.264 / AVC (High Profile), 1080x1920, 25 fps progressive, bitrate ~3.64 Mbps
+  - **Audio Stream**: AAC-LC stereo, 96 kHz sample rate, bitrate ~196 kbps, duration 11.011s
+  - **Audio Mastering**: Final Mix LUFS -16.92, True Peak -0.86 dBTP, clipping detected: false, effectively silent: false
+  - **Container & File Size**: MP4 / QuickTime, 5,284,393 bytes (5.28 MB)
+  - **Technical QA Score**: 100 / 100 (0 issues, 0 black frames)
+  - **Voice Provider**: VoiceTut Local High Quality (`mohammedaly22/VoiceTut-TTS` on host NVIDIA RTX 4070 GPU via CUDA float16, speaker `Mohamed`)
+  - **Voice Cost**: $0.00 (100% local neural inference, zero ElevenLabs calls)
+  - **Stock Provider**: Real Pexels HD footage via live API key (`nqjW••••3nvt`)
+    - Assets: 5083287, 7563932, 8938179 (100% semantic score, 100% orientation fit, 100% duration fit)
+    - Zero placeholder footage, zero mock assets
+  - **Captions**: `viral_bold` style burned into video with correct RTL text shaping and margins
+  - **Media Delivery QA**:
+    - Thumbnail GET `/api/videos/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Thumbnail GET `/api/short-video/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Preview stream GET `/api/short-video/:id`: `200 OK` (video/mp4, 5,284,393 bytes, Accept-Ranges: bytes)
+    - Range request GET `/api/short-video/:id` (`Range: bytes=0-1023`): `206 Partial Content` (Content-Range: bytes 0-1023/5284393)
+    - Download GET `/api/videos/:id/download`: `200 OK` (video/mp4, attachment filename `abud-short-11-cmtpagwt2000d07ogg5ld9wd7.mp4`)
+  - **Diagnostics & Provider Ledger**:
+    - Conclusively diagnosed doctor report consistency: `Providers: 0 configured, 0 healthy, 5 total` in `doctor` specifically reports social publishing channels (Upload-Post, Telegram, YouTube, Meta, TikTok). Stock & Voice providers (Pexels, VoiceTut) are separately tracked in the Provider Vault (`/api/v2/providers`), where Pexels is `configured = true` and VoiceTut is `configured = true` (healthy).
+    - `short-studio status`: All components Healthy.
+    - `short-studio doctor`: `16 passed, 1 warnings, 0 failed` (1 warning for pre-rotation failed attempt).
+  - **Owner Review**: PENDING human inspection.
+
 ### Short Studio 2.5 Live Gate Ledger
 
 | Gate | Status |
@@ -11594,16 +11626,17 @@ this section is updated again at actual GA promotion, not pre-marked passed.
 | Pexels activation | PASS |
 | Permanent primary cutover | PASS |
 | Local Voice final readiness | PASS |
-| Real Arabic video + owner review | PENDING |
+| Real Arabic video production | PASS (OWNER REVIEW PENDING) |
 | Real English video + owner review | PENDING |
 | Upload-Post live activation/publication | PENDING |
 | Final GA promotion | PENDING |
 
 ### Remaining Pre-GA Commercial Closure Tasks
 
-1. Real Arabic video (VoiceTut, no paid AI) + owner review.
+1. Owner review and human approval of real Arabic video (`cmtpagwt2000d07ogg5ld9wd7`).
 2. Real English video (Kokoro) + owner review.
 3. Upload-Post live activation and one owner-authorized test publication.
 4. Full browser QA (desktop + mobile, Arabic + English UI).
 5. Linux script execution against a real Linux target.
 6. GitHub repository rename (deliberately last, pending owner permissions).
+

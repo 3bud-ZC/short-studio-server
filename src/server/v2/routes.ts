@@ -1674,6 +1674,10 @@ export function createV2PublicRouter(
     if (process.env.COMFYUI_BASE_URL) ids.add("comfyui");
     if (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY) ids.add("gemini");
     if (new ElevenLabsVoiceProvider().isConfigured()) ids.add("elevenlabs");
+    if (new VoiceRegistry({} as any).isArabicProductionConfigured()) {
+      ids.add("local_voice");
+      ids.add("voicetut");
+    }
     if (providerVault.isAvailable()) {
       const vaultCredentials = await providerVault.list().catch(() => []);
       vaultCredentials.forEach((credential) => {
@@ -1857,14 +1861,30 @@ export function createV2PublicRouter(
     }
 
     if (isArabicLanguage(spec?.language || controls.language, (spec?.dialect || controls.dialect) as any)) {
-      add(
-        "elevenlabs",
-        "ElevenLabs Arabic voice",
-        providerIds.has("elevenlabs"),
-        true,
-        ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
-        { label: "Configure ElevenLabs", href: "/providers" },
-      );
+      const wantsElevenLabs =
+        controls.voiceProvider === ARABIC_PREMIUM_CLOUD_PROVIDER ||
+        spec?.voiceProvider === ARABIC_PREMIUM_CLOUD_PROVIDER;
+      if (wantsElevenLabs) {
+        add(
+          "elevenlabs",
+          "ElevenLabs Arabic voice",
+          providerIds.has("elevenlabs"),
+          true,
+          ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
+          { label: "Configure ElevenLabs", href: "/providers" },
+        );
+      } else {
+        const localVoiceConfigured = new VoiceRegistry({} as any).isArabicProductionConfigured();
+        const hasArabicVoice = localVoiceConfigured || providerIds.has("elevenlabs");
+        add(
+          "local_voice",
+          "Local Egyptian Arabic voice",
+          hasArabicVoice,
+          true,
+          ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE,
+          { label: "Open Local Voice Setup", href: "/providers" },
+        );
+      }
     } else {
       add("kokoro", "Built-in English voice", true, false);
     }
