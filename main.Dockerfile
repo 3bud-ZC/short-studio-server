@@ -1,7 +1,17 @@
-FROM ubuntu:22.04 AS install-whisper
+FROM debian:bookworm-slim AS install-whisper
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update
 # whisper install dependencies
+#
+# Built on debian:bookworm-slim (the same base OS/glibc as the `node:22-
+# bookworm-slim` runtime stage below), not ubuntu:22.04 as before: a binary
+# compiled under Ubuntu 22.04's glibc/toolchain and then copied into a
+# Debian bookworm runtime crashed with SIGILL (illegal instruction) even
+# after pinning a portable -march baseline - a cross-distro glibc ABI
+# mismatch, confirmed by building and running the same source directly on
+# each base image. Compiling in the runtime's own OS avoids that class of
+# bug entirely, which is the only real way to guarantee the shipped binary
+# runs unmodified in the image that ships it.
 RUN apt install -y \
     git \
     build-essential \
@@ -40,6 +50,10 @@ RUN apt install -y \
       curl \
       make \
       libsdl2-dev \
+      # OpenMP runtime the whisper.cpp binary (built with -fopenmp in the
+      # install-whisper stage) links against; not pulled in transitively
+      # here since this stage never installs a C/C++ compiler itself.
+      libgomp1 \
       # remotion dependencies
       libnss3 \
       libdbus-1-3 \
