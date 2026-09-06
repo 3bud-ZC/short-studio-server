@@ -819,7 +819,9 @@ export const ar: TranslationCatalog = {
   "settings.field.timezone": "المنطقة الزمنية الافتراضية",
 
   "settings.account.title": "الحساب والأمان",
-  "settings.account.description": "بيانات دخول المالك لهذا التثبيت.",
+  "settings.account.description": "عناصر التحكم في الوصول لهذا التثبيت.",
+  "settings.account.localAccessMode": "وضع الوصول: مستخدم محلي واحد",
+  "settings.account.localRemoteAccess": "الوصول عن بُعد: معطّل",
   "settings.account.currentUsername": "اسم المستخدم الحالي: {username}",
   "settings.account.changeUsername": "تغيير اسم المستخدم",
   "settings.account.newUsername": "اسم المستخدم الجديد",

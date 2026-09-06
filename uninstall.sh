@@ -55,14 +55,26 @@ elif [ "$IS_LEGACY_ABUD_INSTALL" = true ]; then
 else
   ABUD_COMPOSE_PROJECT="short-studio"
 fi
+env_value() {
+  key="$1"
+  default="${2:-}"
+  [ -f "$ABUD_ENV_FILE" ] || { printf '%s\n' "$default"; return; }
+  value="$(grep -E "^${key}=" "$ABUD_ENV_FILE" | tail -n 1 | sed "s/^${key}=//" || true)"
+  printf '%s\n' "${value:-$default}"
+}
+
 # The real, already-existing volume/network names on a legacy installation are
 # project-prefixed - the pre-2.5 compose file never set an explicit `name:`.
-# A fresh Short Studio install pins an explicit `name:` instead, so its real
-# names are the bare short-studio-*-data / short-studio-v2.
+# Fresh Short Studio installs write explicit names too, derived from their
+# compose project, so isolated rehearsals do not share default volumes.
 if [ "$IS_LEGACY_ABUD_INSTALL" = true ]; then
-  POSTGRES_VOLUME_NAME="${ABUD_COMPOSE_PROJECT}_abud-shorts-postgres-data"
+  POSTGRES_VOLUME_NAME="$(env_value ABUD_POSTGRES_VOLUME "${ABUD_COMPOSE_PROJECT}_abud-shorts-postgres-data")"
+  N8N_VOLUME_NAME="$(env_value ABUD_N8N_VOLUME "${ABUD_COMPOSE_PROJECT}_abud-shorts-n8n-data")"
+  NETWORK_NAME="$(env_value ABUD_NETWORK "${ABUD_COMPOSE_PROJECT}_abud-shorts-v2")"
 else
-  POSTGRES_VOLUME_NAME="short-studio-postgres-data"
+  POSTGRES_VOLUME_NAME="$(env_value SHORT_STUDIO_POSTGRES_VOLUME "${ABUD_COMPOSE_PROJECT}-postgres-data")"
+  N8N_VOLUME_NAME="$(env_value SHORT_STUDIO_N8N_VOLUME "${ABUD_COMPOSE_PROJECT}-n8n-data")"
+  NETWORK_NAME="$(env_value SHORT_STUDIO_NETWORK "${ABUD_COMPOSE_PROJECT}-v2")"
 fi
 
 # Fall back to the in-place layout used by a developer checkout.
@@ -79,10 +91,13 @@ echo "================================================================="
 compose() {
   export SHORT_STUDIO_DATA_DIR="$ABUD_DATA_DIR" ABUD_DATA_DIR="$ABUD_DATA_DIR"
   export SHORT_STUDIO_RELEASE_DIR="$ABUD_HOME/current" ABUD_RELEASE_DIR="$ABUD_HOME/current"
+  export SHORT_STUDIO_POSTGRES_VOLUME="$POSTGRES_VOLUME_NAME"
+  export SHORT_STUDIO_N8N_VOLUME="$N8N_VOLUME_NAME"
+  export SHORT_STUDIO_NETWORK="$NETWORK_NAME"
   if [ "$IS_LEGACY_ABUD_INSTALL" = true ]; then
     export ABUD_POSTGRES_VOLUME="$POSTGRES_VOLUME_NAME"
-    export ABUD_N8N_VOLUME="${ABUD_COMPOSE_PROJECT}_abud-shorts-n8n-data"
-    export ABUD_NETWORK="${ABUD_COMPOSE_PROJECT}_abud-shorts-v2"
+    export ABUD_N8N_VOLUME="$N8N_VOLUME_NAME"
+    export ABUD_NETWORK="$NETWORK_NAME"
   fi
   docker compose --project-name "$ABUD_COMPOSE_PROJECT" \
     ${ABUD_ENV_FILE:+--env-file "$ABUD_ENV_FILE"} \
@@ -99,6 +114,7 @@ if [ "$REMOVE_DATA" != true ]; then
   echo "  PRESERVED:"
   echo "    Videos, uploads and media   $ABUD_DATA_DIR"
   echo "    Database                    Docker volume $POSTGRES_VOLUME_NAME"
+  echo "    Automation data             Docker volume $N8N_VOLUME_NAME"
   echo "    Backups                     $ABUD_SHARED/backups"
   echo "    Configuration and secrets   $ABUD_SHARED/config"
   echo ""

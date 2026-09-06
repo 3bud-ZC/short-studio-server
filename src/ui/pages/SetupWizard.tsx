@@ -52,8 +52,13 @@ export const SetupWizard: React.FC = () => {
   const { t, format } = useI18n();
   // Version comes from the canonical contract, never from a literal here.
   const { info: productInfo } = useProductInfo();
-  const steps = stepKeys;
+  const localSingleUser = productInfo?.accessMode === "local";
+  const steps = React.useMemo(
+    () => (localSingleUser ? stepKeys.filter((key) => key !== "setup.signIn") : stepKeys),
+    [localSingleUser],
+  );
   const [activeStep, setActiveStep] = useState(0);
+  const currentStepKey = steps[activeStep] || steps[0];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +83,7 @@ export const SetupWizard: React.FC = () => {
       .get("/api/v2/setup/status")
       .then((res) => {
         if (res.data.isSetupCompleted) {
-          // Setup already complete
+          navigate("/");
         }
       })
       .catch(() => {});
@@ -87,13 +92,19 @@ export const SetupWizard: React.FC = () => {
       .get("/health/ready")
       .then((res) => setSystemHealth(res.data))
       .catch(() => setSystemHealth({ ready: true, message: "Local system ready" }));
-  }, []);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (activeStep >= steps.length) {
+      setActiveStep(Math.max(0, steps.length - 1));
+    }
+  }, [activeStep, steps.length]);
 
   const handleNext = async () => {
     setError(null);
 
     // Validate Admin Step
-    if (activeStep === 2) {
+    if (currentStepKey === "setup.signIn") {
       if (!adminUsername || adminUsername.trim().length < 3) {
         setError("Username must be at least 3 characters.");
         return;
@@ -129,7 +140,7 @@ export const SetupWizard: React.FC = () => {
     }
 
     // Final step: complete setup
-    if (activeStep === steps.length - 2) {
+    if (currentStepKey === "setup.review") {
       setLoading(true);
       try {
         // Keys typed during setup are saved into the encrypted vault here.
@@ -172,7 +183,7 @@ export const SetupWizard: React.FC = () => {
       }
     }
 
-    if (activeStep === steps.length - 1) {
+    if (currentStepKey === "setup.ready") {
       navigate("/");
       return;
     }
@@ -216,7 +227,7 @@ export const SetupWizard: React.FC = () => {
         */}
         <Box sx={{ display: { xs: "block", md: "none" }, mb: 3 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 1 }}>
-            <Typography variant="subtitle1">{t(steps[activeStep])}</Typography>
+            <Typography variant="subtitle1">{t(currentStepKey)}</Typography>
             <Typography variant="caption" color="text.secondary">
               {t("setup.stepCounter", {
                 current: format.number(activeStep + 1),
@@ -254,7 +265,7 @@ export const SetupWizard: React.FC = () => {
 
         <CardContent sx={{ minHeight: 280 }}>
           {/* Step 0: Welcome */}
-          {activeStep === 0 && (
+          {currentStepKey === "setup.welcome" && (
             <Stack spacing={2} alignItems="center" textAlign="center">
               <RocketLaunchIcon sx={{ fontSize: 56, color: "primary.main" }} />
               <Typography variant="h5">{t("setup.welcomeHeading")}</Typography>
@@ -275,7 +286,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 1: System Check */}
-          {activeStep === 1 && (
+          {currentStepKey === "setup.systemCheck" && (
             <Stack spacing={2}>
               <Typography variant="h6">{t("setup.systemCheckHeading")}</Typography>
               <Typography variant="body2" color="text.secondary">
@@ -322,7 +333,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 2: Admin Access */}
-          {activeStep === 2 && (
+          {currentStepKey === "setup.signIn" && (
             <Stack spacing={2.5}>
               <Box>
                 <Typography variant="h6" fontWeight={700}>
@@ -359,7 +370,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 3: Storage */}
-          {activeStep === 3 && (
+          {currentStepKey === "setup.storage" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
                 Persistent Storage Locations
@@ -381,7 +392,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 4: Free Providers */}
-          {activeStep === 4 && (
+          {currentStepKey === "setup.stockFootage" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
                 Stock footage
@@ -415,7 +426,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 5: Optional AI */}
-          {activeStep === 5 && (
+          {currentStepKey === "setup.voiceAndAi" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
                 Voice &amp; AI
@@ -450,7 +461,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 6: Publishing */}
-          {activeStep === 6 && (
+          {currentStepKey === "setup.publishing" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
                 Social Publishing & Distribution
@@ -474,7 +485,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 7: Defaults */}
-          {activeStep === 7 && (
+          {currentStepKey === "setup.videoDefaults" && (
             <Stack spacing={2.5}>
               <Typography variant="h6">{t("setup.videoDefaults")}</Typography>
               {/* Narration language is a production setting. It is deliberately
@@ -512,7 +523,7 @@ export const SetupWizard: React.FC = () => {
           )}
 
           {/* Step 8: Verification */}
-          {activeStep === 8 && (
+          {currentStepKey === "setup.review" && (
             <Stack spacing={2} textAlign="center" alignItems="center">
               <CheckCircleIcon sx={{ fontSize: 60, color: "success.main" }} />
               <Typography variant="h5" fontWeight={700}>
@@ -525,7 +536,7 @@ Everything checks out
           )}
 
           {/* Step 9: Finish */}
-          {activeStep === 9 && (
+          {currentStepKey === "setup.ready" && (
             <Stack spacing={3} textAlign="center" alignItems="center">
               <RocketLaunchIcon sx={{ fontSize: 70, color: "primary.main" }} />
               <Typography variant="h4" fontWeight={700} color="primary.main">
@@ -551,7 +562,7 @@ Everything checks out
             <Button variant="contained" onClick={handleNext} disabled={loading}>
               {loading ? (
                 <CircularProgress size={22} color="inherit" />
-              ) : activeStep === steps.length - 2 ? (
+              ) : currentStepKey === "setup.review" ? (
                 t("setup.finish")
               ) : (
                 t("common.next")

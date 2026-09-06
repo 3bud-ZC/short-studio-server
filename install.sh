@@ -262,7 +262,6 @@ tar -c --exclude='./images' -C "$PACKAGE_DIR" . | tar -x -C "$RELEASE_DIR.incomi
 rm -rf "$RELEASE_DIR"
 mv "$RELEASE_DIR.incoming" "$RELEASE_DIR"
 chmod +x "$RELEASE_DIR"/scripts/host/*.sh 2>/dev/null || true
-ln -sfn "$RELEASE_DIR" "$ABUD_CURRENT"
 echo "      Installed to $RELEASE_DIR"
 
 # ---------------------------------------------------------------------------
@@ -291,6 +290,8 @@ if [ ! -f "$ABUD_ENV_FILE" ]; then
 HOST_PORT=$HOST_PORT
 V2_PUBLIC_URL=$PUBLIC_URL
 TRUSTED_PROXY=$TRUSTED_PROXY_VALUE
+SHORT_STUDIO_ACCESS_MODE=local
+SHORT_STUDIO_PUBLIC_BIND_HOST=127.0.0.1
 
 SHORT_STUDIO_IMAGE=$RELEASE_IMAGE
 SHORT_STUDIO_RELEASE_CHANNEL=$RELEASE_CHANNEL
@@ -298,6 +299,9 @@ SHORT_STUDIO_HOST_PLATFORM=linux
 SHORT_STUDIO_INSTALL_TYPE=docker_linux
 SHORT_STUDIO_COMPOSE_PROJECT=$ABUD_COMPOSE_PROJECT
 SHORT_STUDIO_CONTAINER_PREFIX=$ABUD_COMPOSE_PROJECT
+SHORT_STUDIO_POSTGRES_VOLUME=$ABUD_COMPOSE_PROJECT-postgres-data
+SHORT_STUDIO_N8N_VOLUME=$ABUD_COMPOSE_PROJECT-n8n-data
+SHORT_STUDIO_NETWORK=$ABUD_COMPOSE_PROJECT-v2
 
 NODE_ENV=production
 V2_ENABLED=true
@@ -351,7 +355,12 @@ else
     update_env SHORT_STUDIO_RELEASE_CHANNEL "$RELEASE_CHANNEL"
     update_env SHORT_STUDIO_COMPOSE_PROJECT "$ABUD_COMPOSE_PROJECT"
     update_env SHORT_STUDIO_CONTAINER_PREFIX "$ABUD_COMPOSE_PROJECT"
+    grep -qE "^SHORT_STUDIO_POSTGRES_VOLUME=" "$ABUD_ENV_FILE" || update_env SHORT_STUDIO_POSTGRES_VOLUME "$ABUD_COMPOSE_PROJECT-postgres-data"
+    grep -qE "^SHORT_STUDIO_N8N_VOLUME=" "$ABUD_ENV_FILE" || update_env SHORT_STUDIO_N8N_VOLUME "$ABUD_COMPOSE_PROJECT-n8n-data"
+    grep -qE "^SHORT_STUDIO_NETWORK=" "$ABUD_ENV_FILE" || update_env SHORT_STUDIO_NETWORK "$ABUD_COMPOSE_PROJECT-v2"
   fi
+  grep -qE "^SHORT_STUDIO_ACCESS_MODE=" "$ABUD_ENV_FILE" || update_env SHORT_STUDIO_ACCESS_MODE "local"
+  grep -qE "^SHORT_STUDIO_PUBLIC_BIND_HOST=" "$ABUD_ENV_FILE" || update_env SHORT_STUDIO_PUBLIC_BIND_HOST "127.0.0.1"
   echo "      Existing configuration kept; secrets and data untouched."
 fi
 
@@ -366,21 +375,23 @@ PREVIOUS_PRODUCT_VALUE=""
 if [ "$IS_LEGACY_ABUD_INSTALL" = true ] && [ "$PRIOR_PRODUCT" = "ABUD Shorts Engine" ]; then
   PREVIOUS_PRODUCT_VALUE="ABUD Shorts Engine $PRIOR_VERSION"
 fi
-jq -n \
-  --arg current "$RELEASE_VERSION" \
-  --arg previous "$PRIOR_VERSION" \
-  --arg previousProduct "$PREVIOUS_PRODUCT_VALUE" \
-  --arg image "$RELEASE_IMAGE" \
-  --arg channel "$RELEASE_CHANNEL" \
-  --arg url "$PUBLIC_URL" \
-  --arg home "$ABUD_HOME" \
-  --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{product: "Short Studio Server",
-    previousProduct: (if $previousProduct == "" then null else $previousProduct end),
-    currentVersion: $current, previousVersion: (if $previous == "" then null else $previous end),
-    image: $image, channel: $channel, publicUrl: $url, installRoot: $home, updatedAt: $at}' \
-  > "$ABUD_SHARED/installation.json"
-chmod 600 "$ABUD_SHARED/installation.json"
+write_installation_record() {
+  jq -n \
+    --arg current "$RELEASE_VERSION" \
+    --arg previous "$PRIOR_VERSION" \
+    --arg previousProduct "$PREVIOUS_PRODUCT_VALUE" \
+    --arg image "$RELEASE_IMAGE" \
+    --arg channel "$RELEASE_CHANNEL" \
+    --arg url "$PUBLIC_URL" \
+    --arg home "$ABUD_HOME" \
+    --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{product: "Short Studio Server",
+      previousProduct: (if $previousProduct == "" then null else $previousProduct end),
+      currentVersion: $current, previousVersion: (if $previous == "" then null else $previous end),
+      image: $image, channel: $channel, publicUrl: $url, installRoot: $home, updatedAt: $at}' \
+    > "$ABUD_SHARED/installation.json"
+  chmod 600 "$ABUD_SHARED/installation.json"
+}
 
 # ---------------------------------------------------------------------------
 # 8. Start
@@ -396,6 +407,8 @@ if [ "$IS_LEGACY_ABUD_INSTALL" = true ]; then
   # pre-2.5 compose file (Docker Compose's own default "<project>_<key>"
   # naming, since that file never set an explicit `name:`).
   LEGACY_VOLUME_ENV="ABUD_POSTGRES_VOLUME=${ABUD_COMPOSE_PROJECT}_abud-shorts-postgres-data ABUD_N8N_VOLUME=${ABUD_COMPOSE_PROJECT}_abud-shorts-n8n-data ABUD_NETWORK=${ABUD_COMPOSE_PROJECT}_abud-shorts-v2"
+else
+  LEGACY_VOLUME_ENV="SHORT_STUDIO_POSTGRES_VOLUME=${ABUD_COMPOSE_PROJECT}-postgres-data SHORT_STUDIO_N8N_VOLUME=${ABUD_COMPOSE_PROJECT}-n8n-data SHORT_STUDIO_NETWORK=${ABUD_COMPOSE_PROJECT}-v2"
 fi
 env $LEGACY_VOLUME_ENV \
   SHORT_STUDIO_DATA_DIR="$ABUD_DATA_DIR" ABUD_DATA_DIR="$ABUD_DATA_DIR" \
@@ -406,6 +419,9 @@ docker compose \
   --env-file "$ABUD_ENV_FILE" \
   --file "$RELEASE_DIR/docker-compose.prod.yml" \
   up -d --remove-orphans
+
+ln -sfn "$RELEASE_DIR" "$ABUD_CURRENT"
+write_installation_record
 
 # The operator command. After this the customer never needs a Docker command.
 # short-studio is canonical; abud-shorts is kept working as a legacy alias for

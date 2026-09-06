@@ -19,6 +19,8 @@ export type ProductInfo = {
   version: string;
   stage: string;
   build: string;
+  accessMode?: "local" | "secure_server";
+  remoteAccess?: "disabled" | "secure_server";
   schemaVersion?: string;
   releaseChannel?: string;
   canonicalUrl?: string;

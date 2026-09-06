@@ -161,7 +161,7 @@ describe("F4 - installation and update never destroy customer data", () => {
       const source = read(script);
       // PostgreSQL and n8n keep running through an update, so no data volume is
       // ever detached while the version is switched.
-      expect(source).toMatch(/short-studio-app.*short-studio-render-worker/s);
+      expect(source).toMatch(/abud-shorts-app.*abud-shorts-render-worker/s);
       expect(source).not.toMatch(/stop\s+(?:short-studio|abud-shorts)-postgres/);
       expect(source).not.toMatch(/stop["'\s,()]+(?:Get-ContainerName\s*)?["']?postgres/);
     }
@@ -266,9 +266,10 @@ describe("F4 - update security posture", () => {
 
   it("publishes only the application, never the database, automation or worker", () => {
     const compose = read("docker-compose.prod.yml");
-    const publishedPorts = compose.match(/^\s+- "\$\{?[^"]*\}?:\d+"/gm) || [];
+    const publishedPorts = compose.match(/^\s+- "(?:127\.0\.0\.1:)?\$\{?[^"]*\}?:\d+"/gm) || [];
     // Exactly one published port, and it is the app's.
     expect(publishedPorts).toHaveLength(1);
+    expect(publishedPorts[0]).toContain("127.0.0.1:");
     expect(publishedPorts[0]).toContain("HOST_PORT");
   });
 

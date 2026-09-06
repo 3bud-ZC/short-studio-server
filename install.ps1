@@ -64,7 +64,12 @@ if (-not $InstallRoot) {
         $InstallRoot = $FreshShortStudioRoot
     }
 }
-$IsLegacyAbudInstall = ($InstallRoot -eq $LegacyAbudRoot) -and (Test-Path (Join-Path $InstallRoot "shared\config\.env"))
+$ExistingEnvFile = Join-Path $InstallRoot "shared\config\.env"
+$IsLegacyAbudInstall = (($InstallRoot -eq $LegacyAbudRoot) -and (Test-Path $ExistingEnvFile))
+if (-not $IsLegacyAbudInstall -and $InstallRoot -and (Test-Path $ExistingEnvFile)) {
+    $legacyEnvLine = Get-Content $ExistingEnvFile | Where-Object { $_ -match "^ABUD_CONTAINER_PREFIX=" } | Select-Object -Last 1
+    $IsLegacyAbudInstall = [bool]$legacyEnvLine
+}
 $AbudShared      = Join-Path $InstallRoot "shared"
 $AbudReleases    = Join-Path $InstallRoot "releases"
 $AbudCurrentFile = Join-Path $InstallRoot "current.txt"
@@ -307,7 +312,6 @@ New-Item -ItemType Directory -Path "$ReleaseDir.incoming" -Force | Out-Null
 Get-ChildItem $PackageDir -Exclude "images" | Copy-Item -Destination "$ReleaseDir.incoming" -Recurse -Force
 if (Test-Path $ReleaseDir) { Remove-Item $ReleaseDir -Recurse -Force }
 Move-Item "$ReleaseDir.incoming" $ReleaseDir
-Write-TextFile $AbudCurrentFile $ReleaseDir
 Write-Host "      Installed to $ReleaseDir" -ForegroundColor Green
 
 # ---------------------------------------------------------------------------
@@ -346,6 +350,8 @@ if (-not (Test-Path $AbudEnvFile)) {
 HOST_PORT=$Port
 V2_PUBLIC_URL=$PublicUrl
 TRUSTED_PROXY=$TrustedProxyValue
+SHORT_STUDIO_ACCESS_MODE=local
+SHORT_STUDIO_PUBLIC_BIND_HOST=127.0.0.1
 
 SHORT_STUDIO_IMAGE=$ReleaseImage
 SHORT_STUDIO_RELEASE_CHANNEL=$ReleaseChannel
@@ -353,6 +359,9 @@ SHORT_STUDIO_HOST_PLATFORM=windows
 SHORT_STUDIO_INSTALL_TYPE=docker_windows
 SHORT_STUDIO_COMPOSE_PROJECT=$ComposeProject
 SHORT_STUDIO_CONTAINER_PREFIX=$ComposeProject
+SHORT_STUDIO_POSTGRES_VOLUME=$ComposeProject-postgres-data
+SHORT_STUDIO_N8N_VOLUME=$ComposeProject-n8n-data
+SHORT_STUDIO_NETWORK=$ComposeProject-v2
 
 NODE_ENV=production
 V2_ENABLED=true
@@ -417,6 +426,21 @@ PEXELS_API_KEY=
         $lines = Update-EnvLine $lines "SHORT_STUDIO_RELEASE_CHANNEL" $ReleaseChannel
         $lines = Update-EnvLine $lines "SHORT_STUDIO_COMPOSE_PROJECT" $ComposeProject
         $lines = Update-EnvLine $lines "SHORT_STUDIO_CONTAINER_PREFIX" $ComposeProject
+        if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_POSTGRES_VOLUME")) {
+            $lines = Update-EnvLine $lines "SHORT_STUDIO_POSTGRES_VOLUME" "$ComposeProject-postgres-data"
+        }
+        if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_N8N_VOLUME")) {
+            $lines = Update-EnvLine $lines "SHORT_STUDIO_N8N_VOLUME" "$ComposeProject-n8n-data"
+        }
+        if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_NETWORK")) {
+            $lines = Update-EnvLine $lines "SHORT_STUDIO_NETWORK" "$ComposeProject-v2"
+        }
+    }
+    if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_ACCESS_MODE")) {
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_ACCESS_MODE" "local"
+    }
+    if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_PUBLIC_BIND_HOST")) {
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_PUBLIC_BIND_HOST" "127.0.0.1"
     }
     Write-TextFile $AbudEnvFile (($lines -join "`r`n") + "`r`n")
     Write-Host "      Existing configuration kept; secrets and data untouched." -ForegroundColor Green
@@ -431,7 +455,7 @@ if (Test-Path $installationJsonPath) {
 # Engine 2.4 installation - a truthful one-time migration record, not shown
 # again once installation.json itself already says Short Studio Server.
 $migratedFromAbud = $IsLegacyAbudInstall -and $priorInstallation -and ($priorInstallation.product -eq "ABUD Shorts Engine")
-[ordered]@{
+$installationRecord = [ordered]@{
     product         = "Short Studio Server"
     previousProduct = $(if ($migratedFromAbud) { "ABUD Shorts Engine $($priorInstallation.currentVersion)" } else { $(if ($priorInstallation) { $priorInstallation.previousProduct } else { $null }) })
     currentVersion  = $ReleaseVersion
@@ -441,7 +465,7 @@ $migratedFromAbud = $IsLegacyAbudInstall -and $priorInstallation -and ($priorIns
     publicUrl       = $PublicUrl
     installRoot     = $InstallRoot
     updatedAt       = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-} | ConvertTo-Json -Depth 6 | ForEach-Object { Write-TextFile $installationJsonPath $_ }
+}
 
 # ---------------------------------------------------------------------------
 # 8. Local Voice (Egyptian Arabic) - hardware detection, runtime/model
@@ -510,6 +534,11 @@ $env:SHORT_STUDIO_RELEASE_DIR = $ReleaseDir
 $env:ABUD_RELEASE_DIR = $ReleaseDir
 $env:SHORT_STUDIO_CONTAINER_PREFIX = $ComposeProject
 $env:ABUD_CONTAINER_PREFIX = $ComposeProject
+if (-not $IsLegacyAbudInstall) {
+    $env:SHORT_STUDIO_POSTGRES_VOLUME = "$ComposeProject-postgres-data"
+    $env:SHORT_STUDIO_N8N_VOLUME = "$ComposeProject-n8n-data"
+    $env:SHORT_STUDIO_NETWORK = "$ComposeProject-v2"
+}
 if ($IsLegacyAbudInstall) {
     # Belt-and-suspenders alongside the .env write above: pins compose to the
     # real, already-existing volumes/network from the pre-2.5 compose file
@@ -522,6 +551,8 @@ if ($IsLegacyAbudInstall) {
 $composeFile = Join-Path $ReleaseDir "docker-compose.prod.yml"
 Invoke-Docker @("compose", "--project-name", $ComposeProject, "--env-file", $AbudEnvFile, "--file", $composeFile, "up", "-d", "--remove-orphans")
 if ($LASTEXITCODE -ne 0) { Fail "The system could not be started. Check that Docker Desktop has enough memory assigned." }
+Write-TextFile $AbudCurrentFile $ReleaseDir
+Write-TextFile $installationJsonPath ($installationRecord | ConvertTo-Json -Depth 6)
 
 # Start Menu shortcuts, so the customer never types a Docker command.
 if (-not $NoShortcuts) {

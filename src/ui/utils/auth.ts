@@ -14,11 +14,37 @@ export function isAuthenticated(): boolean {
   return Boolean(getSessionToken());
 }
 
-export function shouldRedirectToLogin(status?: number, url = ""): boolean {
+export async function isLocalSingleUserBrowserOwner(): Promise<boolean> {
+  try {
+    const response = await axios.get("/api/v2/auth/me", { timeout: 6000 });
+    const isLocal = response.data?.user?.accessMode === "local";
+    if (isLocal) {
+      try {
+        localStorage.setItem("abud_access_mode", "local");
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem("abud_access_mode");
+      } catch {}
+    }
+    return isLocal;
+  } catch {
+    return false;
+  }
+}
+
+export function shouldRedirectToLogin(status?: number, url = "", accessMode?: string): boolean {
   if (status !== 401) return false;
+  try {
+    const currentMode =
+      accessMode ||
+      (typeof window !== "undefined" ? localStorage.getItem("abud_access_mode") : null);
+    if (currentMode === "local") return false;
+  } catch {}
   const target = String(url || "");
   return !(
     target.includes("/api/v2/auth/login") ||
+    target.includes("/api/v2/auth/me") ||
     target.includes("/api/v2/auth/setup-admin") ||
     target.includes("/api/v2/setup/status")
   );

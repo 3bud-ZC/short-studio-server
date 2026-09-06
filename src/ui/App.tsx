@@ -22,13 +22,39 @@ import { EmptyState, ErrorBoundary, PageHeader } from "./components/v2";
 import { I18nProvider, useI18n } from "./i18n";
 
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { getSessionToken } from "./utils/auth";
+import { getSessionToken, isLocalSingleUserBrowserOwner } from "./utils/auth";
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = getSessionToken();
   const location = useLocation();
+  const [access, setAccess] = React.useState<"checking" | "local" | "anonymous">(
+    token ? "local" : "checking",
+  );
 
-  if (!token) {
+  React.useEffect(() => {
+    let cancelled = false;
+    if (token) {
+      setAccess("local");
+      return;
+    }
+    setAccess("checking");
+    isLocalSingleUserBrowserOwner()
+      .then((isLocal) => {
+        if (!cancelled) setAccess(isLocal ? "local" : "anonymous");
+      })
+      .catch(() => {
+        if (!cancelled) setAccess("anonymous");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  if (access === "checking") {
+    return null;
+  }
+
+  if (access === "anonymous") {
     try {
       localStorage.setItem("abud_auth_return_to", `${location.pathname}${location.search}`);
     } catch {
@@ -38,6 +64,27 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   return <>{children}</>;
+};
+
+const LoginRoute: React.FC = () => {
+  const [access, setAccess] = React.useState<"checking" | "local" | "secure">("checking");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    isLocalSingleUserBrowserOwner()
+      .then((isLocal) => {
+        if (!cancelled) setAccess(isLocal ? "local" : "secure");
+      })
+      .catch(() => {
+        if (!cancelled) setAccess("secure");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (access === "checking") return null;
+  return access === "local" ? <Navigate to="/" replace /> : <LoginPage />;
 };
 
 /** Shown for any path the router does not recognise. */
@@ -73,7 +120,7 @@ const App: React.FC = () => {
         <Layout>
           <ErrorBoundary>
             <Routes>
-              <Route path="/login" element={<LoginPage />} />
+              <Route path="/login" element={<LoginRoute />} />
               <Route path="/setup" element={<SetupWizard />} />
 
               <Route path="/" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />

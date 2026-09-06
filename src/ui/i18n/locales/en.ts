@@ -822,7 +822,9 @@ export const en: TranslationCatalog = {
   "settings.field.timezone": "Default time zone",
 
   "settings.account.title": "Account & security",
-  "settings.account.description": "Your owner sign-in for this installation.",
+  "settings.account.description": "Access controls for this installation.",
+  "settings.account.localAccessMode": "Access Mode: Local Single-User",
+  "settings.account.localRemoteAccess": "Remote Access: Disabled",
   "settings.account.currentUsername": "Current username: {username}",
   "settings.account.changeUsername": "Change username",
   "settings.account.newUsername": "New username",

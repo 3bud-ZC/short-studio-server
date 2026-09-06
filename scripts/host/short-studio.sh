@@ -214,7 +214,7 @@ cmd_rollback() {
   local previous_image
   previous_image="$(jq -r '.image // empty' "$previous_dir/release.json" 2>/dev/null || true)"
 
-  compose stop short-studio-app short-studio-render-worker >/dev/null 2>&1 || true
+  compose stop abud-shorts-app abud-shorts-render-worker >/dev/null 2>&1 || true
   if [ -n "$previous_image" ]; then
     if grep -qE '^SHORT_STUDIO_IMAGE=' "$ABUD_ENV_FILE"; then
       sed -i "s|^SHORT_STUDIO_IMAGE=.*|SHORT_STUDIO_IMAGE=${previous_image}|" "$ABUD_ENV_FILE"

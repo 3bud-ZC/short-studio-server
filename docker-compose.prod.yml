@@ -22,7 +22,7 @@
 # ==============================================================================
 
 services:
-  short-studio-postgres:
+  abud-shorts-postgres:
     # Pinned to an exact patch release. A floating tag would let an unrelated
     # PostgreSQL upgrade ride along with an application update.
     image: postgres:16.10-alpine
@@ -45,18 +45,18 @@ services:
       # `down -v` in any normal path. The external volume name is pinned via
       # `name:` below so an upgraded install can reattach to its existing
       # abud-shorts-postgres-data volume instead of a new empty one.
-      - postgres-data:/var/lib/postgresql/data
+      - abud-shorts-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
     networks:
-      short-studio-v2:
+      abud-shorts-v2:
         aliases:
           - postgres
 
-  short-studio-n8n:
+  abud-shorts-n8n:
     # Pinned. n8n changes workflow semantics between minor versions, so a
     # floating tag could break the control plane without any Short Studio release.
     image: n8nio/n8n:1.76.1
@@ -77,7 +77,7 @@ services:
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Africa/Cairo}
     volumes:
       # External volume name pinned via `name:` below - see the postgres note above.
-      - n8n-data:/home/node/.n8n
+      - abud-shorts-n8n-data:/home/node/.n8n
       - ${SHORT_STUDIO_RELEASE_DIR:-${ABUD_RELEASE_DIR:-.}}/integrations/n8n:/workflows:ro
     entrypoint: ["/bin/sh", "-c"]
     # n8n 1.76's import:workflow reads the file and calls .map() on it, so a
@@ -103,7 +103,7 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      short-studio-v2:
+      abud-shorts-v2:
         aliases:
           - n8n
 
@@ -124,7 +124,7 @@ services:
   # The render worker and the application are the same immutable image running
   # in two roles, which is what SERVICE_ROLE already selects. One image to pull,
   # one digest to verify, one thing to roll back.
-  short-studio-render-worker:
+  abud-shorts-render-worker:
     image: ${SHORT_STUDIO_IMAGE:-${ABUD_IMAGE:?SHORT_STUDIO_IMAGE (or legacy ABUD_IMAGE) must be set by the installer or updater}}
     container_name: ${SHORT_STUDIO_CONTAINER_PREFIX:-${ABUD_CONTAINER_PREFIX:-short-studio}}-render-worker
     restart: unless-stopped
@@ -179,11 +179,11 @@ services:
       # Linux Docker Engine (>=20.10), which also loads this same compose file.
       - "host.docker.internal:host-gateway"
     networks:
-      short-studio-v2:
+      abud-shorts-v2:
         aliases:
           - render-worker
 
-  short-studio-app:
+  abud-shorts-app:
     image: ${SHORT_STUDIO_IMAGE:-${ABUD_IMAGE:?SHORT_STUDIO_IMAGE (or legacy ABUD_IMAGE) must be set by the installer or updater}}
     container_name: ${SHORT_STUDIO_CONTAINER_PREFIX:-${ABUD_CONTAINER_PREFIX:-short-studio}}-app
     restart: unless-stopped
@@ -193,11 +193,11 @@ services:
         max-size: "20m"
         max-file: "5"
     depends_on:
-      short-studio-postgres:
+      abud-shorts-postgres:
         condition: service_healthy
-      short-studio-n8n:
+      abud-shorts-n8n:
         condition: service_started
-      short-studio-render-worker:
+      abud-shorts-render-worker:
         condition: service_started
     environment:
       SERVICE_ROLE: app
@@ -225,6 +225,8 @@ services:
       # and editable from Settings; every OAuth callback URL derives from it.
       V2_PUBLIC_URL: ${V2_PUBLIC_URL:-http://localhost:3130}
       HOST_PORT: ${HOST_PORT:-3130}
+      SHORT_STUDIO_ACCESS_MODE: ${SHORT_STUDIO_ACCESS_MODE:-local}
+      SHORT_STUDIO_PUBLIC_BIND_HOST: ${SHORT_STUDIO_PUBLIC_BIND_HOST:-127.0.0.1}
       # Unset means forwarded headers are ignored. Set to 1 (or a CIDR list)
       # only when nginx or Cloudflare really is in front.
       TRUSTED_PROXY: ${TRUSTED_PROXY:-}
@@ -243,8 +245,9 @@ services:
       VIDEO_CACHE_SIZE_IN_BYTES: ${VIDEO_CACHE_SIZE_IN_BYTES:-2097152000}
     ports:
       # Only the application is published. PostgreSQL, n8n and the render worker
-      # stay on the internal network with no host port at all.
-      - "${HOST_PORT:-3130}:3123"
+      # stay on the internal network with no host port at all. Local mode binds
+      # the customer-facing app to loopback so it is not exposed on the LAN.
+      - "127.0.0.1:${HOST_PORT:-3130}:3123"
     volumes:
       - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}:/app/data
       # Same physical directory as render-worker's /models mount - see the
@@ -259,7 +262,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      short-studio-v2:
+      abud-shorts-v2:
         aliases:
           - app
 
@@ -277,12 +280,12 @@ volumes:
   # whole migration and must never be left to the bare default. install.ps1
   # computes and writes the correct prefixed name for a detected legacy
   # installation; see the comment there for the reasoning.
-  postgres-data:
+  abud-shorts-postgres-data:
     name: ${SHORT_STUDIO_POSTGRES_VOLUME:-${ABUD_POSTGRES_VOLUME:-short-studio-postgres-data}}
-  n8n-data:
+  abud-shorts-n8n-data:
     name: ${SHORT_STUDIO_N8N_VOLUME:-${ABUD_N8N_VOLUME:-short-studio-n8n-data}}
 
 networks:
-  short-studio-v2:
+  abud-shorts-v2:
     name: ${SHORT_STUDIO_NETWORK:-${ABUD_NETWORK:-short-studio-v2}}
     driver: bridge

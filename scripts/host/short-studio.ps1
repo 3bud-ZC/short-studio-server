@@ -1010,7 +1010,7 @@ function Invoke-Rollback {
             $previousImage = (Get-Content $previousReleaseJson -Raw | ConvertFrom-Json).image
         }
 
-        Invoke-Compose @("stop", "short-studio-app", "short-studio-render-worker") 2>$null | Out-Null
+        Invoke-Compose @("stop", "abud-shorts-app", "abud-shorts-render-worker") 2>$null | Out-Null
         if ($previousImage) { Set-EnvValue "SHORT_STUDIO_IMAGE" $previousImage; Set-EnvValue "ABUD_IMAGE" $previousImage }
         Write-TextFile $AbudCurrentFile $previousDir
         Write-InstallationRecord $previous "" $previousImage $record.channel $record.publicUrl
@@ -1234,7 +1234,7 @@ function Invoke-Update {
 
         # Only the two services whose image changes stop. PostgreSQL and n8n
         # keep running, so no data volume is ever detached.
-        Invoke-Compose @("stop", "short-studio-app", "short-studio-render-worker") 2>$null | Out-Null
+        Invoke-Compose @("stop", "abud-shorts-app", "abud-shorts-render-worker") 2>$null | Out-Null
 
         Set-EnvValue "SHORT_STUDIO_IMAGE" $pinnedImage; Set-EnvValue "ABUD_IMAGE" $pinnedImage
         Write-TextFile $AbudCurrentFile $newReleaseDir
@@ -1261,7 +1261,7 @@ function Invoke-Update {
             # schema it does not understand.
             if (-not $release.schemaBackwardsCompatible) {
                 Write-Warn "This release changed the database in a way the previous version cannot read."
-                Invoke-Compose @("stop", "short-studio-app", "short-studio-render-worker") 2>$null | Out-Null
+                Invoke-Compose @("stop", "abud-shorts-app", "abud-shorts-render-worker") 2>$null | Out-Null
                 if (Restore-PreUpgradeBackup $backupId) {
                     $databaseRestored = $true
                     Write-Ok "Database restored from the pre-upgrade backup."

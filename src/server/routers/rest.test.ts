@@ -173,3 +173,30 @@ describe("download filename builder", () => {
     expect(filename.endsWith(".mp4")).toBe(true);
   });
 });
+
+describe("APIRouter local single-user access", () => {
+  test("allows /videos access without token in local access mode", async () => {
+    const express = (await import("express")).default;
+    const request = (await import("supertest")).default;
+    const { APIRouter } = await import("./rest");
+
+    const config = {
+      accessMode: "local",
+      videosDirPath: path.join(os.tmpdir(), "abud-test-videos"),
+      tempDirPath: os.tmpdir(),
+    } as any;
+    const shortCreator = {
+      getQueueStatus: () => ({ queue: [] }),
+    } as any;
+    const authService = {
+      validateSession: async () => null,
+    } as any;
+    const router = new APIRouter(config, shortCreator, authService);
+    const app = express();
+    app.use("/api", router.router);
+
+    const res = await request(app).get("/api/videos");
+    expect(res.status).toBe(200);
+  });
+});
+

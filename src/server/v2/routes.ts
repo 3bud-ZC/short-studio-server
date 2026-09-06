@@ -76,6 +76,7 @@ import {
 import { resolveTrustedProxy } from "./system/trustedProxy";
 import { AuthService } from "./auth/authService";
 import { ApiTokenService, type ApiTokenScope } from "./auth/apiTokenService";
+import { isLocalSingleUserAccess, localSingleUserOwner } from "./auth/localSingleUser";
 import {
   ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
   ARABIC_LIGHTWEIGHT_PROVIDER,
@@ -1571,10 +1572,16 @@ function isPublicHealthOrBootstrapPath(req: ExpressRequest): boolean {
   );
 }
 
-function requireV2Access(authService: AuthService, apiTokenService: ApiTokenService) {
+function requireV2Access(config: Config, authService: AuthService, apiTokenService: ApiTokenService) {
   return async (req: ExpressRequest, res: ExpressResponse, next: express.NextFunction) => {
     try {
       if (isPublicHealthOrBootstrapPath(req)) {
+        next();
+        return;
+      }
+
+      if (isLocalSingleUserAccess(config)) {
+        (req as any).v2Auth = { type: "local_owner", user: localSingleUserOwner() };
         next();
         return;
       }
@@ -1941,7 +1948,7 @@ export function createV2PublicRouter(
   }
 
   router.use(express.json({ limit: "2mb" }));
-  router.use(requireV2Access(authService, apiTokenService));
+  router.use(requireV2Access(config, authService, apiTokenService));
 
   // Mount Publishing & Distribution Routes
   router.use("/publishing", createPublishingRouter(config, publishingService));
@@ -4716,7 +4723,12 @@ export function createV2PublicRouter(
     // secret, no path, no provider state.
     const info = getProductInfo();
     const resolved = await resolveInstallationPublicUrl(db, config);
-    res.status(200).json({ ...info, canonicalUrl: resolved.url });
+    res.status(200).json({
+      ...info,
+      canonicalUrl: resolved.url,
+      accessMode: config.accessMode,
+      remoteAccess: config.accessMode === "local" ? "disabled" : "secure_server",
+    });
   });
 
   /**
@@ -4849,7 +4861,11 @@ export function createV2PublicRouter(
   router.get("/setup/status", async (req, res) => {
     try {
       const status = await authService.getSetupState();
-      res.status(200).json(status);
+      res.status(200).json({
+        ...status,
+        accessMode: config.accessMode,
+        ownerCredentialRequired: config.accessMode !== "local",
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to get setup status", message: String(error) });
     }
@@ -4908,6 +4924,11 @@ export function createV2PublicRouter(
   });
 
   router.get("/auth/me", async (req, res) => {
+    const auth = (req as any).v2Auth;
+    if (auth?.user) {
+      res.status(200).json({ user: auth.user });
+      return;
+    }
     const token = bearerToken(req);
     if (!token) {
       res.status(401).json({ error: "Unauthorized." });

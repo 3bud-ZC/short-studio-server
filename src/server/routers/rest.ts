@@ -33,6 +33,7 @@ import {
 import type { SceneInputWithFallback } from "../../types/shorts";
 import { AuthService } from "../v2/auth/authService";
 import { ApiTokenService } from "../v2/auth/apiTokenService";
+import { isLocalSingleUserAccess, localSingleUserOwner } from "../v2/auth/localSingleUser";
 
 // todo abstract class
 export class APIRouter {
@@ -598,6 +599,11 @@ export class APIRouter {
   private requireProtectedAccess(requiredScope: "production:create" | "videos:read") {
     return async (req: ExpressRequest, res: ExpressResponse, next: express.NextFunction) => {
       if (!this.authService) {
+        next();
+        return;
+      }
+      if (isLocalSingleUserAccess(this.config)) {
+        (req as any).v2Auth = { type: "local_owner", user: localSingleUserOwner() };
         next();
         return;
       }

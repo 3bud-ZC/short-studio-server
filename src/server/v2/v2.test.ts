@@ -5,7 +5,7 @@ import path from "path";
 import nock from "nock";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Config } from "../../config";
+import { Config, REMOTE_ACCESS_REQUIRES_SECURE_SERVER_MODE } from "../../config";
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { Server } from "../server";
 import { listVideoFiles, mergeMetadata, readMetadata, writeMetadata } from "../videoMetadata";
@@ -608,20 +608,112 @@ describe("V2 storage policy", () => {
 describe("V2 runtime config validation", () => {
   it("flags missing app database configuration when V2 is enabled", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
+    const previousV2Enabled = process.env.V2_ENABLED;
+    const previousInternalToken = process.env.INTERNAL_SERVICE_TOKEN;
     process.env.V2_ENABLED = "true";
     process.env.INTERNAL_SERVICE_TOKEN = "valid-internal-token-value-for-tests";
     delete process.env.DATABASE_URL;
-    const config = new Config();
-    config.serviceRole = "app";
-    const validation = config.validateRuntimeConfig();
+    try {
+      const config = new Config();
+      config.serviceRole = "app";
+      const validation = config.validateRuntimeConfig();
 
-    expect(validation.valid).toBe(false);
-    expect(validation.issues.some((issue) => issue.code === "missing_database_url")).toBe(true);
+      expect(validation.valid).toBe(false);
+      expect(validation.issues.some((issue) => issue.code === "missing_database_url")).toBe(true);
+    } finally {
+      if (previousDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = previousDatabaseUrl;
+      }
+      if (previousV2Enabled === undefined) {
+        delete process.env.V2_ENABLED;
+      } else {
+        process.env.V2_ENABLED = previousV2Enabled;
+      }
+      if (previousInternalToken === undefined) {
+        delete process.env.INTERNAL_SERVICE_TOKEN;
+      } else {
+        process.env.INTERNAL_SERVICE_TOKEN = previousInternalToken;
+      }
+    }
+  });
 
-    if (previousDatabaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
-    } else {
-      process.env.DATABASE_URL = previousDatabaseUrl;
+  it("allows local single-user mode only on a loopback public binding", () => {
+    const previousV2Enabled = process.env.V2_ENABLED;
+    process.env.V2_ENABLED = "true";
+    try {
+      const config = new Config();
+      config.serviceRole = "app";
+      config.accessMode = "local";
+      config.accessModeConfigValid = true;
+      config.publicBindHost = "127.0.0.1";
+      config.v2PublicUrl = "http://localhost:3145";
+      config.internalServiceToken = "valid-internal-token-value-for-tests";
+      config.databaseUrl = "postgres://short_studio:secret@127.0.0.1:5432/short_studio";
+
+      const validation = config.validateRuntimeConfig();
+      expect(validation.issues.some((issue) => issue.code === "remote_access_requires_secure_server")).toBe(false);
+    } finally {
+      if (previousV2Enabled === undefined) {
+        delete process.env.V2_ENABLED;
+      } else {
+        process.env.V2_ENABLED = previousV2Enabled;
+      }
+    }
+  });
+
+  it("fails closed when local single-user mode is exposed beyond localhost", () => {
+    const previousV2Enabled = process.env.V2_ENABLED;
+    process.env.V2_ENABLED = "true";
+    try {
+      const config = new Config();
+      config.serviceRole = "app";
+      config.accessMode = "local";
+      config.accessModeConfigValid = true;
+      config.publicBindHost = "0.0.0.0";
+      config.v2PublicUrl = "http://192.168.1.20:3145";
+      config.internalServiceToken = "valid-internal-token-value-for-tests";
+      config.databaseUrl = "postgres://short_studio:secret@127.0.0.1:5432/short_studio";
+
+      const validation = config.validateRuntimeConfig();
+      expect(validation.valid).toBe(false);
+      expect(validation.issues).toContainEqual(
+        expect.objectContaining({
+          code: "remote_access_requires_secure_server",
+          message: REMOTE_ACCESS_REQUIRES_SECURE_SERVER_MODE,
+        }),
+      );
+    } finally {
+      if (previousV2Enabled === undefined) {
+        delete process.env.V2_ENABLED;
+      } else {
+        process.env.V2_ENABLED = previousV2Enabled;
+      }
+    }
+  });
+
+  it("does not apply the local exposure block to secure server mode", () => {
+    const previousV2Enabled = process.env.V2_ENABLED;
+    process.env.V2_ENABLED = "true";
+    try {
+      const config = new Config();
+      config.serviceRole = "app";
+      config.accessMode = "secure_server";
+      config.accessModeConfigValid = true;
+      config.publicBindHost = "0.0.0.0";
+      config.v2PublicUrl = "https://shorts.example.com";
+      config.internalServiceToken = "valid-internal-token-value-for-tests";
+      config.databaseUrl = "postgres://short_studio:secret@127.0.0.1:5432/short_studio";
+
+      const validation = config.validateRuntimeConfig();
+      expect(validation.issues.some((issue) => issue.code === "remote_access_requires_secure_server")).toBe(false);
+    } finally {
+      if (previousV2Enabled === undefined) {
+        delete process.env.V2_ENABLED;
+      } else {
+        process.env.V2_ENABLED = previousV2Enabled;
+      }
     }
   });
 });

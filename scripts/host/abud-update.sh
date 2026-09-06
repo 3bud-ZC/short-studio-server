@@ -340,7 +340,7 @@ write_transaction APPLYING
 
 # Only the two services whose image changes are stopped. PostgreSQL and n8n keep
 # running, so no data volume is detached at any point.
-compose stop short-studio-app short-studio-render-worker >/dev/null 2>&1 || true
+compose stop abud-shorts-app abud-shorts-render-worker >/dev/null 2>&1 || true
 
 # The image reference lives in the environment file, so a rollback is a matter of
 # putting the previous value back.
@@ -385,7 +385,7 @@ rollback() {
   if [ "$REL_SCHEMA_COMPATIBLE" != "true" ]; then
     warn "This release changed the database in a way the previous version cannot read."
     step "    Restoring the pre-upgrade database backup..."
-    compose stop short-studio-app short-studio-render-worker >/dev/null 2>&1 || true
+    compose stop abud-shorts-app abud-shorts-render-worker >/dev/null 2>&1 || true
     if restore_pre_upgrade_backup "$BACKUP_ID"; then
       db_restored=true
       ok "Database restored from the pre-upgrade backup."
