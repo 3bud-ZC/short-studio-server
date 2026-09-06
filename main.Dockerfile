@@ -12,6 +12,17 @@ RUN apt install -y \
 WORKDIR /whisper
 RUN git clone https://github.com/ggml-org/whisper.cpp.git .
 RUN git checkout v1.7.1
+# whisper.cpp's own Makefile unconditionally appends `-march=native
+# -mtune=native` for x86_64 (MK_CFLAGS/HOST_CXXFLAGS), which bakes in
+# whatever CPU extensions the *build* machine happens to expose. That is
+# fine for a binary built and run on the same box, but this image ships to
+# customer machines with different CPUs - a build-time CPU with, say,
+# AVX-512 produces a binary that crashes with SIGILL ("illegal
+# instruction") on a runtime CPU without it. Pin a portable baseline
+# (x86-64-v2: SSE4.2/POPCNT, universally available on real hardware since
+# ~2009) instead, so the compiled binary runs everywhere this image is
+# deployed rather than only on whatever machine built it.
+RUN sed -i 's/-march=native -mtune=native/-march=x86-64-v2 -mtune=generic/g' Makefile
 RUN make
 WORKDIR /whisper/models
 RUN sh ./download-ggml-model.sh base.en
