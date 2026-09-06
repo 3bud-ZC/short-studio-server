@@ -124,7 +124,12 @@ COPY package.json /app/
 # app configuration via environment variables
 ENV DATA_DIR_PATH=/app/data
 ENV DOCKER=true
-ENV WHISPER_MODEL=base.en
+# Must match the model actually downloaded above (ggml-small.bin) and
+# docker-compose.prod.yml's WHISPER_MODEL default - "base.en" here (while
+# every other default said "small") meant Whisper.init()'s own model-file
+# check never found what this stage built, forcing a full re-install
+# attempt on every build.
+ENV WHISPER_MODEL=small
 # number of chrome tabs to use for rendering
 ENV CONCURRENCY=1
 # video cache - 2000MB
