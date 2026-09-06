@@ -35,7 +35,12 @@ RUN git checkout v1.7.1
 RUN sed -i 's/-march=native -mtune=native/-march=x86-64-v2 -mtune=generic/g' Makefile
 RUN make
 WORKDIR /whisper/models
-RUN sh ./download-ggml-model.sh base.en
+# "small" - not "base.en" as before - to match WHISPER_MODEL's actual
+# default (docker-compose.prod.yml: WHISPER_MODEL:-small, src/config.ts:
+# defaultWhisperModel = "small"). A mismatched bundled model was silently
+# harmless only because the runtime entrypoint's bootstrap-copy path (see
+# the final stage below) was itself broken and never used this directory.
+RUN sh ./download-ggml-model.sh small
 
 FROM node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -93,7 +98,18 @@ RUN pnpm build
 
 FROM base
 COPY static /app/static
-COPY --from=install-whisper /whisper /app/data/libs/whisper
+# /app/data is a host bind mount (docker-compose.prod.yml:
+# ${SHORT_STUDIO_DATA_DIR}:/app/data), so anything the image places directly
+# under /app/data/libs/whisper is invisible at runtime - the mount fully
+# shadows it from the very first container start, on every install. The
+# compose entrypoint already anticipates this and seeds the volume from
+# /app/bootstrap/whisper on first run (`if [ ! -f
+# /app/data/libs/whisper/models/ggml-small.bin ]; then ... cp -R
+# /app/bootstrap/whisper /app/data/libs/whisper; fi`) - that path must
+# actually exist in the image for a genuinely fresh install to come up at
+# all, instead of the entrypoint's `cp` failing and the container never
+# reaching `node dist/index.js`.
+COPY --from=install-whisper /whisper /app/bootstrap/whisper
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build /app/dist /app/dist
 COPY package.json /app/

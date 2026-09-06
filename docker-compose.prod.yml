@@ -168,7 +168,14 @@ services:
       # host-native service, so this must be the same physical directory
       # install.ps1's Local Voice setup writes the model cache into.
       - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}/models:/models
-    entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper; fi && node dist/index.js"]
+    # The bootstrap copy is a fast path, not a hard requirement: `|| true`
+    # and the trailing `;` (not `&&`) before `node dist/index.js` mean a
+    # failed or missing bootstrap seed never prevents the app from starting
+    # - Whisper.ts's own init() self-heals by downloading whisper.cpp and
+    # the model over the network when /app/data/libs/whisper isn't already
+    # populated correctly, which is exactly what must happen on a fresh
+    # install if this seed step is ever broken again.
+    entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3125/health >/dev/null || exit 1"]
       interval: 15s
@@ -253,7 +260,14 @@ services:
       # Same physical directory as render-worker's /models mount - see the
       # comment there.
       - ${SHORT_STUDIO_DATA_DIR:-${ABUD_DATA_DIR:?SHORT_STUDIO_DATA_DIR (or legacy ABUD_DATA_DIR) must be set by the installer}}/models:/models
-    entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper; fi && node dist/index.js"]
+    # The bootstrap copy is a fast path, not a hard requirement: `|| true`
+    # and the trailing `;` (not `&&`) before `node dist/index.js` mean a
+    # failed or missing bootstrap seed never prevents the app from starting
+    # - Whisper.ts's own init() self-heals by downloading whisper.cpp and
+    # the model over the network when /app/data/libs/whisper isn't already
+    # populated correctly, which is exactly what must happen on a fresh
+    # install if this seed step is ever broken again.
+    entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3123/health >/dev/null || exit 1"]
       interval: 15s
