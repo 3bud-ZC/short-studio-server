@@ -13,6 +13,11 @@ import {
   isAlignmentConfident,
   mapAlignmentToCaptionTokens,
 } from "../server/v2/voice-providers/elevenLabsAlignment";
+import {
+  alignWhisperToNarration,
+  WHISPER_SCRIPT_SIMILARITY_THRESHOLD,
+} from "./libraries/whisperAlignment";
+import { validateScriptQuality, validateSentenceCompleteness } from "../server/v2/content-ai/scriptQuality";
 import { renderArabicCaptions } from "../server/v2/captions/arabicCaptionRendererV3";
 import { runCaptionQa } from "../server/v2/captions/captionQa";
 import { resolveCaptionStyle } from "../server/v2/captions/captionStyles";
@@ -1128,9 +1133,10 @@ export class ShortCreator {
       });
       let rawCaptions: Caption[] = [];
       // Canonical vocabulary persisted as captionTimingSource.
-      let timingSource: "elevenlabs_alignment" | "whisper" | "synthetic" = "synthetic";
+      let timingSource: "elevenlabs_alignment" | "whisper" | "deterministic_fallback" = "deterministic_fallback";
       let alignmentConfidence: number | undefined;
       let alignmentUnmapped: string[] | undefined;
+      let captionScriptSimilarity: number | undefined;
       let captionArtifact: DurableSceneArtifact | undefined;
       const captionInputHash = createCaptionInputHash({
         voiceChecksum: voiceArtifact?.checksum || "",
@@ -1215,25 +1221,50 @@ export class ShortCreator {
         }
       }
 
-      // 2. Whisper.
+      // 2. Whisper: a TIMING/ALIGNMENT source only. Whisper transcribes the
+      //    actual rendered audio, so its own words can mishear, drop, or add
+      //    words relative to the canonical narration that was actually sent
+      //    to TTS - that canonical text is what gets burned into the video,
+      //    never Whisper's transcript. Whisper's timestamps are aligned onto
+      //    the canonical words via the same LCS pairing already used for
+      //    ElevenLabs alignment above (see whisperAlignment.ts). If Whisper's
+      //    transcript diverges too far from the canonical text to trust its
+      //    timing at all, this falls through to the deterministic fallback
+      //    below rather than anchor known-correct words to an untrustworthy
+      //    transcript.
       if (!captionArtifact && rawCaptions.length === 0) {
+        const canonicalText = String((originalSceneSpec as any).captionText || sceneTimeline.narration || "");
         try {
           artifactReuse.providerInvocations.whisper++;
-          rawCaptions = await this.whisper.CreateCaption(
+          const whisperCaptions = await this.whisper.CreateCaption(
             captionAudioPath,
             voiceAudio?.language || (voiceArtifact?.metadata?.reuseKey as any)?.language || spec.language,
           );
-          if (rawCaptions.length > 0) {
-            timingSource = "whisper";
+          if (whisperCaptions.length > 0 && canonicalText.trim()) {
+            const aligned = alignWhisperToNarration(whisperCaptions, canonicalText);
+            captionScriptSimilarity = aligned.scriptSimilarity;
+            if (aligned.captions.length > 0 && aligned.scriptSimilarity >= WHISPER_SCRIPT_SIMILARITY_THRESHOLD) {
+              rawCaptions = aligned.captions;
+              alignmentConfidence = aligned.confidence;
+              timingSource = "whisper";
+            } else {
+              logger.info(
+                { sceneIndex: index, scriptSimilarity: aligned.scriptSimilarity },
+                "Whisper transcript diverged too far from the canonical narration; using deterministic timing for this scene",
+              );
+            }
           }
         } catch (whisperErr) {
-          logger.warn(whisperErr, `Whisper transcription notice for scene ${index + 1}; using synthesized word timestamps`);
+          logger.warn(whisperErr, `Whisper transcription notice for scene ${index + 1}; using deterministic word timestamps`);
         }
       }
 
-      // 3. Deterministic synthetic fallback.
+      // 3. Deterministic fallback: the canonical narration, evenly
+      //    distributed across the scene. Used whenever no timing source
+      //    above is trustworthy - the canonical text is always what gets
+      //    shown, never invented and never a mistranscription.
       if (!rawCaptions || rawCaptions.length === 0) {
-        timingSource = "synthetic";
+        timingSource = "deterministic_fallback";
         const captionText = String((originalSceneSpec as any).captionText || sceneTimeline.narration || "");
         const words = captionText.trim().split(/\s+/).filter(Boolean);
         if (words.length > 0) {
@@ -1252,20 +1283,37 @@ export class ShortCreator {
       }
       voiceArtifacts[voiceArtifacts.length - 1].timingSource = timingSource;
       voiceArtifacts[voiceArtifacts.length - 1].captionTimingSource = timingSource;
+      // Always canonical_narration: every path above (alignment, whisper,
+      // deterministic fallback) burns the known narration script, never a
+      // transcription - only the timing strategy differs.
+      voiceArtifacts[voiceArtifacts.length - 1].captionTextSource = "canonical_narration";
       if (alignmentConfidence !== undefined) {
         voiceArtifacts[voiceArtifacts.length - 1].alignmentConfidence = alignmentConfidence;
+        voiceArtifacts[voiceArtifacts.length - 1].captionAlignmentConfidence = alignmentConfidence;
         voiceArtifacts[voiceArtifacts.length - 1].alignmentUnmappedTokens = alignmentUnmapped;
+      }
+      if (captionScriptSimilarity !== undefined) {
+        voiceArtifacts[voiceArtifacts.length - 1].captionScriptSimilarity = captionScriptSimilarity;
       }
       captionTimingSources.add(timingSource);
 
-      // Enforce caption boundaries strictly within the scene duration
+      // Fit the caption timeline inside the scene duration WITHOUT ever
+      // dropping canonical words. Filtering out anything past the boundary
+      // (the previous approach) silently truncated the visible sentence
+      // whenever real timing (Whisper or alignment) ran a little long
+      // relative to the scene's planned duration - proportionally
+      // compressing the whole timeline keeps every word on screen instead.
       const maxSceneMs = Math.round(targetSceneDuration * 1000) + 100;
-      const captions: Caption[] = rawCaptions
-        .filter((c) => c.startMs < maxSceneMs)
-        .map((c) => ({
+      const lastRawEndMs = rawCaptions.reduce((max, c) => Math.max(max, c.endMs), 0);
+      const captionScale = lastRawEndMs > maxSceneMs ? maxSceneMs / lastRawEndMs : 1;
+      const captions: Caption[] = rawCaptions.map((c) => {
+        const startMs = Math.round(c.startMs * captionScale);
+        return {
           ...c,
-          endMs: Math.min(c.endMs, maxSceneMs),
-        }));
+          startMs,
+          endMs: Math.max(startMs, Math.round(c.endMs * captionScale)),
+        };
+      });
       if (!captionArtifact && voiceArtifact) {
         captionArtifact = artifactStore.persistJson({
           type: "captions",
@@ -2796,11 +2844,28 @@ export class ShortCreator {
       // report).
       const visualQualityPass = isExplicitGraphicsMode || professionalVisualQuality.readyForProfessionalAuto;
       const audioSilencePass = !mixedSilenceGate.criticalFailure;
-      const professionalReady = finalAudioQa.pass && audioSilencePass && visualQualityPass;
+      // TECHNICAL: the media itself is a valid, playable render. CONTENT: the
+      // script that was actually spoken/burned is topical, complete, and not
+      // generic filler - recomputed here (not just at job-creation time in
+      // routes.ts) because a job can reach the render worker through paths
+      // that never went through that gate (retries, internal APIs). Neither
+      // technical nor content validity alone is "professional" - a technically
+      // perfect render of a meaningless script is exactly the defect this
+      // separation exists to catch.
+      const scriptQuality = validateScriptQuality(
+        String(spec.userPrompt || ""),
+        spec.scenes || [],
+        spec.cta,
+        spec.language === "ar" ? "ar" : "en",
+      );
+      const technicalReady = finalAudioQa.pass && audioSilencePass && visualQualityPass;
+      const contentReady = scriptQuality.pass;
+      const professionalReady = technicalReady && contentReady;
       const readinessFailureReasons: string[] = [
         ...(finalAudioQa.pass ? [] : ["Audio mastering did not pass quality checks."]),
         ...(audioSilencePass ? [] : ["Audio timing needs another pass; a section of the video was unexpectedly quiet."]),
         ...(visualQualityPass ? [] : ["One or more sections need better footage; a scene fell back to a graphic instead of real video."]),
+        ...(contentReady ? [] : [scriptQuality.reason || "Script did not pass the content quality gate."]),
       ];
 
       // V2.4 Pass 5 wall-clock accounting: the OpenCLIP pool's init cost is
@@ -2908,8 +2973,20 @@ export class ShortCreator {
         // were timed rather than implying Whisper for every production.
         captionTimingSource: captionTimingSources.size === 1
           ? Array.from(captionTimingSources)[0]
-          : Array.from(captionTimingSources).join('+') || 'synthetic',
+          : Array.from(captionTimingSources).join('+') || 'deterministic_fallback',
         captionTimingSources: Array.from(captionTimingSources),
+        // Every timing path burns the canonical narration script - never a
+        // transcription - so this is constant, but persisted explicitly per
+        // the caption-fidelity contract rather than left implicit.
+        captionTextSource: "canonical_narration",
+        // Worst-case (minimum) across scenes: a single badly-aligned scene
+        // must not be hidden behind an average that looks fine.
+        captionScriptSimilarity: voiceArtifacts.reduce((min: number | undefined, v: any) =>
+          typeof v.captionScriptSimilarity === "number" ? Math.min(min ?? 1, v.captionScriptSimilarity) : min,
+        undefined as number | undefined),
+        captionAlignmentConfidence: voiceArtifacts.reduce((min: number | undefined, v: any) =>
+          typeof v.captionAlignmentConfidence === "number" ? Math.min(min ?? 1, v.captionAlignmentConfidence) : min,
+        undefined as number | undefined),
         voiceArtifacts,
         costEstimate: spec.costEstimate as any,
         productionSpec: spec as any,
@@ -2961,6 +3038,20 @@ export class ShortCreator {
         creativeGrade: creativeQualityResult.creativeGrade,
         creativeDiagnostics: creativeQualityResult.diagnostics,
         creativeWarnings: creativeQualityResult.warnings,
+        // Human-visible quality metrics (deterministic/explainable - see
+        // scriptQuality.ts and qualityEngine.ts; visualRelevanceScore/
+        // sceneCoherenceScore/audioContinuityScore reuse the same keyword-
+        // relevance and audio-continuity signals already computed above
+        // under their existing names, surfaced here for direct visibility).
+        technicalReady,
+        contentReady,
+        topicRelevanceScore: scriptQuality.topicRelevanceScore,
+        genericFillerDetected: scriptQuality.genericFillerDetected,
+        scriptCompleteness: scriptQuality.scriptCompleteness,
+        ctaCompleteness: spec.cta?.text ? validateSentenceCompleteness(String(spec.cta.text), spec.language === "ar" ? "ar" : "en").complete : true,
+        visualRelevanceScore: professionalVisualQuality.averageSemanticScore,
+        sceneCoherenceScore: creativeQualityResult.diagnostics.visualDiversityScore,
+        audioContinuityScore: creativeQualityResult.diagnostics.audioContinuityScore,
         maxNarrationSilenceMs: deadAirReport.maxNarrationSilenceMs,
         deadAirReport,
         mediaPlanScore: mediaPlanScoreV24,
@@ -2997,6 +3088,7 @@ export class ShortCreator {
           truePeakDbtp: finalAudioQa.finalMixMetrics.truePeakDbtp,
           clippingDetected: finalAudioQa.finalMixMetrics.clippingDetected,
           effectivelySilent: finalAudioQa.finalMixMetrics.effectivelySilent,
+          loudnessTargetMet: finalAudioQa.loudnessTargetMet,
           duckingProfile: "balanced",
         },
         createdAt: stats.mtime.toISOString(),

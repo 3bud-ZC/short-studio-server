@@ -127,9 +127,14 @@ function spanTiming(alignment: CharacterAlignment, startIndex: number, endIndex:
  * reach the screen, so a display token that cannot be paired is reported as
  * unmapped rather than being shown in its spoken form.
  */
-function pairTokens(ttsTokens: SpanToken[], displayTokens: string[]): Array<number | null> {
-  const a = ttsTokens.map((t) => normalizeForMatch(t.text));
-  const b = displayTokens.map(normalizeForMatch);
+/**
+ * Longest-common-subsequence pairing between two already-normalized token
+ * arrays. Returns, for each `b` index, the `a` index it pairs with (or null).
+ * Pulled out of `pairTokens` so other alignment sources (Whisper word
+ * timestamps, not just ElevenLabs character spans) can reuse the same
+ * pairing/gap-fill approach instead of re-deriving it.
+ */
+export function pairNormalizedTokens(a: string[], b: string[]): Array<number | null> {
   const rows = a.length + 1;
   const cols = b.length + 1;
   const table: number[][] = Array.from({ length: rows }, () => new Array(cols).fill(0));
@@ -141,13 +146,13 @@ function pairTokens(ttsTokens: SpanToken[], displayTokens: string[]): Array<numb
           : Math.max(table[i - 1][j], table[i][j - 1]);
     }
   }
-  // Walk back to recover which display token each TTS token pairs with.
-  const pairedTtsForDisplay: Array<number | null> = new Array(displayTokens.length).fill(null);
+  // Walk back to recover which `a` token each `b` token pairs with.
+  const pairedForB: Array<number | null> = new Array(b.length).fill(null);
   let i = a.length;
   let j = b.length;
   while (i > 0 && j > 0) {
     if (a[i - 1] && a[i - 1] === b[j - 1]) {
-      pairedTtsForDisplay[j - 1] = i - 1;
+      pairedForB[j - 1] = i - 1;
       i--;
       j--;
     } else if (table[i - 1][j] >= table[i][j - 1]) {
@@ -156,7 +161,11 @@ function pairTokens(ttsTokens: SpanToken[], displayTokens: string[]): Array<numb
       j--;
     }
   }
-  return pairedTtsForDisplay;
+  return pairedForB;
+}
+
+function pairTokens(ttsTokens: SpanToken[], displayTokens: string[]): Array<number | null> {
+  return pairNormalizedTokens(ttsTokens.map((t) => normalizeForMatch(t.text)), displayTokens.map(normalizeForMatch));
 }
 
 /**

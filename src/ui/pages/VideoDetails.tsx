@@ -56,7 +56,7 @@ function formatFileSize(bytes?: number): string {
 const CAPTION_TIMING_LABELS: Record<string, string> = {
   elevenlabs_alignment: "ElevenLabs Alignment",
   whisper: "Whisper",
-  synthetic: "Synthetic",
+  deterministic_fallback: "Deterministic Fallback",
 };
 
 function captionTimingLabel(video: any): string {

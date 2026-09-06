@@ -20,6 +20,8 @@ export type FinalAudioQaResult = {
   finalMixMetrics: AudioLoudnessMetrics;
   pass: boolean;
   issues: string[];
+  /** True when integratedLufs falls inside the -16..-14 social-video target band. */
+  loudnessTargetMet: boolean;
 };
 
 export type DeadAirInterval = {
@@ -146,20 +148,46 @@ export class AudioMasteringService {
    */
   public async analyzeMixedSilence(
     videoOrAudioPath: string,
-    options: { thresholdDb?: number; minDurationSeconds?: number; warningThresholdMs?: number; criticalThresholdMs?: number } = {},
+    options: {
+      thresholdDb?: number;
+      minDurationSeconds?: number;
+      /** Below this, a run is a normal conversational pause - not even a warning. */
+      warningThresholdMs?: number;
+      /** Professional-failure limit for a silence run anywhere except the outro. */
+      midVideoCriticalMs?: number;
+      /** Professional-failure limit specifically for a run touching the very end of the track. */
+      outroCriticalMs?: number;
+      /** How close (seconds) to the track's end counts as "the outro" rather than mid-video. */
+      outroWindowSeconds?: number;
+    } = {},
   ): Promise<MixedSilenceGateResult> {
-    const warningThresholdMs = options.warningThresholdMs ?? 1500;
-    const criticalThresholdMs = options.criticalThresholdMs ?? 3000;
+    const warningThresholdMs = options.warningThresholdMs ?? 500;
+    const midVideoCriticalMs = options.midVideoCriticalMs ?? 900;
+    const outroCriticalMs = options.outroCriticalMs ?? 1000;
+    const outroWindowSeconds = options.outroWindowSeconds ?? 0.25;
+
     const detected = await this.ffmpeg.detectSilenceIntervals(videoOrAudioPath, {
       thresholdDb: options.thresholdDb,
       minDurationSeconds: options.minDurationSeconds,
     });
+    // A silence run in the last fraction of a second of the track is the
+    // outro/tail (a deliberate closing beat), not a mid-video dead-air gap -
+    // it gets its own, slightly more permissive, threshold.
+    const streamInfo = await this.ffmpeg.getAudioStreamInfo(videoOrAudioPath).catch(() => null);
+    const totalDurationSeconds = streamInfo?.durationSeconds || 0;
 
     const issues: string[] = [];
-    if (detected.longestSilenceRunMs >= criticalThresholdMs) {
-      issues.push(`Unexplained mixed-audio silence of ${detected.longestSilenceRunMs}ms exceeds the ${criticalThresholdMs}ms critical threshold.`);
-    } else if (detected.longestSilenceRunMs >= warningThresholdMs) {
-      issues.push(`Unexplained mixed-audio silence of ${detected.longestSilenceRunMs}ms exceeds the ${warningThresholdMs}ms professional target.`);
+    let criticalFailure = false;
+    for (const run of detected.silenceRuns) {
+      const runMs = Math.round(run.durationSeconds * 1000);
+      const isOutro = totalDurationSeconds > 0 && run.endSeconds >= totalDurationSeconds - outroWindowSeconds;
+      const limitMs = isOutro ? outroCriticalMs : midVideoCriticalMs;
+      if (runMs >= limitMs) {
+        criticalFailure = true;
+        issues.push(`${isOutro ? "Outro" : "Mid-video"} silence of ${runMs}ms exceeds the ${limitMs}ms professional limit.`);
+      } else if (runMs >= warningThresholdMs) {
+        issues.push(`${isOutro ? "Outro" : "Mid-video"} silence of ${runMs}ms exceeds the ${warningThresholdMs}ms normal target.`);
+      }
     }
 
     return {
@@ -167,10 +195,10 @@ export class AudioMasteringService {
       longestSilenceRunMs: detected.longestSilenceRunMs,
       totalSilenceMs: detected.totalSilenceMs,
       thresholdDb: detected.thresholdDb,
-      criticalThresholdMs,
+      criticalThresholdMs: midVideoCriticalMs,
       warningThresholdMs,
       pass: detected.longestSilenceRunMs < warningThresholdMs,
-      criticalFailure: detected.longestSilenceRunMs >= criticalThresholdMs,
+      criticalFailure,
       issues,
     };
   }
@@ -209,10 +237,23 @@ export class AudioMasteringService {
     if (finalMixMetrics.clippingDetected) issues.push("Severe clipping detected in final mix.");
     if (finalMixMetrics.integratedLufs === null) issues.push("Final mix loudness could not be measured.");
 
+    // Social-video target is -16..-14 LUFS (matches masterVoiceAudioFile's own
+    // I=-16 target). Music mixing/ducking after voice mastering can still pull
+    // the FINAL mix well outside that, which nothing previously checked - only
+    // unmistakably broken levels fail the gate outright (far outside any
+    // reasonable band); a miss of the tighter target band is reported but
+    // does not by itself fail a video that is otherwise perfectly audible.
+    const lufs = finalMixMetrics.integratedLufs;
+    const loudnessTargetMet = lufs !== null && lufs >= -16 && lufs <= -14;
+    if (lufs !== null && (lufs < -30 || lufs > -6)) {
+      issues.push(`Final mix loudness (${lufs} LUFS) is far outside a usable range for social video.`);
+    }
+
     return {
       stream,
       finalMixMetrics,
       pass: issues.length === 0,
+      loudnessTargetMet,
       issues,
     };
   }

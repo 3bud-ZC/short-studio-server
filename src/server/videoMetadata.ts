@@ -38,6 +38,30 @@ export interface VideoMetadata {
   creativeFacts?: Record<string, unknown>;
   captionTimingSource?: string;
   captionTimingSources?: string[];
+  /** Always "canonical_narration": captions burn the known narration script, never a transcription. */
+  captionTextSource?: string;
+  /** 0..1 order-preserving match between Whisper's transcript and the canonical narration (worst scene). */
+  captionScriptSimilarity?: number;
+  /** 0..1 share of canonical words that received a real (non-interpolated) timing anchor (worst scene). */
+  captionAlignmentConfidence?: number;
+  /** Media is a valid, playable render (audio + visual gates), independent of what the script says. */
+  technicalReady?: boolean;
+  /** The script that was actually spoken is topical, complete, and not generic filler. */
+  contentReady?: boolean;
+  /** 0..1 share of the prompt's extracted topic concepts actually present in the generated script. */
+  topicRelevanceScore?: number;
+  /** True when a known generic-filler phrase appears without topic grounding. */
+  genericFillerDetected?: boolean;
+  /** True when every narration/CTA line passed the dangling-conjunction completeness check. */
+  scriptCompleteness?: boolean;
+  /** True when the CTA line specifically passed the completeness check. */
+  ctaCompleteness?: boolean;
+  /** Keyword/tag-based stock relevance average (same signal as mediaPlanScore's averageSemanticScore). */
+  visualRelevanceScore?: number;
+  /** Visual diversity/duplicate-asset signal, as a proxy for scene-to-scene coherence. */
+  sceneCoherenceScore?: number;
+  /** Same signal as creativeDiagnostics.audioContinuityScore, surfaced at top level. */
+  audioContinuityScore?: number;
   /** Which engine drew the spoken captions: libass or the Remotion layer. */
   captionRenderer?: string;
   captionFont?: string;

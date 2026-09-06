@@ -36,6 +36,7 @@ import {
   voiceRevisionSchema,
 } from "./types";
 import { ContentAIRegistry } from "./content-ai/registry";
+import { validateScriptQuality } from "./content-ai/scriptQuality";
 import { estimateProductionCost } from "./cost-estimator";
 import {
   productionSpecSchema,
@@ -1200,6 +1201,30 @@ function contentConfidenceBlocker(spec: {
   return {
     error: "content_confidence_low",
     message: "Better content generation is needed for this topic. Connect a Content AI provider or adjust the prompt.",
+    action: { label: "Connect a Content AI Provider", href: "/providers" },
+  };
+}
+
+/**
+ * Fails a job closed BEFORE any render compute is spent when the generated
+ * script either (a) never materially engages the customer's actual topic -
+ * generic filler such as "Here's something worth seeing... Follow for more"
+ * can still report contentProvenance: DETERMINISTIC/high confidence, so the
+ * confidence gate above does not catch it - or (b) is grammatically
+ * unfinished (a dangling conjunction/preposition, or no terminal
+ * punctuation at all). See scriptQuality.ts for the deterministic,
+ * explainable checks behind this.
+ */
+function scriptQualityBlocker(
+  prompt: string,
+  spec: { scenes?: Array<{ narration?: unknown }>; cta?: { text?: unknown }; language?: string },
+): { error: string; message: string; action: { label: string; href: string } } | null {
+  const language = spec.language === "ar" ? "ar" : "en";
+  const result = validateScriptQuality(prompt, spec.scenes || [], spec.cta, language);
+  if (result.pass) return null;
+  return {
+    error: "script_quality_insufficient",
+    message: result.reason || "Short Studio could not create a sufficiently specific script for this topic. Please add more detail or enable an advanced content provider.",
     action: { label: "Connect a Content AI Provider", href: "/providers" },
   };
 }
@@ -2428,6 +2453,11 @@ export function createV2PublicRouter(
       const confidenceBlock = contentConfidenceBlocker(canonicalSpec);
       if (confidenceBlock) {
         res.status(409).json(confidenceBlock);
+        return;
+      }
+      const scriptQualityBlock = scriptQualityBlocker(parsed.data.prompt, canonicalSpec as any);
+      if (scriptQualityBlock) {
+        res.status(409).json(scriptQualityBlock);
         return;
       }
       const readiness = await checkCreateReadiness(parsed.data, canonicalSpec);
