@@ -1005,6 +1005,34 @@ export class ShortCreator {
         actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
         captionAudioPath = tempMasteredWavPath;
 
+        // Second-chance slowdown using the POST-mastering measurement (Kokoro
+        // duration closure pass). The speed-adjust above only ever saw the
+        // PRE-mastering duration, so a scene that looked close enough to
+        // target before mastering (no slowdown applied) can still land short
+        // once mastering's own real leading/trailing-silence trim removes
+        // more than expected. Re-checking here catches that class of small
+        // shortfall with the SAME safe, already-natural-sounding 0.82x-floor
+        // mechanism, before ever falling through to content expansion below -
+        // adding a whole extra sentence to close what is often just a 5-15%
+        // gap was overshooting badly (proven: a 5.94s-target scene's required
+        // text measured 4.77s post-mastering; one added sentence overshot to
+        // 10.37s, worse than the original shortfall in the other direction).
+        if (actualVoiceDuration > 0 && actualVoiceDuration < targetSceneDuration * 0.85) {
+          const strongerSpeedFactor = Math.max(0.82, actualVoiceDuration / (targetSceneDuration * 0.96));
+          if (strongerSpeedFactor < 1 && strongerSpeedFactor < speedFactor) {
+            const reSlowed = await this.ffmpeg.saveNormalizedAudioWithSpeed(
+              voiceAudio.audio,
+              tempWavPath,
+              strongerSpeedFactor,
+            );
+            speedFactor = strongerSpeedFactor;
+            voiceMastering = await this.audioMastering.masterVoice(tempWavPath, tempMasteredWavPath);
+            await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
+            actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
+            captionAudioPath = tempMasteredWavPath;
+          }
+        }
+
         // Bounded post-TTS duration correction (ABUD_SHORTS_ENGINE_STATUS.md
         // section 7). The speed-stretch above is deliberately capped at 0.82x
         // to avoid unnatural-sounding audio, so it cannot close a large gap
