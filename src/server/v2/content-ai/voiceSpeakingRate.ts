@@ -42,20 +42,32 @@ function calibrationKey(provider: string, voiceId: string, language: string): Ca
  * Measured calibration points. Each is derived from one real proof job's
  * actual ffprobe-measured narration duration against the actual synthesized
  * text - see ABUD_SHORTS_ENGINE_STATUS.md's "Real English proof" / "Real
- * Arabic proof" sections for the source numbers (149 chars / 4.031188s
- * combined for English scenes 0+1; 140 chars / 4.572876s combined for Arabic
- * scenes 0+1, both counted in Unicode codepoints via Array.from).
+ * Arabic proof" sections for the source numbers.
+ *
+ * The English (Kokoro af_heart) value was originally 36.96 chars/s, taken
+ * from the very first real English proof (149 chars / 4.031188s combined).
+ * That measurement was itself corrupted by a real, since-fixed bug: ffmpeg's
+ * silenceremove filter in FFmpeg.ts's masterVoiceAudioFile() was silently
+ * truncating narration audio down to ~1.9-2.2s regardless of how long the
+ * actual speech was (proof: three real Kokoro clips of 7.375s/13.15s/19.4s
+ * all collapsed to the identical 1.950625s through the old filter chain -
+ * see ABUD_SHORTS_ENGINE_STATUS.md's Kokoro duration closure pass). Every
+ * duration this constant was ever calibrated from was measured AFTER that
+ * truncation, so 36.96 was never a real speaking rate - it was an artifact
+ * of the bug. Recalibrated from real post-fix measurements (mastering fixed,
+ * three controlled Kokoro af_heart samples, chars/actual-seconds: 101/6.576
+ * =15.36, 187/12.336=15.16, 296/18.401=16.09; averaged and rounded).
  */
 const MEASURED_PROFILES: Record<CalibrationKey, SpeakingRateProfile> = {
   [calibrationKey("kokoro", "af_heart", "en")]: {
-    charsPerSecond: 36.96,
+    charsPerSecond: 15.5,
     source: "measured",
-    basis: "real-proof-en (real-proof-en-revideo-project), 2 scenes, 149 chars / 4.031188s combined",
+    basis: "post-mastering-fix direct Kokoro.generate() calibration, 3 samples (101/187/296 chars), averaged ~15.5 chars/s - see this file's own comment for why the original 36.96 was corrupted data",
   },
   [calibrationKey("voicetut", "mohamed", "ar")]: {
     charsPerSecond: 30.62,
     source: "measured",
-    basis: "real-proof-ar (real-proof-ar-revideo-project), 2 scenes, 140 chars / 4.572876s combined",
+    basis: "real-proof-ar (real-proof-ar-revideo-project), 2 scenes, 140 chars / 4.572876s combined - NOT re-verified against the masterVoiceAudioFile fix in this pass (Arabic path deliberately left unchanged per this pass's scope); may warrant re-measurement in a future pass",
   },
 };
 
@@ -69,9 +81,9 @@ const MEASURED_PROFILES: Record<CalibrationKey, SpeakingRateProfile> = {
  */
 const LANGUAGE_DEFAULTS: Record<string, SpeakingRateProfile> = {
   en: {
-    charsPerSecond: 36.96,
+    charsPerSecond: 15.5,
     source: "default",
-    basis: "seeded from the one real English measurement on file (kokoro/af_heart) - not yet a per-voice measurement",
+    basis: "seeded from the one real (post-mastering-fix) English measurement on file (kokoro/af_heart) - not yet a per-voice measurement",
   },
   ar: {
     charsPerSecond: 30.62,

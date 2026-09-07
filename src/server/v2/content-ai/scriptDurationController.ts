@@ -109,6 +109,75 @@ export type CorrectionDecision =
   | { action: "condense" }
   | { action: "give_up"; reason: string };
 
+export type SceneBeat = {
+  id: string;
+  /** First `required` unit is the beat's core meaning; only it counts toward the fits-in-budget check below. */
+  units: NarrationUnit[];
+  /** Beats with priority false are dropped first if the budget cannot fit everything - see allocateBeatDurations. */
+  essential: boolean;
+};
+
+export type BeatAllocation = {
+  id: string;
+  included: boolean;
+  targetSeconds: number;
+};
+
+/**
+ * Scene-level rebalancing (section 9 of the Kokoro duration closure): a
+ * fixed equal split of the content budget across N beats breaks down the
+ * moment a single required sentence, at the voice's REAL calibrated rate,
+ * takes longer to say than that equal share - which is exactly what
+ * happened here (four ~85-105 char required sentences each need ~5.5-7.4s
+ * at Kokoro af_heart's real ~15.5 chars/s, but an 11s / 4-scene split only
+ * gives each ~2.4-2.8s). Instead of forcing every beat into an equal,
+ * too-small slot, this allocates each beat a share of `contentBudget`
+ * PROPORTIONAL to its own required narration's real estimated length, and
+ * drops non-essential beats first (in the order given) if even the
+ * essential ones alone cannot all fit - never by inventing filler, only by
+ * choosing how many of the already-written, real beats to use.
+ */
+export function allocateBeatDurations(
+  beats: SceneBeat[],
+  contentBudget: number,
+  rate: SpeakingRateProfile,
+): BeatAllocation[] {
+  const requiredEstimate = (beat: SceneBeat): number => {
+    const required = beat.units.find((u) => u.role === "required");
+    return required ? estimateSpeechSeconds(required.text, rate) : 0;
+  };
+
+  let candidates = beats.map((beat) => ({ beat, estimate: requiredEstimate(beat) }));
+  // Drop non-essential beats (least-priority first, i.e. from the end) while
+  // the total required content exceeds the budget - even when the essential
+  // beats alone would ALSO exceed it (dropping cheaper non-essential content
+  // still gets closer to the target than keeping every beat), stopping once
+  // only essential beats remain.
+  while (
+    candidates.some((c) => !c.beat.essential) &&
+    candidates.reduce((sum, c) => sum + c.estimate, 0) > contentBudget
+  ) {
+    const lastOptionalIndex = [...candidates].reverse().findIndex((c) => !c.beat.essential);
+    if (lastOptionalIndex === -1) break;
+    candidates.splice(candidates.length - 1 - lastOptionalIndex, 1);
+  }
+
+  const totalEstimate = candidates.reduce((sum, c) => sum + c.estimate, 0) || 1;
+  const includedIds = new Set(candidates.map((c) => c.beat.id));
+
+  return beats.map((beat) => {
+    if (!includedIds.has(beat.id)) {
+      return { id: beat.id, included: false, targetSeconds: 0 };
+    }
+    const estimate = requiredEstimate(beat);
+    // Proportional share of the budget, never below the beat's own required
+    // estimate's floor when the budget has room (composeNarrationForDuration
+    // still trims further downstream if truly necessary).
+    const share = (estimate / totalEstimate) * contentBudget;
+    return { id: beat.id, included: true, targetSeconds: Math.max(share, Math.min(estimate, contentBudget)) };
+  });
+}
+
 export function decideCorrectionAction(input: {
   actualSeconds: number;
   targetSeconds: number;

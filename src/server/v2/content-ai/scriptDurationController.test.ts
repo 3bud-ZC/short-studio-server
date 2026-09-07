@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  allocateBeatDurations,
   composeNarrationForDuration,
   decideCorrectionAction,
   evaluateDurationFit,
+  type SceneBeat,
   type NarrationUnit,
 } from "./scriptDurationController";
 import { getSpeakingRate } from "./voiceSpeakingRate";
@@ -122,5 +124,74 @@ describe("decideCorrectionAction", () => {
       retriesSoFar: 0,
     });
     expect(decision.action).toBe("give_up");
+  });
+});
+
+describe("allocateBeatDurations", () => {
+  const rate = getSpeakingRate("kokoro", "af_heart", "en");
+  // Real required sentences from the English backup pack, whose combined
+  // required-only length at Kokoro's real ~15.5 chars/s (~24s total) is
+  // nearly 2.5x an 11s-request's ~9.5s content budget - the actual real
+  // shape that made an equal 4-way split impossible to satisfy.
+  const beats: SceneBeat[] = [
+    {
+      id: "hook",
+      essential: true,
+      units: [{ role: "required", text: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?" }],
+    },
+    {
+      id: "problem",
+      essential: false,
+      units: [{ role: "required", text: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations." }],
+    },
+    {
+      id: "solution",
+      essential: false,
+      units: [{ role: "required", text: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress." }],
+    },
+    {
+      id: "cta",
+      essential: true,
+      units: [{ role: "required", text: "Follow for more essential tech tips and secure your business infrastructure today." }],
+    },
+  ];
+
+  it("reproduces the real regression shape: dropping non-essential beats when even required-only content does not fit an 11s-style budget", () => {
+    const allocations = allocateBeatDurations(beats, 9.5, rate);
+    const hook = allocations.find((a) => a.id === "hook")!;
+    const cta = allocations.find((a) => a.id === "cta")!;
+    expect(hook.included).toBe(true);
+    expect(cta.included).toBe(true);
+    // At least one non-essential beat should be dropped rather than every
+    // beat being crushed into an equal, too-small slot.
+    const droppedCount = allocations.filter((a) => !a.included).length;
+    expect(droppedCount).toBeGreaterThan(0);
+  });
+
+  it("never drops an essential beat even when the budget is very tight", () => {
+    const allocations = allocateBeatDurations(beats, 3, rate);
+    expect(allocations.find((a) => a.id === "hook")!.included).toBe(true);
+    expect(allocations.find((a) => a.id === "cta")!.included).toBe(true);
+  });
+
+  it("allocates duration proportional to each beat's own required-narration weight, not an equal split", () => {
+    // Two beats, one required sentence roughly twice as long as the other.
+    const uneven: SceneBeat[] = [
+      { id: "short", essential: true, units: [{ role: "required", text: "Short line here." }] },
+      {
+        id: "long",
+        essential: true,
+        units: [{ role: "required", text: "This is a considerably longer required sentence with much more real content in it." }],
+      },
+    ];
+    const allocations = allocateBeatDurations(uneven, 10, rate);
+    const short = allocations.find((a) => a.id === "short")!;
+    const long = allocations.find((a) => a.id === "long")!;
+    expect(long.targetSeconds).toBeGreaterThan(short.targetSeconds);
+  });
+
+  it("includes every beat, unallocated proportions aside, when the budget comfortably fits all required content", () => {
+    const allocations = allocateBeatDurations(beats, 60, rate);
+    expect(allocations.every((a) => a.included)).toBe(true);
   });
 });

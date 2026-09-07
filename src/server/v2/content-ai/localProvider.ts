@@ -23,7 +23,7 @@ import { matchFactPack, type FactPackEntry } from "./factPacks";
 import { detectContentStyle } from "./contentStyleDetector";
 import { extractTopicConcepts } from "./scriptQuality";
 import { getSpeakingRate, type SpeakingRateProfile } from "./voiceSpeakingRate";
-import { composeNarrationForDuration, type NarrationUnit } from "./scriptDurationController";
+import { allocateBeatDurations, composeNarrationForDuration, type NarrationUnit } from "./scriptDurationController";
 
 function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
@@ -1021,8 +1021,9 @@ export class LocalContentAIProvider implements ContentAIProvider {
     rate: SpeakingRateProfile,
     brand?: string,
   ): ProductionSceneSpec[] {
-    const perScene = contentBudget / 4;
     const beats: Array<{
+      id: string;
+      essential: boolean;
       purpose: ProductionSceneSpec["purpose"];
       onScreenText: string;
       stockSearchTerms: string[];
@@ -1031,6 +1032,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
       units: NarrationUnit[];
     }> = [
       {
+        id: "hook",
+        essential: true,
         purpose: "hook",
         onScreenText: "60% of Businesses Lose Data",
         stockSearchTerms: ["server room blinking", "cyber security tech", "business computer"],
@@ -1052,6 +1055,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
         ],
       },
       {
+        id: "problem",
+        essential: false,
         purpose: "problem",
         onScreenText: "The Real Cost of Downtime",
         stockSearchTerms: ["stressed worker computer", "cyber attack graphic", "technology failure"],
@@ -1073,6 +1078,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
         ],
       },
       {
+        id: "solution",
+        essential: false,
         purpose: "solution",
         onScreenText: "Automated Encrypted Backups",
         stockSearchTerms: ["cloud computing data", "secure backup progress", "cyber security"],
@@ -1094,6 +1101,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
         ],
       },
       {
+        id: "cta",
+        essential: true,
         purpose: "cta",
         onScreenText: "Follow For Daily Tech Tips",
         stockSearchTerms: ["technology team success", "smiling engineer", "software development"],
@@ -1102,7 +1111,11 @@ export class LocalContentAIProvider implements ContentAIProvider {
         units: [
           {
             role: "required",
-            text: "Follow for more essential tech tips and secure your business infrastructure today.",
+            // Explicitly names "back up" and "files" (not just generic "tech
+            // tips") so the topic stays clear even when a tight budget drops
+            // the "problem"/"solution" beats and this required sentence ends
+            // up carrying the CTA alone (allocateBeatDurations).
+            text: "Follow for more tips on backing up your business files and keeping your work protected.",
           },
           {
             role: "optional",
@@ -1118,23 +1131,39 @@ export class LocalContentAIProvider implements ContentAIProvider {
       },
     ];
 
-    return beats.map((beat, sceneIndex) => {
-      const composed = composeNarrationForDuration(beat.units, perScene, rate);
-      const nextUnits = beat.units.slice(composed.unitsUsed);
-      return {
-        sceneIndex,
-        purpose: beat.purpose,
-        durationSeconds: perScene,
-        narration: composed.text,
-        onScreenText: beat.onScreenText,
-        stockSearchTerms: beat.stockSearchTerms,
-        visualPrompt: beat.visualPrompt,
-        visualSource: "stock",
-        visualProvider: "pexels",
-        transition: beat.transition,
-        narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
-      };
-    });
+    // Scene-level rebalancing (section 9): a single required sentence at
+    // Kokoro's real calibrated rate can take longer than an equal 1/4 share
+    // of a short requested duration - allocate each beat's share
+    // proportional to its own required narration's real length instead, and
+    // drop the least-essential beats first if even the essential ones alone
+    // would not fit. See allocateBeatDurations's own doc comment.
+    const allocations = allocateBeatDurations(
+      beats.map((b) => ({ id: b.id, units: b.units, essential: b.essential })),
+      contentBudget,
+      rate,
+    );
+    const allocationById = new Map(allocations.map((a) => [a.id, a]));
+
+    return beats
+      .filter((beat) => allocationById.get(beat.id)?.included)
+      .map((beat, sceneIndex) => {
+        const targetSeconds = allocationById.get(beat.id)!.targetSeconds;
+        const composed = composeNarrationForDuration(beat.units, targetSeconds, rate);
+        const nextUnits = beat.units.slice(composed.unitsUsed);
+        return {
+          sceneIndex,
+          purpose: beat.purpose,
+          durationSeconds: targetSeconds,
+          narration: composed.text,
+          onScreenText: beat.onScreenText,
+          stockSearchTerms: beat.stockSearchTerms,
+          visualPrompt: beat.visualPrompt,
+          visualSource: "stock",
+          visualProvider: "pexels",
+          transition: beat.transition,
+          narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
+        };
+      });
   }
 
   /**

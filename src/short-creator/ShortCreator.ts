@@ -1065,7 +1065,16 @@ export class ShortCreator {
           captionAudioPath = tempMasteredWavPath;
           expansionRetries++;
           logger.info(
-            { sceneIndex: index, expansionRetries, actualVoiceDuration, targetSceneDuration },
+            {
+              sceneIndex: index,
+              expansionRetries,
+              actualVoiceDuration,
+              targetSceneDuration,
+              expandedSpokenNarration,
+              expandedSpokenNarrationChars: expandedSpokenNarration.length,
+              preSpeedAdjustDuration: expandedNormalized.duration || voiceAudio.audioLength,
+              speedFactor,
+            },
             "Bounded duration correction: expanded scene narration and re-synthesized",
           );
         }

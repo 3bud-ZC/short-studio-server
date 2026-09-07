@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { estimateSpeechSeconds, getSpeakingRate } from "./voiceSpeakingRate";
 
 describe("getSpeakingRate", () => {
-  it("returns the real measured calibration for kokoro/af_heart/en", () => {
+  it("returns the real post-mastering-fix measured calibration for kokoro/af_heart/en (NOT the original 36.96, which was corrupted by the since-fixed silenceremove truncation bug)", () => {
     const rate = getSpeakingRate("kokoro", "af_heart", "en");
     expect(rate.source).toBe("measured");
-    expect(rate.charsPerSecond).toBeCloseTo(36.96, 1);
+    expect(rate.charsPerSecond).toBeCloseTo(15.5, 1);
   });
 
   it("returns the real measured calibration for voicetut/Mohamed/ar (case-insensitive)", () => {
@@ -28,12 +28,14 @@ describe("getSpeakingRate", () => {
 });
 
 describe("estimateSpeechSeconds", () => {
-  it("reproduces the real English proof's measured duration within a reasonable margin", () => {
+  it("estimates a plausible duration for real English narration at the corrected rate (NOT the original proof's corrupted 4.031s measurement - see voiceSpeakingRate.ts's own comment on why that number was never a real speaking rate)", () => {
     const rate = getSpeakingRate("kokoro", "af_heart", "en");
     const text =
       "If you run a small business, your files can disappear without warning. That is why backing up your files regularly protects your work from being lost.";
-    // Real combined duration for these two sentences was 4.031188s.
-    expect(estimateSpeechSeconds(text, rate)).toBeCloseTo(4.031, 0);
+    // 149 chars at the corrected ~15.5 chars/s is ~9.6s, not the original
+    // proof's corrupted 4.031s (that measurement was taken after the
+    // since-fixed silenceremove truncation bug had already cut the audio).
+    expect(estimateSpeechSeconds(text, rate)).toBeCloseTo(9.6, 0);
   });
 
   it("counts Arabic by Unicode codepoint, not UTF-16 code unit", () => {
