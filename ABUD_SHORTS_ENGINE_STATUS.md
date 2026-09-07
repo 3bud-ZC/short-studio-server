@@ -13134,3 +13134,131 @@ reproduction, all gates green). Arabic Caption Review: **OWNER REVIEW
 PENDING**. English Caption Review: **OWNER REVIEW PENDING**. Live Revideo
 Swap: **BLOCKED pending owner approval**.
 
+### Libass Final Caption Migration (correction)
+
+**Previous Revideo-native Caption Typography: AUTOMATED CHECK PASS / OWNER
+VISUAL REVIEW REJECTED.** The owner watched the actual rendered Arabic and
+English review videos from the pass above and rejected them: malformed,
+overlapping, badly-joined Arabic glyphs, and a horizontal artifact slicing
+through English glyphs across multiple words/frames - a real defect this
+session's automated frame-metadata checks did not catch, since they
+verified DOM/layout geometry, not the actual rasterized pixels. That
+automated PASS is superseded by this correction. **Root cause of the
+Revideo defects, since verified**: `Txt.draw()` never draws text itself -
+only its children do - so a wrapping `<Txt>` per caption word never
+actually applied its own `textDirection`/style to the glyphs it appeared to
+own; the visible corruption was the canvas repeatedly drawing under
+mismatched per-node state. Rather than continue patching Revideo's
+Txt/TxtLeaf internals (explicitly the wrong path per the owner's
+direction), final caption rasterization moves to the FFmpeg+libass path
+that was already proven for the legacy engine.
+
+**Final Caption Rasterizer: LIBASS / FFmpeg. Revideo: VIDEO COMPOSITION
+ENGINE** (timeline, clips, crop/layout, transitions, motion, audio, final
+duration - unchanged). New hybrid pipeline:
+`ProductionTimeline -> Revideo composition with captionTracks stripped
+(clean intermediate MP4, no burned text) -> ASS built from that SAME
+timeline's real captionTracks -> FFmpeg + libass burn -> final MP4`.
+`ProductionTimeline.captionTracks` (`video-core/types.ts`) is the one
+canonical, renderer-independent caption timing model both stages read from
+- no second one was invented. Implementation, entirely reused/extended
+rather than duplicated per instruction: `arabicCaptionRendererV3.ts`
+(ASS generation - logical-order Arabic in, HarfBuzz/FriBidi do all
+shaping/bidi, karaoke expressed as `\k` tags inside one shaped run so joins
+are never broken by a separately-drawn active word), `captionQa.ts`
+(objective geometry/shaping gate), `FFMpeg.burnAssSubtitles` (the existing
+production burn call). New: `revideoLibassRenderer.ts` orchestrates the
+three stages (`stripCaptionsForIntermediate`, `captionWordsFrom`, then
+build+QA+burn), injectable for testing, and - unlike the legacy Remotion
+call site's intentional silent-fallback (never lose an already-finished
+render to a caption-stage bug) - a libass burn failure or a real caption QA
+error here **throws and fails the render** rather than silently shipping
+an uncaptioned video, per explicit instruction for this still-being-proven
+path.
+
+**Fonts.** English: `CAPTION_FONTS.inter` added (`Inter-Variable.ttf`,
+already bundled/licensed from the prior pass); `captionFontForWords()`
+picks it for any caption batch with no Arabic-range character, instead of
+libass falling back through an Arabic-named family for English glyphs (a
+real, if minor, pre-existing gap - the same `renderArabicCaptions` call
+already served English captions in production, always via an Arabic font).
+Arabic: the default "Auto Professional" preset (`social_ad`/`bold_social`,
+both "Bold Social") now declares `font: "cairo"` instead of
+`noto_kufi_arabic`, matching the owner's explicit preference and the
+brand's own documented flagship Arabic caption face (Cairo is named
+repeatedly elsewhere in this document as the intended typography).
+`scripts/instance_fonts.py` extended with `Inter-Bold.ttf`/
+`Inter-ExtraBold.ttf` static instances (same build-time mechanism already
+used for the Arabic weights - libass/FreeType render a variable font at its
+Regular default instance only, so a real Bold face must be instanced out
+ahead of time, not requested at render time).
+
+**A real environment-fidelity finding, verified two ways before trusting
+either.** The first local render attempt (Windows, the `@ffmpeg-installer`
+npm package's bundled ffmpeg.exe) showed real tofu/missing-glyph boxes
+exactly where isolated Arabic alef (ا/أ) should render - a genuine defect,
+reproduced with and without karaoke tags, and with and without this
+session's own font-instancing step, so neither was the cause. Rather than
+"fix" a font problem sight unseen, the SAME text was rendered inside a
+throwaway `node:22-bookworm-slim` container with `apt-get install ffmpeg
+fontconfig` - the exact base image and package v2.Dockerfile already uses
+for production - and the alef glyph rendered correctly, cleanly, every
+time. The defect is specific to the Windows-bundled ffmpeg binary's
+libass/FreeType combination, not the production Debian/apt-get libass
+build this repository already verified links HarfBuzz+FriBidi+FreeType+
+Fontconfig. All further local verification in this pass burned captions
+inside that Debian container, not the Windows binary - this is the only
+representative way to test this pipeline from a Windows dev machine, and
+this session did not treat the Windows-only symptom as a real defect
+requiring a fix.
+
+**Real review renders.** Reused the exact same already-qualified audio and
+neutral background established in the prior (Revideo-native) pass -
+extracted verbatim from the previously-qualified MP4s, no TTS/Pexels
+re-fetch - now composed through the real `RevideoRenderer` with
+`captionTracks` stripped (clean, no burned text - confirmed by direct
+inspection of the intermediate) and captioned via the Debian-container
+libass burn. Same typography-verification fixture caption text as the
+prior pass (real, previously-vetted strings; not a re-verification of
+narration-content accuracy, which stays out of scope). Output, matching
+the qualified durations: `final-review-ar-caption-libass.mp4` (**10.93s**)
+and `final-review-en-caption-libass.mp4` (**11.23s**), both 1080x1920
+H.264+AAC, written with their hook/middle/CTA contact sheets to
+`C:\ProgramData\ShortStudio\shared\qa\caption-review-libass\`. Direct
+frame-by-frame inspection (all 6 frames, both languages) confirms: correct
+Arabic joins with no overlaps/collisions/reversal and the alef glyph
+rendering correctly, correct RTL reading order, clean unbroken English
+glyphs with no horizontal artifact anywhere, karaoke highlight working
+(libass `\k` hard-karaoke semantics - a word's fill is cumulative/stays
+highlighted once "sung," the standard, industry-conventional behaviour for
+this tag, not a defect), 2-5 word phrase grouping, max 2 lines, safe
+margins respected, no clipping, no oversized debug-style panel, no isolated
+single-word captions.
+
+**Regression tests** (18 new, all passing): `arabicCaptionRendererV3.test.ts`
+(5 - Inter for English/Arabic font stays Arabic, Arabic text never
+reversed/no RTL override characters, every karaoke word stays inside ONE
+dialogue event per phrase, font family matches the declared ASS Style) and
+`revideoLibassRenderer.test.ts` (8 - `stripCaptionsForIntermediate` empties
+only captionTracks, `captionWordsFrom` maps ProductionTimeline captions
+into absolute-ms words unchanged, the Revideo intermediate call always
+receives an EMPTY captionTracks array even when the input timeline has
+real captions, a normal render burns via libass and returns the captioned
+path, the `"none"` preset and an empty caption track both skip the burn
+stage entirely, a libass burn failure propagates/fails the render instead
+of silently returning the uncaptioned video, and a real caption QA
+violation - text that cannot fit any allowed size/line count - fails the
+render before ever reaching the burn stage).
+
+**Gates.** `npx tsc --noEmit` (server, ui, revideo-project): clean.
+`npx vitest run`: **91 files / 1258 tests passing**, zero unexplained
+failures. `npm run build`: clean.
+
+**Current field values**: Previous Revideo-native Caption Typography:
+**AUTOMATED CHECK PASS / OWNER VISUAL REVIEW REJECTED** (real rendered
+glyph corruption in Arabic and English). Final Caption Rasterizer:
+**LIBASS / FFmpeg**. Revideo: **VIDEO COMPOSITION ENGINE**. Arabic libass
+review: **OWNER REVIEW PENDING**. English libass review: **OWNER REVIEW
+PENDING**. Live Revideo Swap: **BLOCKED**. Upload-Post: **BLOCKED**.
+GA: **BLOCKED**.
+

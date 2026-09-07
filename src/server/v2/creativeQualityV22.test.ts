@@ -281,7 +281,7 @@ describe("Arabic caption renderer V3", () => {
     expect(built.content).toContain(`PlayResY: ${FRAME.height}`);
     expect(built.content).toContain("[Events]");
     expect(built.content).toContain("Dialogue:");
-    expect(built.fontFamily).toBe("Noto Kufi Arabic");
+    expect(built.fontFamily).toBe("Cairo");
     expect(built.phrases.length).toBeGreaterThan(0);
   });
 

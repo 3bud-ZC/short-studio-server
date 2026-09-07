@@ -28,7 +28,8 @@ export type CaptionFontId =
   | "ibm_plex_sans_arabic"
   | "noto_kufi_arabic"
   | "noto_sans_arabic"
-  | "cairo";
+  | "cairo"
+  | "inter";
 
 export type CaptionHighlightMode =
   /** libass karaoke timing inside one shaped run - shaping is preserved. */
@@ -82,6 +83,13 @@ export const CAPTION_FONTS: Record<CaptionFontId, CaptionFontSpec> = {
     files: ["Cairo-Variable.ttf", "Cairo-Bold.ttf"],
     license: "OFL-1.1",
     weights: { regular: 400, bold: 700 },
+  },
+  inter: {
+    id: "inter",
+    family: "Inter",
+    files: ["Inter-Variable.ttf", "Inter-Bold.ttf", "Inter-ExtraBold.ttf"],
+    license: "OFL-1.1",
+    weights: { regular: 400, bold: 700, extrabold: 800 },
   },
 };
 
@@ -178,7 +186,7 @@ export const CAPTION_STYLES: Record<CaptionStyleId, CaptionStyleSpec> = {
   bold_social: {
     id: "bold_social",
     label: "Bold Social",
-    font: "noto_kufi_arabic",
+    font: "cairo",
     weight: "bold",
     minSizeRatio: 0.038,
     maxSizeRatio: 0.052,
@@ -199,7 +207,7 @@ export const CAPTION_STYLES: Record<CaptionStyleId, CaptionStyleSpec> = {
   social_ad: {
     id: "social_ad",
     label: "Bold Social",
-    font: "noto_kufi_arabic",
+    font: "cairo",
     weight: "bold",
     minSizeRatio: 0.038,
     maxSizeRatio: 0.052,

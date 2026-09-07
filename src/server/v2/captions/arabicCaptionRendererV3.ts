@@ -1,6 +1,8 @@
 import {
+  CAPTION_FONTS,
   captionFontFor,
   resolveCaptionStyle,
+  type CaptionFontSpec,
   type CaptionStyleSpec,
 } from "./captionStyles";
 
@@ -288,6 +290,20 @@ export type AssBuildResult = {
 };
 
 /**
+ * Every named `CaptionStyleSpec.font` today points at an Arabic-script face
+ * (Cairo, Noto Kufi Arabic, ...) - there is no separate style per language.
+ * A caption batch is effectively single-language in practice (one video, one
+ * narration language), so a whole-batch check is enough: if none of the
+ * words contain an Arabic-range character, use the bundled Latin face
+ * (Inter) instead of the style's own Arabic one rather than asking libass to
+ * fall back through an Arabic-named family for English glyphs.
+ */
+export function captionFontForWords(style: CaptionStyleSpec, words: CaptionWord[]): CaptionFontSpec {
+  const hasArabic = words.some((word) => ARABIC_RANGE.test(word.text));
+  return hasArabic ? captionFontFor(style) : CAPTION_FONTS.inter;
+}
+
+/**
  * Renders caption words into a complete ASS script.
  *
  * `PlayResX/PlayResY` are set to the real frame size so every measurement here
@@ -295,7 +311,7 @@ export type AssBuildResult = {
  */
 export function buildArabicAss(words: CaptionWord[], options: AssRenderOptions): AssBuildResult {
   const { style, frame } = options;
-  const font = captionFontFor(style);
+  const font = captionFontForWords(style, words);
   const phrases = chunkIntoPhrases(words);
 
   const platformSafe = options.platformSafeBottomRatio ?? 0;
