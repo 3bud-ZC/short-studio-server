@@ -1045,6 +1045,10 @@ export class LocalContentAIProvider implements ContentAIProvider {
             role: "optional",
             text: "It rarely happens with any warning - one bad drive, one power surge, and years of records are gone.",
           },
+          {
+            role: "optional",
+            text: "Client contracts, financial records, years of project files - all of it can vanish in a single moment.",
+          },
         ],
       },
       {
@@ -1062,6 +1066,10 @@ export class LocalContentAIProvider implements ContentAIProvider {
             role: "optional",
             text: "Every hour spent trying to recover lost files is an hour not spent serving customers.",
           },
+          {
+            role: "optional",
+            text: "And by the time you notice something is wrong, the version you need to restore might already be overwritten.",
+          },
         ],
       },
       {
@@ -1078,6 +1086,10 @@ export class LocalContentAIProvider implements ContentAIProvider {
           {
             role: "optional",
             text: "A good backup routine runs quietly in the background, so protecting your work never becomes another task on your list.",
+          },
+          {
+            role: "optional",
+            text: "Whether it is a laptop, a shared drive, or a cloud folder, the same simple habit keeps everything recoverable.",
           },
         ],
       },
@@ -1097,6 +1109,10 @@ export class LocalContentAIProvider implements ContentAIProvider {
             text: brand
               ? `${brand} can help you set up a reliable backup routine in less time than you think.`
               : "Setting up a reliable backup routine takes less time than you think.",
+          },
+          {
+            role: "optional",
+            text: "Start today, before the next hardware failure decides the timeline for you.",
           },
         ],
       },
@@ -1149,6 +1165,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         units: [
           { role: "required", text: "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس." },
           { role: "optional", text: "عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية." },
+          { role: "optional", text: "عقود عملائك، حساباتك، وكل ملفات مشروعك، ممكن تختفي في لحظة واحدة." },
         ],
       },
       {
@@ -1160,6 +1177,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         units: [
           { role: "required", text: "من غير نسخة احتياطية، أي مشكلة بسيطة ممكن توقفك عن شغلك تماماً." },
           { role: "optional", text: "كل ساعة بتضيع في محاولة استرجاع ملفاتك، هي ساعة كنت ممكن تخدم فيها عملائك." },
+          { role: "optional", text: "وأحياناً لما تكتشف المشكلة، بيكون الوقت اتأخر والنسخة اللي محتاجها راحت خلاص." },
         ],
       },
       {
@@ -1171,6 +1189,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         units: [
           { role: "required", text: "عشان كده لازم تعمل نسخة احتياطية لملفاتك بشكل دوري، وتحافظ على شغلك من الضياع." },
           { role: "optional", text: "نسخة احتياطية منظمة بتشتغل من غير ما تحس، وتضمنلك إنك ترجع شغلك في دقايق." },
+          { role: "optional", text: "سواء الملفات على اللاب توب أو على السحابة، نفس العادة البسيطة بتحافظ على كل حاجة." },
         ],
       },
       {
@@ -1187,6 +1206,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
               ? `${brand} بيساعدك تظبط نظام نسخ احتياطي موثوق في وقت أقل مما تتخيل.`
               : "تنظيم نسخة احتياطية موثوقة بياخد وقت أقل بكتير مما تتخيل.",
           },
+          { role: "optional", text: "ابدأ من دلوقتي، قبل ما عطل مفاجئ يحدد لك الميعاد بدل ما تختاره إنت." },
         ],
       },
     ];
