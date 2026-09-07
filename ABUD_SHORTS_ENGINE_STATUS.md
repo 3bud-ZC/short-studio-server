@@ -12847,3 +12847,155 @@ below). English Final Pre-Swap Proof: **OWNER REVIEW PENDING** (duration
 target not met - flagged, not hidden; other gates pass). Live Revideo
 Swap: **BLOCKED pending owner review**. Upload-Post: BLOCKED. GA: BLOCKED.
 
+## KOKORO ENGLISH DURATION ANOMALY CLOSURE
+
+Narrowly-scoped root-cause and fix for the one open item from the prior
+pass: the English final-review proof's 8.77s-against-11s shortfall.
+
+### Root cause (proven via direct ffmpeg filter isolation, not assumed)
+
+`masterVoiceAudioFile()`'s (`src/short-creator/libraries/FFmpeg.ts`)
+`silenceremove` filter was invoked with both `start_periods` and
+`stop_periods` set in one call. That does not wait for the true end of the
+file to find "the" trailing silence - it treats the FIRST silence run
+encountered after the leading trim as if it were the final trailing
+silence, and discards everything after it. Real speech has several
+natural inter-word/inter-sentence pauses well before its real end, so this
+was silently truncating every voice narration this product ever mastered
+down to roughly wherever its first natural pause fell.
+
+Proof, not assertion: three real Kokoro af_heart clips of measured lengths
+7.375s/13.15s/19.4s were generated directly (bypassing ShortCreator
+entirely) and run through the exact old filter chain - **all three
+collapsed to the identical 1.950625s**, regardless of their real, verified
+length. `stop_periods=1` alone (no `start_periods` in the same call)
+produced an EMPTY output file. Bisecting the chain filter-by-filter
+confirmed `silenceremove` alone reproduces it; `highpass`/`loudnorm` alone
+do not touch duration at all. This also explains the earlier pass's
+"identical duration across consecutive correction retries" observation,
+and reveals that the ORIGINAL English calibration (36.96 chars/s) was
+itself measured from already-truncated audio - never a real speaking rate.
+
+### Artifact identity test (section 4) - no cache/reuse bug
+
+Two clearly different sentences (5 words/25 chars vs 31 words/187 chars),
+synthesized directly via the same `Kokoro.generate()` the product calls:
+input hashes differed, audio hashes differed, measured durations differed
+meaningfully (2.025s vs 12.025s) and scaled with real length. **No
+artifact-reuse/caching defect exists** - every duration anomaly traced back
+to the single mastering-filter bug above, confirmed by testing the exact
+same real texts through `Kokoro.generate()` alone (correct, differentiated
+durations) versus through the OLD `masterVoiceAudioFile()` (collapsed to
+one fixed number).
+
+### Fix
+
+- `masterVoiceAudioFile`: replaced the single unsafe `silenceremove` call
+  with the standard ffmpeg idiom for trimming ONLY true leading/trailing
+  silence without touching mid-stream pauses - reverse, trim what is now
+  the "start" (the real end), reverse back. Verified: the same three real
+  clips now come out proportionally shorter (6.58s/12.34s/18.40s), not
+  collapsed to one fixed number. New real-audio regression test
+  (`masterVoiceAudioFile.test.ts`) reproduces the bug shape with
+  synthesized tone+silence audio and asserts against it directly - this is
+  the test that would have caught the original bug.
+- `voiceSpeakingRate.ts`: recalibrated the English (Kokoro af_heart)
+  constant from the corrupted 36.96 chars/s to a real post-fix measurement
+  (~15.5 chars/s, averaged from 3 controlled samples). **Arabic (VoiceTut)
+  left untouched** per this pass's explicit scope - its real proof already
+  met the 10-12s target and was not re-verified against the mastering fix.
+- New `allocateBeatDurations` (`scriptDurationController.ts`) - scene-level
+  rebalancing (section 9): at the corrected real rate, all four English
+  backup-pack required sentences combined need ~24s, far more than an 11s
+  request's ~9.5s content budget - no calibration fix alone makes an equal
+  4-way split viable. Drops non-essential beats (problem/solution) first
+  when the budget is tight, allocates duration proportional to each
+  surviving beat's real required-narration length instead of an equal
+  split, and never drops the hook/cta beats. Wired into
+  `buildTechEducationalScenesEnglish` only - **`buildTechEducationalScenes
+  Arabic` deliberately left untouched**, out of scope, its real proof
+  already passed.
+- Fixed the CTA required sentence to explicitly name "back up"/"files" (it
+  previously said only "secure your business infrastructure" - generic
+  tech-tips copy with no topic anchor), so the topic stays clear even when
+  it is the only surviving closing beat under a tight budget.
+- Added a second-chance post-mastering slowdown in `ShortCreator.ts`: the
+  existing speed-adjust only ever saw the PRE-mastering duration, so a
+  scene that looked close enough to target before mastering (no slowdown
+  applied) could still land short once mastering's own real silence-trim
+  removed more than expected - and the retry loop's only remaining tool
+  (adding a whole extra sentence) badly overshot gaps that were often just
+  5-15% short (proven: a 5.94s-target scene's required text alone measured
+  4.77s post-mastering; adding one more sentence overshot to 10.37s, worse
+  than the original shortfall). Re-checks with the same safe 0.82x-floor
+  mechanism against the POST-mastering measurement first; only falls
+  through to content expansion if that is still insufficient.
+
+### Tests (section 13)
+
+19 new/updated tests: `masterVoiceAudioFile.test.ts` (2, real-ffmpeg
+regression reproducing the exact bug shape and verifying the fix, plus
+that true leading/trailing silence is still trimmed), `allocateBeatDurations`
+(4, dropping non-essential beats, never dropping essential ones,
+proportional-not-equal allocation, includes-everything-when-it-fits),
+recalibrated `voiceSpeakingRate`/`estimateSpeechSeconds` (updated to the
+corrected 15.5 chars/s), and rewritten `localProviderBackupPack.test.ts`
+(8: backup-pack routing including the Arabic path, essential beats
+survive, no filler/duplicated narration, proportional per-scene durations,
+plausible total estimate, unused-expansion-units bookkeeping, and an
+explicit **Arabic path unchanged** lock-in test asserting
+`buildTechEducationalScenesArabic` still produces exactly 4 equal-share
+scenes). Revideo timeline files (`src/video-core/`) had zero changes this
+pass (confirmed via `git diff --stat`).
+
+### Full gate - all green
+
+`npx tsc --noEmit`: clean. `npx vitest run`: **87 files / 1231 tests
+passing**. `npm run build`: clean. Python local-TTS API tests: **8/8**.
+Pester host-lifecycle tests: **21/21**. No unexplained failures.
+
+### Candidate
+
+Committed on `v2.5-short-studio` (local, not pushed, not merged to main):
+`ba861bf` (root-cause fix), `a48e85c` (second-chance slowdown). Built
+`abud-shorts-engine:kokoro-fixed` (final image ID
+`sha256:015d0e6fbe90...`) via plain `docker build` - no `docker cp`, no
+manual `node_modules` edits. Live containers untouched.
+
+### English TTS-only qualification (section 16) and real proof (section 17)
+
+A hand-rolled standalone "TTS-only" duration predictor was attempted first
+per section 16's instruction, but proved unreliable twice (it omitted the
+real pipeline's speed-adjust step, then its own retry simulation
+overshot) - rather than trust a third simulation, verification moved
+directly to the real `ShortCreator` pipeline, which is the authoritative
+implementation being fixed. Real English proof (`final-review-en`, topic
+"Why small businesses should back up their files", Kokoro af_heart,
+Revideo, real Pexels, `LocalContentAIProvider`-generated content, no paid
+AI): **actual duration 11.2s** (target 11s, variance 0.2s, inside 10-12s).
+`technicalReady`/`contentReady`/`professionalReady`: all true.
+`genericFillerDetected`: false. `scriptCompleteness`/`ctaCompleteness`:
+true. No duplicated narration (2 distinct scenes: hook + cta - problem/
+solution correctly dropped by the rebalancer for this tight budget).
+Silence gate: **pass true**, longest run 445ms, all 3 gaps (445/364/439ms)
+under BOTH the 900ms/1000ms required bounds and the stricter 500ms
+preference. 1080x1920 H.264 + AAC 48kHz. Real Pexels assets: `28709421`,
+`5377775`, `6101149`, `7496272`, `10375461`. Delivery: thumbnail 200,
+preview 200/206, download 200. No bounded-correction content-expansion
+retry was even needed - the second-chance slowdown alone closed the gap.
+
+Exported to `C:\ProgramData\ShortStudio\shared\qa\revideo-final-review\`
+as `final-review-en-v2.mp4` / `final-review-en-v2-contactsheet.jpg`,
+preserving the prior 8.77s evidence (`final-review-en.mp4`) unchanged.
+Arabic (`final-review-ar.mp4`, 10.93s) untouched, not re-run, per explicit
+instruction.
+
+**Current field values**: Kokoro Duration Anomaly: **ROOT CAUSE FOUND**
+(masterVoiceAudioFile's silenceremove filter). Artifact Reuse: **PASS** (no
+defect found - proven via direct hash/duration comparison). Duration
+Controller: **PASS** (recalibrated + rebalanced + second-chance slowdown;
+real proof lands at 11.2s). Arabic: **10.93s PASS - unchanged** (file and
+code both untouched this pass). English Replacement: **PASS** (11.2s,
+all gates green). Live Revideo Swap: **STILL BLOCKED pending owner video
+review**. Upload-Post: BLOCKED. GA: BLOCKED.
+
