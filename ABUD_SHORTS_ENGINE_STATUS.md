@@ -12393,6 +12393,29 @@ content, not just the synthetic fixture.
   register/idempotency/unregister, uninstall-preserves-data).
 - No unexplained failures anywhere in the gate.
 
+### Section 10 (preview/render parity) - genuinely blocked, not fabricated
+
+Checked directly rather than assumed: `package.json` installs `@revideo/2d`,
+`@revideo/core`, `@revideo/ffmpeg`, `@revideo/renderer`, `@revideo/ui`, and
+`@revideo/vite-plugin` - **not** `@revideo/player`, the package that
+actually renders a live browser preview - and no file under `src/ui/`
+references Revideo at all (`grep -rn "revideo" src/ui/` -> no matches).
+This spike built only the headless render path
+(`RevideoRenderer`/`revideo-project`); a browser preview surface was never
+wired into the product UI at any point in this evaluation, so there is
+nothing to compare the headless render against for a live, multi-timestamp
+parity check. What IS architecturally true and directly verifiable: there
+is exactly one scene definition (`timelineScene.tsx`, `makeScene2D('timeline',
+...)`) consuming one `timelineJson` variable, with no second,
+preview-specific implementation anywhere in the codebase - so the
+"avoid separate preview/export implementations" requirement holds by
+construction (there is only one to begin with), even though a live pixel-
+level comparison across timestamps could not be performed. Recorded
+honestly as **NOT VERIFIABLE IN THIS PASS** rather than marked done -
+building a full `@revideo/player` browser-preview integration would be new
+product scope (a new dependency, a new UI page, new wiring), not something
+this productization pass should add unprompted.
+
 ### Performance comparison (section 18) - Revideo (real proofs) vs Legacy (existing measured evidence)
 
 Per section 18's explicit instruction, no new legacy render was generated
