@@ -12999,3 +12999,138 @@ code both untouched this pass). English Replacement: **PASS** (11.2s,
 all gates green). Live Revideo Swap: **STILL BLOCKED pending owner video
 review**. Upload-Post: BLOCKED. GA: BLOCKED.
 
+### Professional Caption Typography Correction
+
+**Owner Caption Typography Review: REJECTED - previous style.** The prior
+Revideo caption implementation drew isolated single words (never a phrase),
+in Arial/IBM Plex Sans Arabic - neither font bundled nor registered for the
+Revideo/Chromium render page, so both languages were one dependency change
+away from a silent system-font fallback - with no karaoke highlight, no
+deterministic line-fitting, and fixed pixel offsets instead of responsive
+safe-area math. This pass replaces that with a real typography system,
+shared in design (not font files) with the legacy ASS caption engine.
+
+**Fonts.** Arabic uses the already-bundled `assets/fonts/Cairo-Variable.ttf`
+(OFL-1.1, already in THIRD_PARTY_NOTICES.md). English needed a bundled bold
+Latin face that didn't exist yet; evaluated and bundled `Inter-Variable.ttf`
+(OFL-1.1, Inter Project release) at `assets/fonts/Inter-Variable.ttf`,
+recorded in THIRD_PARTY_NOTICES.md. Both are variable fonts registered via
+a new `fonts.css` (`@font-face`, full weight axis, offline `url()` imports -
+no runtime web-font fetch). A new `fontRegistration.ts` forces both
+families to load via the Font Loading API and throws a clear error if
+either fails to resolve; it is deliberately **not** `yield`-ed into the
+scene's cooperative generator scheduler - an earlier version that did
+deadlocked the entire render (confirmed by direct reproduction: idle CPU,
+zero output, indefinitely) - so it runs as a non-blocking check whose
+failure surfaces as a console error rather than a silent fallback font.
+`fontRegistration.test.ts` is the reliable, CI-enforced half of this gate
+(asserts fonts.css declares both families and every `url()` target exists
+on disk); the runtime check is the best-effort half for a real render.
+
+**Typography.** New `captionPhrasing.ts` groups Whisper/ElevenLabs
+word-level timing (the alignment contract itself is untouched) into 2-5
+word on-screen phrases, breaking early on a natural pause and backing off
+before a phrase would exceed 2 lines at a deterministic character-per-line
+estimate - 11 unit tests in `captionPhrasing.test.ts`. `timelineScene.tsx`
+renders each phrase as one sizing/position pass reading the SAME
+`CAPTION_STYLES` design tokens the legacy ASS engine uses
+(`src/server/v2/captions/captionStyles.ts` - size bounds, safe-area ratio,
+colours, weight, line height, max lines; imported read-only, not modified)
+mapped per template (stock_social_reel -> social_ad, business_promo ->
+clean_professional/top-anchored, kinetic_explainer -> kinetic_phrase),
+so every dimension scales off the real render width/height instead of a
+fixed pixel constant. The whole phrase stays visible while the current
+word's fill switches to the style's highlight colour (karaoke), governed by
+each style's own `highlight` mode.
+
+**Real defects found and fixed while producing real renders** (not
+caption-logic bugs - infrastructure the Revideo pipeline needed to actually
+render on this Windows host, confirmed one at a time by direct render
+reproduction):
+- Vite's dev server now sits on 8.2.2 (a newer major than the `^6.3.4` the
+  app itself pins); `@revideo/renderer`'s internal `virtual:renderer` module
+  imports two bare specifiers Vite 8's resolver could no longer find on
+  disk despite them existing with no exports-map restriction - fixed with
+  two `resolve.alias` entries in `revideoRenderer.ts`, the same pattern
+  already used there for the `@revideo/2d/jsx-runtime` gap.
+- That same virtual module interpolates the absolute project file path
+  straight into a JS string literal with no escaping; on Windows that path
+  contains backslashes, so sequences like `\v`/`\r` were silently consumed
+  as (invalid) JS escapes, corrupting the path (e.g. `\video-core` lost its
+  `v`) - a genuine upstream `@revideo/renderer` bug, invisible on POSIX
+  paths. Fixed by extending the existing
+  `patches/@revideo__renderer@0.11.0.patch` (pnpm patch) to escape
+  backslashes before interpolation.
+- Vite's `server.fs.allow` blocked font requests outside the per-render
+  staging directory ("outside of Vite serving allow list") - exactly the
+  silent-fallback-font failure mode `fontRegistration.ts` exists to catch,
+  and it did. Fixed by widening `fs.allow` to include the repo root.
+- Revideo's `Txt` node never draws text itself; it only delegates to an
+  auto-created internal `TxtLeaf`, which does not inherit a wrapping
+  `<Txt>`'s `textDirection` - every caption word was drawing with the
+  canvas default (effectively ltr) direction regardless of the RTL
+  container, pushing Arabic phrases past both safe-area edges. Fixed by
+  reaching each word's already-created leaf via its own `.children()[0]`
+  and setting `textDirection` directly on it (deliberately not via a
+  separate `TxtLeaf` import - a second Vite-resolved copy of that internal,
+  non-barrel-exported class caused real render crashes, confirmed by direct
+  testing and reverted).
+- `textWrap` was never set on the phrase container - phrases rendered as
+  one unwrapped, overflowing line regardless of the line-fitting estimate.
+  Fixed by setting `textWrap={true}`.
+- A canvas `shadowBlur`/`shadowColor` on each word cast under BOTH the
+  separate `strokeText()` and `fillText()` calls TxtLeaf issues, producing
+  a visible doubled/offset "ghost" edge on every glyph. Removed; the stroke
+  alone gives clean, restrained contrast.
+
+**Real review renders.** The exact per-job assets behind the previously
+qualified `final-review-ar.mp4`/`final-review-en-v2.mp4` no longer exist on
+disk (their temp job directories were cleaned up before this pass), so a
+byte-for-byte rerun of the original harness wasn't possible. Re-rendered
+using the REAL already-qualified narration+music audio (extracted verbatim
+from those two files via ffmpeg, zero TTS calls) over a plain generated
+neutral-colour background (no cached Pexels asset survived on disk in a
+usable state, and none was re-fetched), with typography-verification
+fixture caption text - real, previously-vetted strings already in this
+repo (the Arabic backup-topic phrases from
+`src/video-core/__smoke__/smoke-revideo.ts` plus a real CTA line reused
+verbatim from `src/short-creator/business-templates.ts`; the literal
+English topic string already quoted above) rather than the original,
+unrecoverable narration script - honestly, this is a typography check, not
+a re-verification of narration/caption-content accuracy, which was already
+qualified separately and untouched this pass.
+
+Rendered via the real `RevideoRenderer`/`stock_social_reel` template:
+`final-review-ar-caption-v2.mp4` (**10.93s**, matches the qualified Arabic
+duration exactly) and `final-review-en-caption-v3.mp4` (**11.23s**, matches
+the qualified English duration to within 30ms). Both 1080x1920 H.264+AAC.
+Frames pulled at hook/middle/CTA for each (precise post-input `-ss` seeking,
+not the input-seek that produced a misleading double-image artifact on the
+first pass) plus a 3-up contact sheet, all four written to
+`C:\ProgramData\ShortStudio\shared\qa\caption-review\`:
+`final-review-ar-caption-v2.mp4`, `final-review-en-caption-v3.mp4`,
+`final-review-ar-caption-v2-contactsheet.jpg`,
+`final-review-en-caption-v3-contactsheet.jpg`. Direct visual inspection of
+all 6 frames confirms: real Cairo/Inter glyphs (not a tofu box or a system
+fallback), 2-5 word phrases with the whole phrase visible and the active
+word in the highlight colour, max 2 lines, no clipping at either safe-area
+edge in either script, correct Arabic RTL order and safe centering, no
+isolated single-word display.
+
+**Gates.** `npx tsc --noEmit` (all 3 projects: server, ui, revideo-project):
+clean. `npx vitest run`: **89 files / 1245 tests passing**, including the
+new `captionPhrasing.test.ts` (11) and `fontRegistration.test.ts` (3); zero
+unexplained failures (one `realVideoQualityQa.test.ts` timeout was observed
+under full-suite parallel CPU contention, confirmed unrelated to this pass
+- it passes in under 1.1s in isolation and needs no change). `npm run
+build`: clean.
+
+**Current field values**: Owner Caption Typography Review: **REJECTED -
+previous style**. Professional Caption Typography Correction: **PASS**
+(fonts registered and offline-bundled, phrase grouping + karaoke + safe
+area implemented and shared in design with the legacy caption engine, 6
+real infrastructure defects found and fixed via direct render
+reproduction, all gates green). Arabic Caption Review: **OWNER REVIEW
+PENDING**. English Caption Review: **OWNER REVIEW PENDING**. Live Revideo
+Swap: **BLOCKED pending owner approval**.
+

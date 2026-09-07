@@ -22,6 +22,7 @@ rewritten during V2.2 finalization.
 | Noto Kufi Arabic | Google Fonts release | `assets/fonts/NotoKufiArabic-Variable.ttf` (google/fonts `ofl/notokufiarabic`) | OFL-1.1; static Bold/ExtraBold instanced at build time from the variable source |
 | Noto Sans Arabic | Google Fonts release | `assets/fonts/NotoSansArabic-Variable.ttf` (google/fonts `ofl/notosansarabic`) | OFL-1.1; static Medium/SemiBold instanced at build time from the variable source |
 | Cairo (TTF) | Google Fonts release | `assets/fonts/Cairo-Variable.ttf` (google/fonts `ofl/cairo`) | OFL-1.1; legacy caption face, static Bold instanced at build time |
+| Inter (TTF) | Inter Project release (rsms/inter) | `assets/fonts/Inter-Variable.ttf` | OFL-1.1; bundled Latin caption face for the Revideo caption engine, no network fetch at render time |
 | libass | system (Debian) | Arabic subtitle rendering via FFmpeg `ass` filter | ISC; linked with HarfBuzz, FriBidi, FreeType and Fontconfig |
 | PySceneDetect | 0.6.4 | Optional CPU quality runtime; shot-boundary detection | BSD-3-Clause |
 | librosa | 0.10.2.post1 | Optional CPU quality runtime; beat and energy analysis | ISC |

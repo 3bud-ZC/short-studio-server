@@ -1,7 +1,7 @@
 diff --git a/lib/server/render-video.js b/lib/server/render-video.js
 index 40cc5c1340b136775d2edad8eb9904c66eaf85f9..dddfc6a38da658755bfa594f5de5d0136ec6cbbc 100644
 --- a/lib/server/render-video.js
-+++ b/lib/server/render-video.js	
++++ b/lib/server/render-video.js
 @@ -62,9 +62,13 @@ function buildUrl(port, fileName, workerId, totalNumOfWorkers, hiddenFolderId) {
   */
  async function initBrowserAndServer(fixedPort, projectFile, outputFolderName, settings, variables) {
@@ -19,3 +19,27 @@ index 40cc5c1340b136775d2edad8eb9904c66eaf85f9..dddfc6a38da658755bfa594f5de5d013
      const resolvedProjectPath = path.join(process.cwd(), projectFile);
      const [browser, server] = await Promise.all([
          puppeteer_1.default.launch({ headless: true, ...settings.puppeteer, args }),
+diff --git a/lib/server/renderer-plugin.js b/lib/server/renderer-plugin.js
+index c698b507a6f3b714e1003d323baa61a5df6fa12b..2a61496a9bee558030a9ef7e58b0617b40c27477 100644
+--- a/lib/server/renderer-plugin.js
++++ b/lib/server/renderer-plugin.js
+@@ -79,7 +79,18 @@ function rendererPlugin(projectSettings, variables, customFfmpegSettings, projec
+                 return `\
+             import {render} from '@revideo/renderer/lib/client/render';
+             import {Vector2} from '@revideo/core';
+-            import project from '${projectFile}';
++            import project from '${(() => {
++              // PATCHED (Short Studio): upstream interpolated the raw absolute
++              // path straight into this JS string literal. On Windows that
++              // path contains backslashes, so sequences like "\U" or "\v" are
++              // parsed as (mostly invalid, silently-swallowed) JS string
++              // escapes once Vite feeds this template through its own
++              // transform - corrupting the path (e.g. "\video-core" loses its
++              // "v") and producing "Failed to resolve import ... Does the
++              // file exist?" even though the real file is right there.
++              // Escaping backslashes here is the fix; a no-op on POSIX paths.
++              return projectFile.replace(/\\/g, '\\\\');
++            })()}';
+ 
+             // Read video variables
+             project.variables = ${variables ? `JSON.parse(\`${JSON.stringify(variables, escapeSpecialChars)}\`)` : 'project.variables'};

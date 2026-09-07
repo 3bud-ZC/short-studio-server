@@ -2,8 +2,12 @@
 // Vite's dependency-scan pass (esbuild) does not always pick up the plugin's
 // jsx config for this file and falls back to React's runtime, which isn't
 // installed here - an explicit per-file pragma avoids depending on that.
-import {Audio, Rect, Txt, Video, View2D, makeScene2D} from '@revideo/2d';
+import {Audio, Layout, Rect, Txt, Video, View2D, makeScene2D} from '@revideo/2d';
 import {all, createRef, useScene, waitFor} from '@revideo/core';
+import './fonts.css';
+import {CAPTION_FONT_FAMILIES, ensureCaptionFontsRegistered} from './fontRegistration';
+import {type CaptionPhrase, type CaptionWord, groupCaptionWordsIntoPhrases} from './captionPhrasing';
+import {CAPTION_STYLES, type CaptionStyleSpec} from '../../server/v2/captions/captionStyles';
 
 /**
  * Single generic, data-driven Revideo scene. It reads the WHOLE
@@ -133,57 +137,125 @@ function* runVisuals(view: View2D, timeline: ParsedTimeline) {
 const ARABIC_PATTERN = /[؀-ۿݐ-ݿ]/;
 
 /**
- * Uses the SAME bundled font family the product's own dashboard already
- * ships (IBM Plex Sans Arabic - see main.Dockerfile/src/components/videos)
- * rather than fetching a web font, per section 9 of the Revideo evaluation.
- * `textDirection` is set explicitly (Canvas2D's own RTL support) rather than
- * relying on implicit Unicode BiDi detection alone.
+ * Average glyph advance width, as a fraction of font size, for the bold
+ * weights these two families render captions at. Used only to turn a pixel
+ * safe-width into an estimated `charsPerLine` for deterministic phrase
+ * line-fitting (captionPhrasing.ts) - the real browser layout still does the
+ * actual wrapping at render time, this just keeps phrases from being handed
+ * to it already too long for 2 lines. Arabic's connected forms run slightly
+ * wider on average than Latin at the same weight.
  */
-function captionStyleFor(text: string): {fontFamily: string; textDirection: 'ltr' | 'rtl'} {
-  return ARABIC_PATTERN.test(text)
-    ? {fontFamily: 'IBM Plex Sans Arabic, Arial, sans-serif', textDirection: 'rtl'}
-    : {fontFamily: 'Arial, sans-serif', textDirection: 'ltr'};
+const AVG_GLYPH_WIDTH_EM: Record<'latin' | 'arabic', number> = {latin: 0.58, arabic: 0.62};
+
+const CAPTION_WEIGHT_NUMBER: Record<CaptionStyleSpec['weight'], number> = {
+  regular: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+  extrabold: 800,
+};
+
+type CaptionTypography = {
+  fontFamily: string;
+  textDirection: 'ltr' | 'rtl';
+  fontWeight: number;
+};
+
+/**
+ * Font choice is Revideo-specific (Cairo/Inter, both bundled offline - see
+ * fonts.css); every other design token (size bounds, safe area, colour,
+ * weight, outline/shadow, highlight behaviour) is read straight from the
+ * SAME `CAPTION_STYLES` spec the legacy ASS caption engine uses
+ * (src/server/v2/captions/captionStyles.ts), so the two engines stay
+ * visually consistent instead of drifting apart. `textDirection` is set
+ * explicitly (Canvas2D/DOM's own RTL support) rather than relying on
+ * implicit Unicode BiDi detection alone.
+ */
+function typographyFor(text: string, style: CaptionStyleSpec): CaptionTypography {
+  const isArabic = ARABIC_PATTERN.test(text);
+  return isArabic
+    ? {
+        fontFamily: CAPTION_FONT_FAMILIES.arabic,
+        textDirection: 'rtl',
+        fontWeight: CAPTION_WEIGHT_NUMBER[style.weight],
+      }
+    : {
+        fontFamily: CAPTION_FONT_FAMILIES.latin,
+        textDirection: 'ltr',
+        fontWeight: CAPTION_WEIGHT_NUMBER[style.weight],
+      };
 }
+
+type CaptionAnchor = 'top' | 'center' | 'bottom';
 
 /**
  * The 3 required Short Studio templates (ABUD_SHORTS_ENGINE_STATUS.md
- * section 7/8). PRESENTATION ONLY - caption size/position/background and a
- * brand accent bar for the promo template. Every field that affects timing
- * (scene duration, gaps, caption start/end) comes from the SAME
- * ProductionTimeline regardless of which of these is selected.
+ * section 7/8), each mapped onto a designed style from the shared
+ * `CAPTION_STYLES` spec rather than separate hand-picked pixel values.
+ * PRESENTATION ONLY - every field that affects timing (scene duration,
+ * gaps, caption start/end) still comes from the SAME ProductionTimeline
+ * regardless of which of these is selected.
  */
-function presentationFor(template: ProductionTemplate | undefined) {
+function presentationFor(template: ProductionTemplate | undefined): {
+  style: CaptionStyleSpec;
+  anchor: CaptionAnchor;
+  scaleIn: boolean;
+  brandBar: boolean;
+} {
   switch (template) {
     case 'business_promo':
-      return {
-        fontSize: 56,
-        y: (height: number) => -height / 2 + 220,
-        background: '#0b1b1fcc',
-        scaleIn: false,
-        brandBar: true,
-      };
+      // Kept top-anchored (its own deliberate identity, brand bar plus a
+      // header-band caption) rather than adopting the bottom safe area.
+      return {style: CAPTION_STYLES.clean_professional, anchor: 'top', scaleIn: false, brandBar: true};
     case 'kinetic_explainer':
-      return {
-        fontSize: 96,
-        y: () => 0,
-        background: null as string | null,
-        scaleIn: true,
-        brandBar: false,
-      };
+      return {style: CAPTION_STYLES.kinetic_phrase, anchor: 'center', scaleIn: true, brandBar: false};
     case 'stock_social_reel':
     default:
-      return {
-        fontSize: 64,
-        y: (height: number) => height / 2 - 180,
-        background: null as string | null,
-        scaleIn: false,
-        brandBar: false,
-      };
+      return {style: CAPTION_STYLES.social_ad, anchor: 'bottom', scaleIn: false, brandBar: false};
   }
 }
 
+function captionY(heightPx: number, anchor: CaptionAnchor, style: CaptionStyleSpec): number {
+  switch (anchor) {
+    case 'bottom':
+      return heightPx / 2 - style.bottomSafeRatio * heightPx;
+    case 'top':
+      // Symmetric reuse of the same safe-area ratio as a top clearance,
+      // rather than inventing a second constant the shared spec doesn't
+      // define.
+      return -heightPx / 2 + style.bottomSafeRatio * heightPx;
+    case 'center':
+    default:
+      return 0;
+  }
+}
+
+function backgroundFillFor(style: CaptionStyleSpec): string | null {
+  if (style.backgroundOpacity <= 0) return null;
+  const alpha = Math.round(style.backgroundOpacity * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `#000000${alpha}`;
+}
+
 function* runCaptions(view: View2D, timeline: ParsedTimeline) {
+  // Deliberately NOT `yield`-ed into the generator's cooperative scheduler:
+  // threading this promise through the nested `all()`/`threads()` chain
+  // (this generator itself runs inside `all(runVisuals, runCaptions)`,
+  // itself inside the scene's own thread) was confirmed to deadlock the
+  // whole render - zero output, idle CPU, indefinitely. Canvas drawing is
+  // still correctly gated on font loading via each Txt's own
+  // `await document.fonts?.ready` (framework-internal, unchanged); this only
+  // adds a best-effort console error instead of a silent fallback font, and
+  // never blocks playback to do it. fontRegistration.test.ts is the
+  // reliable, CI-enforced gate for this - see its file comment.
+  void ensureCaptionFontsRegistered().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error(err);
+  });
+
   const presentation = presentationFor(timeline.template);
+  const {style} = presentation;
 
   if (presentation.brandBar) {
     // Business Promo's brand accent - a thin bar pinned to the top edge,
@@ -192,58 +264,158 @@ function* runCaptions(view: View2D, timeline: ParsedTimeline) {
     view.add(<Rect size={[timeline.width, 14]} y={-timeline.height / 2 + 7} fill="#1f9d55" />);
   }
 
+  // A single deterministic font size per template (the midpoint of the
+  // style's own size bounds), responsive to the actual render height rather
+  // than a fixed pixel constant - this is what "responsive 1080x1920
+  // typography" means in practice: every dimension below scales with
+  // `timeline.height`/`timeline.width`, so a differently-sized render still
+  // gets the same designed proportions.
+  const fontSizePx = ((style.minSizeRatio + style.maxSizeRatio) / 2) * timeline.height;
+  const maxWidthPx = timeline.width * style.maxWidthRatio;
+  const y = captionY(timeline.height, presentation.anchor, style);
+  const background = backgroundFillFor(style);
+
+  const words: CaptionWord[] = timeline.captionTracks.map((c) => ({
+    text: c.text,
+    startMs: c.startMs,
+    endMs: c.endMs,
+  }));
+  // charsPerLine is derived per-script below (Arabic/Latin glyphs are a
+  // different average width), so phrasing runs once per contiguous run of
+  // same-script words rather than once for the whole track.
+  const phrases: CaptionPhrase[] = [];
+  let runStart = 0;
+  for (let i = 1; i <= words.length; i++) {
+    const prevIsArabic = i > 0 && ARABIC_PATTERN.test(words[i - 1]?.text ?? '');
+    const curIsArabic = i < words.length && ARABIC_PATTERN.test(words[i]?.text ?? '');
+    if (i === words.length || prevIsArabic !== curIsArabic) {
+      const run = words.slice(runStart, i);
+      if (run.length > 0) {
+        const avgGlyphWidthEm = prevIsArabic ? AVG_GLYPH_WIDTH_EM.arabic : AVG_GLYPH_WIDTH_EM.latin;
+        const charsPerLine = Math.max(4, Math.floor(maxWidthPx / (fontSizePx * avgGlyphWidthEm)));
+        phrases.push(...groupCaptionWordsIntoPhrases(run, {charsPerLine, maxLines: style.maxLines}));
+      }
+      runStart = i;
+    }
+  }
+
   let elapsedMs = 0;
-  for (const caption of timeline.captionTracks) {
-    const waitBeforeMs = Math.max(0, caption.startMs - elapsedMs);
+  for (const phrase of phrases) {
+    const waitBeforeMs = Math.max(0, phrase.startMs - elapsedMs);
     if (waitBeforeMs > 0) {
       yield* waitFor(waitBeforeMs / 1000);
       elapsedMs += waitBeforeMs;
     }
-    const textRef = createRef<Txt>();
+
+    const typography = typographyFor(phrase.text, style);
+    const containerRef = createRef<Txt>();
     const bgRef = createRef<Rect>();
-    const style = captionStyleFor(caption.text);
-    const captionY = presentation.y(timeline.height);
+    const wordRefs = phrase.words.map(() => createRef<Txt>());
+    const wordTexts = phrase.words.map((w, i) => (i < phrase.words.length - 1 ? `${w.text} ` : w.text));
+
     view.add(
       <>
-        {presentation.background ? (
+        {background ? (
           <Rect
             ref={bgRef}
-            size={[timeline.width - 60, presentation.fontSize + 60]}
-            y={captionY}
-            fill={presentation.background}
+            size={[maxWidthPx + 48, fontSizePx * style.lineHeight * style.maxLines + 48]}
+            y={y}
+            fill={background}
+            radius={16}
           />
         ) : null}
         <Txt
-          ref={textRef}
-          text={caption.text}
-          fill="#ffffff"
-          fontSize={presentation.fontSize}
-          fontWeight={800}
-          fontFamily={style.fontFamily}
-          textDirection={style.textDirection}
-          // Safe-area: keep captions off the platform-UI band (TikTok/Reels
-          // chrome) and within a horizontal margin at 1080 width.
-          y={captionY}
-          width={timeline.width - 120}
+          ref={containerRef}
+          y={y}
+          width={maxWidthPx}
           textAlign="center"
-          stroke="#000000"
-          lineWidth={6}
+          textDirection={typography.textDirection}
+          textWrap={true}
+          lineHeight={`${style.lineHeight * 100}%`}
           scale={presentation.scaleIn ? 0.7 : 1}
-        />
+        >
+          {phrase.words.map((_, i) => (
+            <Txt
+              ref={wordRefs[i]}
+              text={wordTexts[i]}
+              fontFamily={typography.fontFamily}
+              fontWeight={typography.fontWeight}
+              fontSize={fontSizePx}
+              fill={style.primaryColour}
+              stroke="#000000"
+              lineWidth={style.outlinePx}
+              // Deliberately no canvas shadowBlur/shadowColor here: TxtLeaf's
+              // drawText() issues separate strokeText()/fillText() calls,
+              // and a shadow set on the node casts under BOTH, producing a
+              // visible doubled/offset "ghost" edge around every glyph -
+              // confirmed by direct render inspection. The stroke alone
+              // already gives clean, restrained contrast against the plate/
+              // background behind it.
+            />
+          ))}
+        </Txt>
       </>,
     );
-    const visibleMs = Math.max(50, caption.endMs - caption.startMs);
-    // The pop-in tween runs CONCURRENTLY with the visible-time wait (never
-    // sequentially before it) so it can never add extra time on top of the
-    // caption's own allotted window - the same additive-duration bug fixed
-    // for transitions in runVisuals().
-    if (presentation.scaleIn) {
-      yield* all(textRef().scale(1, Math.min(0.15, visibleMs / 1000)), waitFor(visibleMs / 1000));
-    } else {
-      yield* waitFor(visibleMs / 1000);
+
+    // `Txt.draw()` never draws text itself - it only delegates to its
+    // children's own `draw()` (see node_modules/@revideo/2d/lib/components/
+    // Txt.js), so a word `<Txt>`'s own `textDirection` is never read for
+    // drawing: only the TxtLeaf it auto-creates internally (via its `text`
+    // prop) actually calls `applyText()` before fillText/strokeText, using
+    // THAT leaf's own textDirection signal - which defaults to 'inherit' and
+    // is never set from JSX. Left unfixed, every word drew with an 'inherit'
+    // (effectively ltr) canvas anchor even under an RTL container, which
+    // pushed Arabic text past both safe-area edges - confirmed by direct
+    // render inspection. Reaching the already-created leaf via `.children()`
+    // and setting the signal directly avoids importing TxtLeaf itself (an
+    // internal, non-barrel-exported class - a separate Vite-resolved copy
+    // of it caused real render crashes, confirmed by direct testing).
+    for (const wordRef of wordRefs) {
+      const leaf = wordRef().children()[0] as Layout | undefined;
+      leaf?.textDirection(typography.textDirection);
     }
-    elapsedMs += visibleMs;
-    textRef().remove();
+
+    const phraseVisibleMs = Math.max(50, phrase.endMs - phrase.startMs);
+    // The pop-in tween runs CONCURRENTLY with the highlight loop below
+    // (never sequentially before it) so it can never add extra time on top
+    // of the phrase's own allotted window - the same additive-duration bug
+    // fixed for transitions in runVisuals().
+    const popIn = presentation.scaleIn
+      ? containerRef().scale(1, Math.min(0.15, phraseVisibleMs / 1000))
+      : waitFor(0);
+
+    function* highlightWords() {
+      if (style.highlight !== 'karaoke_fill') {
+        yield* waitFor(phraseVisibleMs / 1000);
+        elapsedMs += phraseVisibleMs;
+        return;
+      }
+      for (let i = 0; i < phrase.words.length; i++) {
+        const word = phrase.words[i];
+        const waitMs = Math.max(0, word.startMs - elapsedMs);
+        if (waitMs > 0) {
+          yield* waitFor(waitMs / 1000);
+          elapsedMs += waitMs;
+        }
+        wordRefs[i]().fill(style.highlightColour);
+        const activeMs = Math.max(30, word.endMs - word.startMs);
+        yield* waitFor(activeMs / 1000);
+        elapsedMs += activeMs;
+        wordRefs[i]().fill(style.primaryColour);
+      }
+      // Whisper/ElevenLabs word timing rarely covers the phrase's own last
+      // ms exactly - settle any remainder so the NEXT phrase's wait-before
+      // is computed against the real elapsed time, not a slightly short one.
+      const remainderMs = phrase.startMs + phraseVisibleMs - elapsedMs;
+      if (remainderMs > 0) {
+        yield* waitFor(remainderMs / 1000);
+        elapsedMs += remainderMs;
+      }
+    }
+
+    yield* all(popIn, highlightWords());
+
+    containerRef().remove();
     bgRef()?.remove();
   }
 }

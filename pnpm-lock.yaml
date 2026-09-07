@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@revideo/renderer@0.11.0': 889a9a58f62399ff1bf0a5eebfb17f41b18f8f472813043a71d7a2bb75e25ff1
+  '@revideo/renderer@0.11.0': 5e3222ded2b53019c0cbb21bd645ffbb34e57ba1ef91305d233adcfe12446acb
 
 importers:
 
@@ -64,7 +64,7 @@ importers:
         version: 0.11.0
       '@revideo/renderer':
         specifier: 0.11.0
-        version: 0.11.0(patch_hash=889a9a58f62399ff1bf0a5eebfb17f41b18f8f472813043a71d7a2bb75e25ff1)(@types/node@22.14.0)(jiti@1.21.7)(terser@5.39.0)(yaml@2.7.1)(yauzl@2.10.0)
+        version: 0.11.0(patch_hash=5e3222ded2b53019c0cbb21bd645ffbb34e57ba1ef91305d233adcfe12446acb)(@types/node@22.14.0)(jiti@1.21.7)(terser@5.39.0)(yaml@2.7.1)(yauzl@2.10.0)
       '@revideo/ui':
         specifier: 0.11.0
         version: 0.11.0
@@ -5431,7 +5431,7 @@ snapshots:
     transitivePeerDependencies:
       - rxjs
 
-  '@revideo/renderer@0.11.0(patch_hash=889a9a58f62399ff1bf0a5eebfb17f41b18f8f472813043a71d7a2bb75e25ff1)(@types/node@22.14.0)(jiti@1.21.7)(terser@5.39.0)(yaml@2.7.1)(yauzl@2.10.0)':
+  '@revideo/renderer@0.11.0(patch_hash=5e3222ded2b53019c0cbb21bd645ffbb34e57ba1ef91305d233adcfe12446acb)(@types/node@22.14.0)(jiti@1.21.7)(terser@5.39.0)(yaml@2.7.1)(yauzl@2.10.0)':
     dependencies:
       '@revideo/ffmpeg': 0.11.0
       puppeteer: 25.10.0(yauzl@2.10.0)

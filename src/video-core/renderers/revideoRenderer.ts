@@ -48,6 +48,16 @@ export class RevideoRenderer implements VideoRenderer {
     fs.ensureDirSync(this.tempDirPath);
     const outFileName = `${timeline.id}.revideo.mp4`;
     const projectFile = path.resolve(__dirname, "../revideo-project/project.ts");
+    // fonts.css (imported by timelineScene.tsx) references the bundled
+    // caption fonts under `assets/fonts/` by relative disk path. Vite's dev
+    // server only serves files under its own `root` (here, the per-render
+    // staging directory from stageRevideoAssets - a temp dir, not an
+    // ancestor of the repo) plus any explicit `server.fs.allow` entries, so
+    // without this the font requests are silently blocked ("outside of Vite
+    // serving allow list") and captions draw with a system-font fallback -
+    // no error, just wrong typography. Widening `fs.allow` to the repo root
+    // is what actually fixes it.
+    const repoRoot = path.resolve(__dirname, "../../..");
 
     // See stageRevideoAssets.ts: copies every asset into <projectRoot>/public/
     // and rewrites the timeline to reference each by root-relative URL. This
@@ -108,6 +118,11 @@ export class RevideoRenderer implements VideoRenderer {
           // resolvePath(outDir, assetPath) assumes (outDir's sibling
           // "public" folder) - so both sides agree on the same files.
           root: projectRoot,
+          server: {
+            fs: {
+              allow: [projectRoot, repoRoot],
+            },
+          },
           // @revideo/2d@0.11.0 ships no package.json "exports" map, so a bare
           // subpath import of its jsx runtime resolves against the package
           // root and misses the real file under lib/. Safe to add here: the
@@ -117,6 +132,20 @@ export class RevideoRenderer implements VideoRenderer {
             alias: {
               "@revideo/2d/jsx-runtime": require.resolve("@revideo/2d/lib/jsx-runtime.js"),
               "@revideo/2d/jsx-dev-runtime": require.resolve("@revideo/2d/lib/jsx-dev-runtime.js"),
+              // @revideo/renderer's own `rendererPlugin` synthesizes a
+              // `virtual:renderer` module (see its
+              // lib/server/renderer-plugin.js) that imports exactly these
+              // two bare specifiers plus the project file by absolute path.
+              // Vite 8's resolver fails both ("Failed to resolve import ...
+              // Does the file exist?") even though the files are right there
+              // on disk with no exports-map restriction - the same class of
+              // bare-subpath resolution gap as the jsx-runtime alias above,
+              // just inside the renderer's own plugin instead of project
+              // code. Aliasing `@revideo/core` here is safe for every other
+              // (already-working) import of it too: it resolves to the
+              // exact same file Node's own resolver already picks.
+              "@revideo/renderer/lib/client/render": require.resolve("@revideo/renderer/lib/client/render.js"),
+              "@revideo/core": require.resolve("@revideo/core"),
             },
           },
         },
