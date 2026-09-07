@@ -68,6 +68,17 @@ Auth Architecture: PRESERVED for future secure_server mode
 Client Delivery: IN PROGRESS. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
 CLOSURE" near the end of this file for the live gate ledger.
 
+Dev Folder: cleaned 2026-09-07 - the outer `Abud Shorts Engine\` directory
+now contains only `source\`. Removed: a stale linked git worktree
+(`v231-worktree`, its commit was already tag `v2.3.1`, fully reachable
+from `main`/`v2.4-professional-video-engine`/`v2.5-short-studio`), a fully
+superseded separate repo checkout (`source-old-pc-20260904-191316`, every
+commit already reachable in `source` and pushed to `origin`), and disposable
+generated release-staging/cache artifacts for already-tagged versions
+(v2.1.0, v2.2.0, v2.3.1) reproducible from git tags. No customer/historical
+data was touched (that lives under `%ProgramData%\ShortStudio` and the
+separate `C:\abud-shorts-engine\data-dev` archive, neither in scope).
+
 ---
 
 ## V2.4 Historical Record (superseded by "Current Product State" above)
