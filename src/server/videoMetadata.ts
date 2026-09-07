@@ -58,6 +58,8 @@ export interface VideoMetadata {
   ctaCompleteness?: boolean;
   /** Keyword/tag-based stock relevance average (same signal as mediaPlanScore's averageSemanticScore). */
   visualRelevanceScore?: number;
+  /** "visual_semantic" only when real frame-level OpenCLIP analysis produced this score; "metadata_relevance" when it is the lexical/keyword pre-score (semantic runtime unavailable); "unscored" when neither is available. Never claim visual semantic validation happened when it did not. */
+  visualRelevanceMethod?: "visual_semantic" | "metadata_relevance" | "unscored";
   /** Visual diversity/duplicate-asset signal, as a proxy for scene-to-scene coherence. */
   sceneCoherenceScore?: number;
   /** Same signal as creativeDiagnostics.audioContinuityScore, surfaced at top level. */

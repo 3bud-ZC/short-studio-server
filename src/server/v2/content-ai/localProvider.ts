@@ -22,6 +22,8 @@ import {
 import { matchFactPack, type FactPackEntry } from "./factPacks";
 import { detectContentStyle } from "./contentStyleDetector";
 import { extractTopicConcepts } from "./scriptQuality";
+import { getSpeakingRate, type SpeakingRateProfile } from "./voiceSpeakingRate";
+import { composeNarrationForDuration, type NarrationUnit } from "./scriptDurationController";
 
 function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
@@ -221,6 +223,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
       durationSeconds,
       contentStyle,
       brandName: params.brandName || params.brandKit?.brandName,
+      voiceProvider: params.voiceProvider,
+      voiceId: params.voiceId,
     }), prompt, isAr, dialect, resolvedCta);
 
     const ctaText = resolvedCta.text;
@@ -375,9 +379,17 @@ export class LocalContentAIProvider implements ContentAIProvider {
     durationSeconds: number;
     contentStyle: string;
     brandName?: string;
+    voiceProvider?: string;
+    voiceId?: string;
   }): ProductionSceneSpec[] {
-    const { prompt, isArabic: isAr, dialect, durationSeconds, contentStyle, brandName } = context;
+    const { prompt, isArabic: isAr, dialect, durationSeconds, contentStyle, brandName, voiceProvider, voiceId } = context;
     const lower = prompt.toLowerCase();
+    // Real, measured calibration when the exact voice is already known (see
+    // voiceSpeakingRate.ts); a language-level default otherwise. Used only by
+    // duration-aware content packs (currently: the backup/tech vertical) to
+    // size how much narration to write BEFORE TTS - the real synthesized
+    // audio duration remains the only authority for the final timeline.
+    const speakingRate = getSpeakingRate(voiceProvider || "", voiceId || "", isAr ? "ar" : "en");
 
     // Outro budget deduction
     const outroTime = Math.min(2.5, Math.max(1.5, Math.round(durationSeconds * 0.1 * 10) / 10));
@@ -403,6 +415,15 @@ export class LocalContentAIProvider implements ContentAIProvider {
     const sceneCount = durationSeconds <= 22 ? 3 : 4;
     const durPerScene = Math.round((contentBudget / sceneCount) * 10) / 10;
 
+    // "back up"/"backing up" (two words, or with a gerund/past-tense suffix)
+    // is the natural phrasing customers actually type - a literal-only
+    // "backup" substring test missed this proof's own real request ("Why
+    // small businesses should back up their files") entirely and fell
+    // through to the generic template instead of the real backup content
+    // pack (ABUD_SHORTS_ENGINE_STATUS.md section 4).
+    const isBackupTopicEn = /back(?:s|ing|ed)?[\s-]?up|\bfiles\b|data loss|cloud storage/i.test(lower);
+    const isBackupTopicAr = /نسخ|احتياطي|ملفات|فقدان البيانات/i.test(prompt);
+
     if (isAr) {
       if (lower.includes("موقع") || lower.includes("مواقع") || lower.includes("ويب") || lower.includes("web") || lower.includes("تصميم")) {
         return this.buildWebDesignScenesArabic(dialect, durPerScene, brandName, durationSeconds);
@@ -419,6 +440,9 @@ export class LocalContentAIProvider implements ContentAIProvider {
       if (lower.includes("عقار") || lower.includes("شقة") || lower.includes("فيلا") || lower.includes("كمبوند")) {
         return this.buildRealEstateScenesArabic(dialect, durPerScene, brandName);
       }
+      if (isBackupTopicAr) {
+        return this.buildTechEducationalScenesArabic(contentBudget, speakingRate, brandName);
+      }
       return this.buildGenericArabicScenes(prompt, dialect, durPerScene, brandName);
     }
 
@@ -432,8 +456,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
     if (lower.includes("fitness") || lower.includes("gym") || lower.includes("workout") || lower.includes("training") || lower.includes("studio")) {
       return this.buildFitnessScenesEnglish(durPerScene, brandName);
     }
-    if (lower.includes("backup") || lower.includes("cloud") || lower.includes("software") || lower.includes("tech")) {
-      return this.buildTechEducationalScenesEnglish(durPerScene, brandName);
+    if (isBackupTopicEn || lower.includes("software") || lower.includes("tech")) {
+      return this.buildTechEducationalScenesEnglish(contentBudget, speakingRate, brandName);
     }
     return this.buildGenericEnglishScenes(prompt, durPerScene, brandName);
   }
@@ -981,60 +1005,209 @@ export class LocalContentAIProvider implements ContentAIProvider {
     ];
   }
 
+  /**
+   * Duration-aware backup/tech content pack (ABUD_SHORTS_ENGINE_STATUS.md
+   * section 4-9). Each beat (hook/problem/solution/cta) has one REQUIRED
+   * line - the scene's core meaning, always included - plus real, grounded
+   * OPTIONAL supporting sentences that are added only as needed to reach
+   * this scene's share of `contentBudget` at the given voice's calibrated
+   * speaking rate (see scriptDurationController.ts). Nothing here is
+   * invented filler: every optional sentence is a genuine, on-topic
+   * elaboration a human copywriter would recognise as real ad copy for this
+   * exact vertical, not a padding trick.
+   */
   private buildTechEducationalScenesEnglish(
-    dur: number,
+    contentBudget: number,
+    rate: SpeakingRateProfile,
     brand?: string,
   ): ProductionSceneSpec[] {
-    return [
+    const perScene = contentBudget / 4;
+    const beats: Array<{
+      purpose: ProductionSceneSpec["purpose"];
+      onScreenText: string;
+      stockSearchTerms: string[];
+      visualPrompt: string;
+      transition: ProductionSceneSpec["transition"];
+      units: NarrationUnit[];
+    }> = [
       {
-        sceneIndex: 0,
         purpose: "hook",
-        durationSeconds: dur,
-        narration: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?",
         onScreenText: "60% of Businesses Lose Data",
         stockSearchTerms: ["server room blinking", "cyber security tech", "business computer"],
         visualPrompt: "Dramatic illuminated server rack with blinking security lights",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "cut",
+        units: [
+          {
+            role: "required",
+            text: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?",
+          },
+          {
+            role: "optional",
+            text: "It rarely happens with any warning - one bad drive, one power surge, and years of records are gone.",
+          },
+        ],
       },
       {
-        sceneIndex: 1,
         purpose: "problem",
-        durationSeconds: dur,
-        narration: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations.",
         onScreenText: "The Real Cost of Downtime",
         stockSearchTerms: ["stressed worker computer", "cyber attack graphic", "technology failure"],
         visualPrompt: "Stressed professional staring at frozen screen with error warning",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "cut",
+        units: [
+          {
+            role: "required",
+            text: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations.",
+          },
+          {
+            role: "optional",
+            text: "Every hour spent trying to recover lost files is an hour not spent serving customers.",
+          },
+        ],
       },
       {
-        sceneIndex: 2,
         purpose: "solution",
-        durationSeconds: dur,
-        narration: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress.",
         onScreenText: "Automated Encrypted Backups",
         stockSearchTerms: ["cloud computing data", "secure backup progress", "cyber security"],
         visualPrompt: "Sleek holographic backup synchronization with green checkmarks",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "fade",
+        units: [
+          {
+            role: "required",
+            text: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress.",
+          },
+          {
+            role: "optional",
+            text: "A good backup routine runs quietly in the background, so protecting your work never becomes another task on your list.",
+          },
+        ],
       },
       {
-        sceneIndex: 3,
         purpose: "cta",
-        durationSeconds: dur,
-        narration: "Follow for more essential tech tips and secure your business infrastructure today.",
         onScreenText: "Follow For Daily Tech Tips",
         stockSearchTerms: ["technology team success", "smiling engineer", "software development"],
         visualPrompt: "Confident IT professional giving thumbs up with clean modern office background",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "cut",
+        units: [
+          {
+            role: "required",
+            text: "Follow for more essential tech tips and secure your business infrastructure today.",
+          },
+          {
+            role: "optional",
+            text: brand
+              ? `${brand} can help you set up a reliable backup routine in less time than you think.`
+              : "Setting up a reliable backup routine takes less time than you think.",
+          },
+        ],
       },
     ];
+
+    return beats.map((beat, sceneIndex) => {
+      const composed = composeNarrationForDuration(beat.units, perScene, rate);
+      const nextUnits = beat.units.slice(composed.unitsUsed);
+      return {
+        sceneIndex,
+        purpose: beat.purpose,
+        durationSeconds: perScene,
+        narration: composed.text,
+        onScreenText: beat.onScreenText,
+        stockSearchTerms: beat.stockSearchTerms,
+        visualPrompt: beat.visualPrompt,
+        visualSource: "stock",
+        visualProvider: "pexels",
+        transition: beat.transition,
+        narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
+      };
+    });
+  }
+
+  /**
+   * Arabic counterpart of buildTechEducationalScenesEnglish - previously
+   * missing entirely (any Arabic backup/tech prompt fell through to the
+   * topic-neutral generic Arabic template). Same duration-aware composition.
+   */
+  private buildTechEducationalScenesArabic(
+    contentBudget: number,
+    rate: SpeakingRateProfile,
+    brand?: string,
+  ): ProductionSceneSpec[] {
+    const perScene = contentBudget / 4;
+    const beats: Array<{
+      purpose: ProductionSceneSpec["purpose"];
+      onScreenText: string;
+      stockSearchTerms: string[];
+      visualPrompt: string;
+      transition: ProductionSceneSpec["transition"];
+      units: NarrationUnit[];
+    }> = [
+      {
+        purpose: "hook",
+        onScreenText: "لو بتشتغل على مشروع صغير",
+        stockSearchTerms: ["laptop typing files close up", "small business office desk"],
+        visualPrompt: "Close-up of hands typing on a laptop with business files visible",
+        transition: "cut",
+        units: [
+          { role: "required", text: "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس." },
+          { role: "optional", text: "عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية." },
+        ],
+      },
+      {
+        purpose: "problem",
+        onScreenText: "خسارة الملفات بتكلفك وقتك",
+        stockSearchTerms: ["stressed business owner laptop", "frustrated worker computer"],
+        visualPrompt: "Frustrated small business owner staring at a frozen laptop screen",
+        transition: "cut",
+        units: [
+          { role: "required", text: "من غير نسخة احتياطية، أي مشكلة بسيطة ممكن توقفك عن شغلك تماماً." },
+          { role: "optional", text: "كل ساعة بتضيع في محاولة استرجاع ملفاتك، هي ساعة كنت ممكن تخدم فيها عملائك." },
+        ],
+      },
+      {
+        purpose: "solution",
+        onScreenText: "نسخة احتياطية يومية تلقائية",
+        stockSearchTerms: ["external hard drive close up", "cloud storage sync laptop"],
+        visualPrompt: "External hard drive connected to a laptop with a sync progress indicator",
+        transition: "fade",
+        units: [
+          { role: "required", text: "عشان كده لازم تعمل نسخة احتياطية لملفاتك بشكل دوري، وتحافظ على شغلك من الضياع." },
+          { role: "optional", text: "نسخة احتياطية منظمة بتشتغل من غير ما تحس، وتضمنلك إنك ترجع شغلك في دقايق." },
+        ],
+      },
+      {
+        purpose: "cta",
+        onScreenText: "ابدأ دلوقتي",
+        stockSearchTerms: ["small business owner smiling laptop", "satisfied entrepreneur office"],
+        visualPrompt: "Small business owner smiling confidently while working on a laptop",
+        transition: "cut",
+        units: [
+          { role: "required", text: "تابعنا عشان تعرف أسهل طريقة تحافظ بيها على ملفاتك من الضياع." },
+          {
+            role: "optional",
+            text: brand
+              ? `${brand} بيساعدك تظبط نظام نسخ احتياطي موثوق في وقت أقل مما تتخيل.`
+              : "تنظيم نسخة احتياطية موثوقة بياخد وقت أقل بكتير مما تتخيل.",
+          },
+        ],
+      },
+    ];
+
+    return beats.map((beat, sceneIndex) => {
+      const composed = composeNarrationForDuration(beat.units, perScene, rate);
+      const nextUnits = beat.units.slice(composed.unitsUsed);
+      return {
+        sceneIndex,
+        purpose: beat.purpose,
+        durationSeconds: perScene,
+        narration: composed.text,
+        onScreenText: beat.onScreenText,
+        stockSearchTerms: beat.stockSearchTerms,
+        visualPrompt: beat.visualPrompt,
+        visualSource: "stock",
+        visualProvider: "pexels",
+        transition: beat.transition,
+        narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
+      };
+    });
   }
 
   private buildCafeScenesEnglish(

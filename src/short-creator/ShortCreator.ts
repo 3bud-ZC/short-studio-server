@@ -107,6 +107,7 @@ import { AudioMasteringService } from "./audioMasteringService";
 import { postProductionPipeline } from "../server/v2/post-production/postProductionPipeline";
 import { qualityEngine } from "../server/v2/quality/qualityEngine";
 import { calculateProfessionalVisualQualityReport } from "../server/v2/quality/professionalVisualQuality";
+import { evaluateVisualCoherence } from "../server/v2/quality/visualCoherence";
 import { motionEngine, type MotionTemplateType } from "../server/v2/motion/motionEngine";
 import { mediaUploadService } from "../server/v2/media/mediaUploadService";
 import { capabilityManager } from "../server/v2/capabilities/capabilityManager";
@@ -1003,6 +1004,78 @@ export class ShortCreator {
         await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
         actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
         captionAudioPath = tempMasteredWavPath;
+
+        // Bounded post-TTS duration correction (ABUD_SHORTS_ENGINE_STATUS.md
+        // section 7). The speed-stretch above is deliberately capped at 0.82x
+        // to avoid unnatural-sounding audio, so it cannot close a large gap
+        // on its own (the real English/Arabic proofs measured ~1.4-2.8s of
+        // actual speech against 5-6s scene budgets - stretching that to fit
+        // would mean speaking at roughly a third of normal pace). When this
+        // scene came from a duration-aware content generator that offered
+        // real, grounded expansion sentences (narrationExpansionUnits - see
+        // scriptDurationController.ts), and the scene is still short even
+        // after the speed-stretch, append the next sentence and re-synthesize
+        // THIS SCENE'S VOICE ONLY - never by padding audio or inventing
+        // silence, and never more than 2 such attempts (never an unbounded
+        // loop). Other scenes' voice/media/Whisper artifacts are untouched.
+        const expansionCandidates = Array.isArray((originalSceneSpec as any).narrationExpansionUnits)
+          ? [...((originalSceneSpec as any).narrationExpansionUnits as string[])]
+          : [];
+        let expandedSpokenNarration = requestedSpokenNarration;
+        let expansionRetries = 0;
+        while (
+          expansionCandidates.length > 0 &&
+          expansionRetries < 2 &&
+          actualVoiceDuration < targetSceneDuration * 0.85
+        ) {
+          const nextUnit = expansionCandidates.shift()!;
+          expandedSpokenNarration = `${expandedSpokenNarration} ${nextUnit}`.trim();
+          voiceAudio = await this.voiceRegistry.synthesize({
+            text: expandedSpokenNarration,
+            language: spec.language,
+            dialect: (brandVoiceProfile?.dialect || spec.dialect) as any,
+            qualityProfile: requestedVoiceQuality,
+            requestedProvider: requestedVoiceProvider,
+            // Retries must never change the speaker or the delivery settings.
+            voiceId: pinnedVoiceId || requestedVoiceId,
+            voicePreset: requestedVoicePreset,
+            modelId: requestedVoiceModelId,
+            requestAlignment: spec.language === "ar" ? false : true,
+            voiceStrategy: spec.language === "ar" ? "plain_tts" : "timestamps",
+            fallbackPolicy: "local",
+            brandPronunciations: brandVoiceProfile?.pronunciationDictionary,
+            pronunciationOverrides: jobPronunciationOverrides,
+          });
+          const expansionProvider = voiceAudio.provider || voiceAudio.decision.providerId;
+          if (expansionProvider in artifactReuse.providerInvocations) {
+            artifactReuse.providerInvocations[expansionProvider as keyof typeof artifactReuse.providerInvocations]++;
+          }
+          let expandedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, 1);
+          let expandedDuration = expandedNormalized.duration || voiceAudio.audioLength || actualVoiceDuration;
+          if (expandedDuration > targetSceneDuration * 1.08) {
+            speedFactor = Math.min(1.08, expandedDuration / targetSceneDuration);
+            expandedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, speedFactor);
+            expandedDuration = expandedNormalized.duration || expandedDuration;
+          } else {
+            speedFactor = 1.0;
+          }
+          voiceMastering = await this.audioMastering.masterVoice(tempWavPath, tempMasteredWavPath);
+          await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
+          actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
+          captionAudioPath = tempMasteredWavPath;
+          expansionRetries++;
+          logger.info(
+            { sceneIndex: index, expansionRetries, actualVoiceDuration, targetSceneDuration },
+            "Bounded duration correction: expanded scene narration and re-synthesized",
+          );
+        }
+        if (expansionRetries > 0) {
+          // Keep captions and the displayed/canonical narration in sync with
+          // what was actually spoken - otherwise captions would silently
+          // truncate before the audio finishes, reintroducing a caption/audio
+          // mismatch of the same class this migration exists to eliminate.
+          sceneTimeline.narration = expandedSpokenNarration;
+        }
       }
 
       // Canonical continuous narration timeline calculation:
@@ -1941,6 +2014,11 @@ export class ShortCreator {
         // captions and its audio are untouched: only the picture is cut, so a
         // three-scene script can still carry six or more shots.
         // ------------------------------------------------------------------
+        let sceneVisualCoherence: ReturnType<typeof evaluateVisualCoherence> = {
+          coherent: true,
+          jumps: [],
+          reason: "single shot or no shot data available",
+        };
         if (!isProductAd && mediaDuration > 0) {
           const sceneStartSeconds = sceneTimeline.startSeconds || 0;
           const sceneEdl = buildEditDecisionList({
@@ -2127,6 +2205,7 @@ export class ShortCreator {
               shot.searchTerms = shotIntentPolicy.terms;
               shot.searchQuery = shotIntentPolicy.terms[0] || shot.searchQuery;
               shot.alternativeQueries = shotIntentPolicy.terms.slice(1);
+              shot.matchedConcepts = shotQueryFamilies.matchedConcepts;
 
               if (shotIndex > 0) {
                 try {
@@ -2354,6 +2433,22 @@ export class ShortCreator {
             shotSourceCounts[onlyShot.sourceType] =
               (shotSourceCounts[onlyShot.sourceType] || 0) + 1;
           }
+          // Real (not fabricated) editorial-coherence check (ABUD_SHORTS_
+          // ENGINE_STATUS.md section 17): flags an adjacent pair of shots
+          // within this scene whose recognised concepts share nothing in
+          // common - the deterministic shape of "laptop worker -> filmmaking
+          // crew" jumps found during the real-content proof. Advisory/logged
+          // in this pass, not yet a hard selection gate - see that same
+          // status file section for the scoping note.
+          sceneVisualCoherence = evaluateVisualCoherence(
+            sceneEdl.shots.map((shot) => shot.matchedConcepts || []),
+          );
+          if (!sceneVisualCoherence.coherent) {
+            logger.warn(
+              { sceneIndex: index, reason: sceneVisualCoherence.reason },
+              "Scene visual coherence: adjacent shots share no recognised concept",
+            );
+          }
         }
         sceneQa.push({
           sceneIndex: index,
@@ -2366,6 +2461,7 @@ export class ShortCreator {
           smartCrop: visualAsset.metadata?.smartCropPlan,
           captionSafeLayout: true,
           voiceDurationFit: actualVoiceDuration <= targetSceneDuration * 1.08,
+          visualCoherence: sceneVisualCoherence,
         });
 
         sceneCaptionWords[index] = captions.map((caption) => ({
@@ -3177,6 +3273,12 @@ export class ShortCreator {
         scriptCompleteness: scriptQuality.scriptCompleteness,
         ctaCompleteness: spec.cta?.text ? validateSentenceCompleteness(String(spec.cta.text), spec.language === "ar" ? "ar" : "en").complete : true,
         visualRelevanceScore: professionalVisualQuality.averageSemanticScore,
+        // Honest signal-type label (section 15 of the Revideo real-content
+        // proof review): "visual_semantic" only when real frame-level
+        // OpenCLIP analysis actually ran; "metadata_relevance" when it fell
+        // back to the lexical/keyword pre-score (e.g. opencv unavailable) -
+        // never silently reported as if it were a validated visual check.
+        visualRelevanceMethod: professionalVisualQuality.visualRelevanceMethod,
         sceneCoherenceScore: creativeQualityResult.diagnostics.visualDiversityScore,
         audioContinuityScore: creativeQualityResult.diagnostics.audioContinuityScore,
         maxNarrationSilenceMs: deadAirReport.maxNarrationSilenceMs,

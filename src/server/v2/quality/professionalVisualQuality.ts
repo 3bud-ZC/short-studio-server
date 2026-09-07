@@ -10,6 +10,20 @@ export type ProfessionalVisualQualityReport = {
   repeatedAssetCount: number;
   averageSemanticScore?: number;
   minimumSemanticScore?: number;
+  /**
+   * Honest label for what averageSemanticScore actually measures:
+   * "visual_semantic" only when real frame-level analysis (OpenCLIP) ran for
+   * every scored asset; "metadata_relevance" when scoring fell back to the
+   * lexical/keyword pre-score because the semantic runtime was unavailable
+   * (e.g. opencv/OpenCLIP not installed in this environment) - that lexical
+   * score is a real signal (query-to-title/tag match), just not a visual
+   * check of the actual frames, and must never be reported as if it were
+   * one. See ABUD_SHORTS_ENGINE_STATUS.md section 15: a real-content proof
+   * once recorded `visualRelevanceScore: 100` while every asset's
+   * `semanticAnalysis.runtime` was `"unavailable"` - this field exists so
+   * that can never happen silently again.
+   */
+  visualRelevanceMethod: "visual_semantic" | "metadata_relevance" | "unscored";
   blackFramePercent?: number;
   textOnlyTimelinePercent: number;
   generatedTimelinePercent: number;
@@ -86,9 +100,29 @@ export function calculateProfessionalVisualQualityReport(input: {
     String(asset.metadata?.providerAssetId || asset.metadata?.pexelsVideoId || asset.metadata?.pixabayVideoId || asset.metadata?.stockAssetId || asset.url || asset.artifactId || ""),
   ).filter(Boolean);
   const uniqueAssetCount = new Set(assetKeys).size;
-  const semanticScores = selected
+  // `semanticAvailable: true` means real frame-level OpenCLIP analysis
+  // produced this asset's score (see router.ts's rebuildCandidateScore).
+  // Anything else - including a perfectly valid lexical/keyword pre-score -
+  // is NOT a visual check of the actual frames and must be tracked
+  // separately, never blended into a number labelled "semantic".
+  const visuallyScored = selected.filter((asset) => asset.metadata?.semanticAvailable === true);
+  const metadataScored = selected.filter((asset) => asset.metadata?.semanticAvailable !== true);
+  const semanticScores = visuallyScored
     .map((asset) => Number(asset.metadata?.semanticScore ?? asset.metadata?.selectedScore))
     .filter((value) => Number.isFinite(value));
+  const metadataRelevanceScores = metadataScored
+    .map((asset) => Number(asset.metadata?.semanticScore ?? asset.metadata?.selectedScore))
+    .filter((value) => Number.isFinite(value));
+  // Prefer real visual scores when any exist; otherwise honestly fall back
+  // to the lexical/metadata score under its own truthful label rather than
+  // reporting nothing (a metadata-relevance signal is still real evidence,
+  // just not what "semantic" implies).
+  const reportedScores = semanticScores.length ? semanticScores : metadataRelevanceScores;
+  const visualRelevanceMethod: ProfessionalVisualQualityReport["visualRelevanceMethod"] = semanticScores.length
+    ? "visual_semantic"
+    : metadataRelevanceScores.length
+      ? "metadata_relevance"
+      : "unscored";
   const rawPromptLeakCount = input.spec.scenes.filter((scene) =>
     containsRawPromptLeak(input.spec.userPrompt, scene.onScreenText || scene.displayText),
   ).length;
@@ -100,10 +134,11 @@ export function calculateProfessionalVisualQualityReport(input: {
     uniqueShotCount: new Set(shots.map((shot) => shot.shotId)).size,
     uniqueAssetCount,
     repeatedAssetCount: Math.max(0, assetKeys.length - uniqueAssetCount),
-    averageSemanticScore: semanticScores.length
-      ? Math.round((semanticScores.reduce((a, b) => a + b, 0) / semanticScores.length) * 10) / 10
+    averageSemanticScore: reportedScores.length
+      ? Math.round((reportedScores.reduce((a, b) => a + b, 0) / reportedScores.length) * 10) / 10
       : undefined,
-    minimumSemanticScore: semanticScores.length ? Math.min(...semanticScores) : undefined,
+    minimumSemanticScore: reportedScores.length ? Math.min(...reportedScores) : undefined,
+    visualRelevanceMethod,
     blackFramePercent: input.blackFramePercent,
     textOnlyTimelinePercent: Math.round((motionSeconds / total) * 1000) / 10,
     generatedTimelinePercent: Math.round((generatedSeconds / total) * 1000) / 10,

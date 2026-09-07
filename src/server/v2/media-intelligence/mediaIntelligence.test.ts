@@ -239,4 +239,40 @@ describe("Media Intelligence Service & Asset Scorer", () => {
     const sum3 = segs3.reduce((sum, s) => sum + s.durationSeconds, 0);
     expect(Math.round(sum3 * 10) / 10).toBe(7.0);
   });
+
+  // Regression coverage for the real-content proof finding (ABUD_SHORTS_
+  // ENGINE_STATUS.md section 11): the previous fallback modifier for any
+  // VisualIntent outside {product_hero, lifestyle, problem, technology, cta}
+  // was the literal, ungrounded word "cinematic" - 5 of the 10 possible
+  // intents (people, solution, social_proof, environment, detail) hit this,
+  // and it is exactly how an unrelated filmmaking-crew clip got selected for
+  // a small-business file-backup scene.
+  it("enrichSearchTerms never injects the bare word 'cinematic' (or any other ungrounded mood word) for any VisualIntent", () => {
+    const service = new MediaIntelligenceService();
+    const allIntents = [
+      "product_hero",
+      "lifestyle",
+      "problem",
+      "technology",
+      "cta",
+      "people",
+      "solution",
+      "social_proof",
+      "environment",
+      "detail",
+    ] as const;
+    for (const intent of allIntents) {
+      const enriched = service.enrichSearchTerms(["base term"], intent as any, "en");
+      expect(enriched).not.toContain("cinematic");
+      expect(enriched).not.toContain("professional");
+      expect(enriched).not.toContain("quality");
+    }
+  });
+
+  it("still adds a concrete, grounded modifier for the intents that have one", () => {
+    const service = new MediaIntelligenceService();
+    expect(service.enrichSearchTerms([], "product_hero", "en")).toContain("closeup");
+    expect(service.enrichSearchTerms([], "people", "en")).toContain("person using laptop");
+    expect(service.enrichSearchTerms([], "solution", "en")).toContain("person solving problem laptop");
+  });
 });
