@@ -1,0 +1,21 @@
+diff --git a/lib/server/render-video.js b/lib/server/render-video.js
+index 40cc5c1340b136775d2edad8eb9904c66eaf85f9..dddfc6a38da658755bfa594f5de5d0136ec6cbbc 100644
+--- a/lib/server/render-video.js
++++ b/lib/server/render-video.js	
+@@ -62,9 +62,13 @@ function buildUrl(port, fileName, workerId, totalNumOfWorkers, hiddenFolderId) {
+  */
+ async function initBrowserAndServer(fixedPort, projectFile, outputFolderName, settings, variables) {
+     const args = settings.puppeteer?.args ?? [];
+-    if (!args.includes('--single-process')) {
+-        args.push('--single-process');
+-    }
++    // PATCHED (Short Studio, ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation"):
++    // upstream unconditionally forced --single-process into the Chromium
++    // launch args here, with no public setting to prevent it. Confirmed by
++    // direct reproduction that this crashes Chromium 152.0.7977.75
++    // immediately (Trace/breakpoint trap, core dumped) - the exact same
++    // binary runs fine without the flag. Removed entirely; multi-process
++    // Chromium is Puppeteer's own safe default.
+     const resolvedProjectPath = path.join(process.cwd(), projectFile);
+     const [browser, server] = await Promise.all([
+         puppeteer_1.default.launch({ headless: true, ...settings.puppeteer, args }),

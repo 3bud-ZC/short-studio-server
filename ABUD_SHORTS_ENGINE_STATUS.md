@@ -11747,3 +11747,753 @@ this section is updated again at actual GA promotion, not pre-marked passed.
 5. Linux script execution against a real Linux target.
 6. GitHub repository rename (deliberately last, pending owner permissions).
 
+## VIDEO ENGINE REPLACEMENT SPIKE (Revideo evaluation) - IN PROGRESS
+
+Owner-authorized spike to evaluate replacing the video timeline/composition/render
+core with Revideo (MIT, `@revideo/*` v0.11.0), scoped to the render layer only -
+UI, PostgreSQL, job system, Pexels, VoiceTut, Kokoro, Whisper, Provider Vault,
+n8n, publishing, installer, Docker architecture and customer data are all
+untouched. Legacy Video Engine remains QUALITY REJECTED / retained for
+fallback per the section above; this spike targets the "scene duration is
+allocated before TTS and never properly reconciled" defect at its root by
+replacing the render core, not by further patching the legacy timeline math.
+
+### Section 1 - current contract inspected (no code deleted, all findings additive)
+
+- Current render entry point: `ShortCreator.renderProductionSpec()`
+  (`src/short-creator/ShortCreator.ts:447`). Content/TTS/media/captions
+  generation (lines ~447-2408) is a clean, already-separable seam from
+  composition/render (lines ~2409-2650+).
+- The current renderer is **not** a single engine: `decideRenderStrategy()`
+  (`src/server/v2/rendering/renderStrategy.ts`) already picks between
+  Remotion (React/Chromium, `src/short-creator/libraries/Remotion.ts:35`),
+  a hand-written ffmpeg concat/filter_complex scheduler
+  (`src/server/v2/rendering/ffmpegFastRenderer.ts:154`), and a libass
+  caption burn-in pass over either. This spike's `VIDEO_RENDER_ENGINE` flag
+  is designed to atomically replace all three when set to `revideo`.
+- **Root cause of the silence-gap defect, refined**: `resolveProductionTimeline()`
+  (`src/types/productionSpec.ts:394`) allocates each scene's duration
+  proportionally *before* TTS. `planSceneVisualDurationSeconds()`
+  (`productionSpec.ts:373`, called from `ShortCreator.ts:1007-1016`) then
+  deliberately **holds the visual to its pre-allocated budget** even when
+  real speech is shorter, to protect total requested duration. In
+  `ffmpegFastRenderer.ts:110-116`, each voice clip is `apad`/`atrim`-ed to
+  that held duration, not to its real speech length - the padding is real
+  silence in the voice track, masked only by quiet background music. The fix
+  is not "add reconciliation" (it already exists) - it's that **total video
+  duration must be an output of real narration length, never an input
+  budget the pipeline stretches silence to satisfy**.
+- Narration-authority for captions already correct and reusable as-is:
+  `whisperAlignment.ts:39` - Whisper supplies timing only via LCS pairing
+  against canonical text, never rewrites wording.
+
+### Section 4 - `src/video-core/` scaffolded, isolated from the legacy pipeline
+
+- `src/video-core/types.ts` - `ProductionTimeline`/`Scene`/`Narration`/`Caption`/
+  `VideoRenderer` contract. Every ms value is either a real measured artifact
+  duration or derived from one in a single forward pass - no pre-TTS estimate
+  anywhere in the type.
+- `src/video-core/buildTimeline.ts` - `buildProductionTimeline()`, the audio-first
+  builder (script -> TTS -> real duration -> timeline, per section 2 of the
+  spike brief). 7 unit tests in `buildTimeline.test.ts` (all passing): real-duration
+  sizing, silence-gate-bound gaps, absolute audio placement, caption timestamp
+  translation, determinism, music track attachment, empty-timeline rejection.
+- `src/video-core/renderers/legacyRenderer.ts` - drives the **existing**
+  `renderFfmpegFast` directly (not reimplemented), scoped to the stock-clip
+  case; motion-graphics/Remotion productions and the full libass Arabic caption
+  pipeline are out of scope for this adapter (see file for the exact reasoning) -
+  the actual legacy comparison baseline for section 12 is the already-produced,
+  preserved rejected candidate videos, not a freshly-built parallel legacy render.
+- `src/video-core/renderers/revideoRenderer.ts` + `src/video-core/revideo-project/`
+  (`project.ts`, `timelineScene.tsx`) - the Revideo adapter and the single
+  generic, data-driven Revideo project every template will render through
+  (one `<Video>`/`<Audio>` pair per timeline scene, driven entirely by a
+  `timelineJson` variable - same source for preview and final render).
+- `Config.videoRenderEngine` (`src/config.ts`) reads `VIDEO_RENDER_ENGINE`
+  (`legacy` default, `revideo` opt-in) - added, not yet wired into
+  `ShortCreator`'s render call (deliberately staged: prove Revideo end-to-end
+  first, wire the flag into the main pipeline once templates are complete).
+- `tsconfig.revideo-project.json` / `typecheck:revideo-project` npm script -
+  the `.tsx` scene file needs `jsxImportSource: "@revideo/2d"`, not the
+  project's default React pragma; isolated exactly like `src/ui`/`tsconfig.ui.json`
+  already are, so `npm run typecheck` covers it without misreporting every
+  Revideo node as an invalid React component.
+
+### Revideo package facts recorded (license safety, section license audit)
+
+- Canonical repo `github.com/havenhq/revideo` (docs/brand: Midrender, matches
+  the `midrender/revideo` URL given in the brief) - **MIT**, copyright
+  motion-canvas (Revideo is a fork of Motion Canvas).
+- Installed at pinned exact `0.11.0` for `@revideo/core`, `@revideo/2d`,
+  `@revideo/renderer`, `@revideo/ffmpeg`, `@revideo/vite-plugin`, `@revideo/ui`.
+  Requires **Node >=22.12.0** - current `main.Dockerfile` base
+  `node:22-bookworm-slim` resolves to `v22.23.2`, confirmed compatible.
+- `@revideo/renderer` depends on `puppeteer` (Apache-2.0, headless Chromium)
+  and `@revideo/ffmpeg`, which itself wraps `fluent-ffmpeg` +
+  `@ffmpeg-installer/ffmpeg` + `@ffprobe-installer/ffprobe` - **the same
+  ffmpeg wrapper libraries Short Studio already depends on**, no new binary
+  family introduced.
+- Full transitive license check (`mp4-wasm`, `culori`, `@rive-app/canvas-advanced`,
+  `mathjax-full`, `hls.js`, `code-fns`, `mp4box`, `parse-svg-path`): all
+  MIT/Apache-2.0/BSD-3-Clause. No GPL, no non-commercial terms found.
+- **Telemetry disclosed and disabled**: `@revideo/telemetry` writes a local
+  anonymous install UUID (`~/.revideo/id.txt`, no network call at install
+  time) and would otherwise report render events. Explicitly disabled via
+  `DISABLE_TELEMETRY=true`, set by `RevideoRenderer` itself rather than left
+  at the library default - required for a self-hosted, customer-data product.
+- Architecture is generator/scene-based (Motion Canvas heritage), not a
+  timeline model - confirms the decision to keep `ProductionTimeline` as our
+  own contract and drive Revideo from it, not adopt Revideo's own project
+  format as the source of truth. Same source confirmed (from package API
+  shape) to drive both `<Player/>` browser preview and headless `renderVideo()`
+  render - satisfies section 9 (single source for preview + final render).
+
+### Section 6 proof-of-concept render - REAL BUGS FOUND AND FIXED, first working render achieved
+
+Built a throwaway Linux container (`revideo-linux-test`, from the exact
+published `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` base image - **not** the
+live `short-studio-app`/`short-studio-render-worker`/`short-studio-postgres`/
+`short-studio-n8n` containers, none of which were touched, stopped, or had
+data modified) to validate the real Revideo render path end-to-end with a
+synthetic 2-scene, 5.6s, 1080x1920 fixture (no real Pexels/TTS calls yet -
+that's section 10/11, not attempted this pass). Five real, reproducible
+defects were found and fixed/worked around before a render succeeded; all
+five are documented in code comments at their fix site:
+
+1. **`main.Dockerfile` is missing `unzip`** - Puppeteer's Chromium/
+   chrome-headless-shell download fails to extract without it (`no zip
+   archiver is available`). Required Dockerfile change if Revideo is adopted;
+   not yet applied to the Dockerfile itself this pass (throwaway test
+   container only).
+2. **`@revideo/renderer@0.11.0` unconditionally forces `--single-process`**
+   into the Chromium launch args (`lib/server/render-video.js:65-67`, no
+   public setting to prevent it). This crashes Chromium 152.0.7977.75
+   immediately (`Trace/breakpoint trap, core dumped`) - confirmed by running
+   the exact same binary with and without the flag. Worked around for this
+   test by patching the installed package directly; a real adoption would
+   need a `pnpm patch` shipped in the repo, or an upstream fix/issue filed.
+3. Raw absolute filesystem paths (`C:/Users/...`, `/app/data/...`) are not
+   valid browser URLs - `timelineScene.tsx` now converts every asset path to
+   Vite's `/@fs/` dev-server convention before use (`toAssetUrl()`).
+4. The default `@revideo/core/wasm` exporter hung indefinitely with no error
+   (needs a cross-origin-isolated context the plain dev server doesn't
+   provide). Switched to the `@revideo/core/ffmpeg` exporter (streams frames
+   to a real ffmpeg subprocess) - correct for a Node-side render pipeline
+   with ffmpeg already available, not just a workaround.
+5. **The actual root cause of every hang observed** (not just #4): passing
+   our own `viteConfig.plugins` array silently dropped the library's own
+   `rendererPlugin` (which wires up the `/render` route, variables
+   injection, and the ffmpeg bridge) - `@revideo/renderer` builds its vite
+   config as `{plugins: [motionCanvas(...), rendererPlugin(...)], ...settings.viteConfig}`,
+   and object spread *replaces* the `plugins` key rather than merging it. A
+   genuine, non-obvious foot-gun in this public API with no error surfaced -
+   the page had nothing meaningful to load and Puppeteer's completion
+   promise never resolved. Fixed by not passing `viteConfig.plugins` at all.
+   Also needed a `viteConfig.resolve.alias` for `@revideo/2d/jsx-runtime` -
+   the package ships no `package.json` "exports" map, so Vite's bare-subpath
+   resolution misses the real file under `lib/`.
+
+**Result, verified with `ffprobe` (not trusted from exit code alone)**:
+`smoke1.revideo.mp4` - h264 video 1080x1920, aac audio, both streams
+5.633s, container duration 5.655s against a requested 5.6s timeline.
+Composition time 6.4s for a 5.6s two-scene video. Real, correctly composed,
+audio/video-synced output.
+
+### Honest status - what this does NOT yet prove
+
+- No captions, transitions, multiple clips per scene, or background music
+  exercised yet (the smoke fixture is 2 solid-color clips + sine-tone audio).
+- No real Pexels/VoiceTut/Kokoro/Whisper content - sections 10/11 (Arabic +
+  English proof) not attempted.
+- The 3 required templates (Stock Social Reel, Business Promo, Kinetic
+  Explainer) not yet built - only the generic single-scene player exists.
+- `VIDEO_RENDER_ENGINE` flag not yet wired into `ShortCreator`'s actual render
+  call - still fully isolated, zero behavior change for any existing
+  customer production.
+- An `ffprobe`-path construction bug was also observed in `@revideo/ffmpeg`'s
+  own asset-serving layer (`.../public/@fs/...` double-prefixing) while
+  checking a video clip for an embedded audio stream - non-fatal for this
+  test (the clip genuinely has no embedded audio, narration is a separate
+  track), but a real rough edge to watch for once real Pexels clips (which
+  may carry their own audio) are used.
+
+### Captions, music, and transitions added and visually verified
+
+`timelineScene.tsx` extended with a concurrent caption loop (word-level,
+absolute-time, run via `all()` alongside the visual loop), a persistent
+background-music `<Audio>` track, and fade/slide/zoom transitions (cut
+remains an instant swap). One more real bug found and fixed here:
+
+6. **Transition time was being added on top of the scene's allotted
+   duration instead of absorbed within it** - a 0.3s fade pushed total video
+   length from the requested 5.6s to 5.933s (confirmed via `ffprobe`,
+   exactly matching the transition length). This is precisely the class of
+   defect this whole spike exists to eliminate (video duration silently
+   drifting from the audio-first-computed total), so it was treated as a
+   hard bug, not a rounding footnote. Fixed by carving the transition time
+   out of the scene's hold duration rather than adding it; re-verified
+   duration returned to 5.633s (matching the 5.6s requested) after the fix.
+
+**Visually verified, not just trusted from ffprobe**: extracted frames with
+`ffmpeg -ss ... -frames:v 1` and read them directly - scene 1 shows the
+caption "hello" correctly styled (bold white, black stroke, lower-third
+position); scene 2 (after a fade transition to the second clip) shows
+"goodbye" at its correct timestamp, fully opaque, confirming the transition
+completes and captions continue to track correctly across a scene switch.
+
+### Honest status - what this still does NOT yet prove
+
+- No real Pexels/VoiceTut/Kokoro/Whisper content - sections 10/11 (Arabic +
+  English proof) not attempted.
+- The 3 required templates (Stock Social Reel, Business Promo, Kinetic
+  Explainer) not yet built - only the generic single-scene player exists,
+  now exercising all of captions/music/transitions/multi-clip scenes.
+- `VIDEO_RENDER_ENGINE` flag not yet wired into `ShortCreator`'s actual render
+  call - still fully isolated, zero behavior change for any existing
+  customer production.
+- `main.Dockerfile` not yet updated to add `unzip` (needed for Puppeteer's
+  Chromium download) - only added to the throwaway test container so far.
+
+## PRODUCTION QUALIFICATION PASS (continuation)
+
+### Section 2 - tracked, deterministic --single-process patch (no more manual container edits)
+
+The manual `sed` edit to the throwaway container's `node_modules` is replaced
+with a real, repository-tracked `pnpm patch`: `pnpm patch @revideo/renderer@0.11.0`,
+edited to remove the forced `args.push('--single-process')` at
+`lib/server/render-video.js:65-67`, committed via `pnpm patch-commit`. This
+produced `patches/@revideo__renderer@0.11.0.patch` and registered it in
+`pnpm-workspace.yaml`'s `patchedDependencies`. A fresh `pnpm install` from
+this commit (Docker build included) applies it automatically - no manual
+step, no `docker cp`, no startup `sed`. Regression coverage added:
+`src/video-core/revideoPatch.test.ts` (3 tests) asserts the patch is declared
+in `pnpm-workspace.yaml`, the tracked `.patch` file exists and targets the
+right line, and the **installed** package no longer contains the forced push
+- so a dependency bump that silently drops the patch fails loudly here
+instead of surfacing as a production render that crashes/hangs.
+
+### Section 5 - ffprobe asset-path bug: root cause found and fixed at the correct boundary
+
+Root-caused precisely (not worked around): `@revideo/ffmpeg`'s own
+server-side asset-audio mixing (`generate-audio.js` -> `resolvePath(outputDir, assetPath)`
+in `dist/utils.js:54-65`) resolves any non-URL asset path as
+`path.join(outputDir, '../public', assetPath)` - i.e. it assumes every asset
+lives in a `public/` folder that is a *sibling* of the render's `outDir`,
+referenced by a plain root-relative URL. This is Revideo's own intended
+asset convention (mirrored by Vite's default static-file serving when
+`viteConfig.root` points at the same project root). Our original `/@fs/<absolute-path>`
+workaround (needed only so the *browser* could load a raw filesystem path)
+broke that assumption and produced the observed
+`<outDir>/../public/@fs/<path>` double-prefixed, nonexistent path - not an
+upstream defect, our own asset-serving mismatch.
+
+**Fixed at the narrowest correct boundary**, in our own code, no package
+patch needed: `src/video-core/renderers/stageRevideoAssets.ts` copies every
+unique asset file referenced by the timeline into `<projectRoot>/public/`
+(stable sha256-based filenames, copy-if-missing) and rewrites the timeline to
+reference each by its root-relative URL; `RevideoRenderer` now sets
+`viteConfig.root` to that same `projectRoot` and `outDir` to
+`<projectRoot>/output`, so both the browser and `@revideo/ffmpeg`'s
+server-side resolution agree on the same files. `timelineScene.tsx`'s old
+`/@fs/` conversion (`toAssetUrl`) is removed entirely - assets are now
+already valid URLs. **Reproduced with a real local MP4 carrying both a video
+and an AAC audio stream** (`clip_with_audio.mp4`, generated locally via
+ffmpeg - not a paid/external call), confirmed the exact double-prefixed
+error, then confirmed it is gone after the fix (re-ran the same fixture
+through the fixed pipeline: no ffprobe path error, correct h264+aac output).
+Regression coverage: `stageRevideoAssets.test.ts` (5 tests) - assets land
+under `public/`, resolve under the exact `path.join(outDir, '../public', assetPath)`
+expression `@revideo/ffmpeg` itself uses, never produce an `/@fs/` path,
+are deterministic across calls, and multiple clips in one scene don't collide.
+
+### Section 6 - explicit stock-audio policy, verified with a real spectral check
+
+Added `VisualAsset.useSourceAudio` (`src/video-core/types.ts`), defaulting to
+`false` everywhere it's read. `timelineScene.tsx` sets the `<Video volume={...}>`
+node's own volume to 0 unless a scene's visual asset explicitly opts in -
+per `@revideo/ffmpeg`'s own `generateAudio()` mixing logic, this is the
+control point that decides whether that asset's audio is captured into the
+final mix at all, not merely its loudness.
+
+**Verified with a real embedded-audio MP4, not asserted**: rendered the same
+fixture (`clip_with_audio.mp4`, a genuine embedded 330Hz tone) three times -
+raw source, default policy, and explicit `useSourceAudio: true` - and
+measured each output's energy in a narrow band around 330Hz
+(`ffmpeg -af bandpass=f=330:width_type=h:w=40,volumedetect`):
+
+| Case | Mean (330Hz band) | Max (330Hz band) |
+| :--- | :--- | :--- |
+| Raw source (tone genuinely present) | -21.1 dB | -18.1 dB |
+| Default policy (muted) | -40.3 dB | -30.9 dB |
+| `useSourceAudio: true` (opted in) | -25.3 dB | -19.3 dB |
+
+Default policy is ~15-19dB quieter than baseline (the tone is gone from the
+mix); the explicit opt-in lands close to the raw source level (the tone is
+back). Confirms the policy works in both directions, not just that muting
+looks quiet for unrelated reasons.
+
+### Section 9 - Arabic RTL captions: PASS, verified visually against real bundled fonts
+
+Installed the product's own bundled Arabic font (`IBM Plex Sans Arabic`,
+extracted from `/app/dist/ui/assets/` inside the actual published image -
+the same font the web dashboard already ships, not a fetched web font) as a
+system font and added explicit `fontFamily`/`textDirection` selection to
+`timelineScene.tsx`'s caption renderer, keyed off the same Arabic-detection
+pattern the legacy `arabicCaptionEngine` uses. Rendered the real proof-video
+topic text ("أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة، خصوصًا في مصر!")
+at 1080x1920 and inspected extracted frames directly (not just ffprobe):
+letters are correctly joined/shaped (proper Arabic cursive ligatures), text
+flows right-to-left in the correct logical order, the tanwin diacritic
+renders correctly positioned, and both the Arabic comma and exclamation mark
+land on the visual left edge of their clause - correct RTL punctuation
+placement, not a red flag. No clipping at the frame edges, no detached or
+reversed letters, no line-wrap tested yet (all three caption fragments fit
+within the safe-area width unwrapped). **Arabic Typography: PASS.**
+
+### Sections 7/8 - the 3 required templates, presentation-only, same timeline
+
+Added `ProductionTimeline.template` (`stock_social_reel` | `business_promo` |
+`kinetic_explainer`, default `stock_social_reel`) and a `presentationFor()`
+switch in `timelineScene.tsx` that changes ONLY caption size/position/
+background and an optional brand accent bar - never touches
+`buildProductionTimeline()`'s timing output. Regression test added
+(`buildTimeline.test.ts`): builds the same production with all 3 template
+values and asserts every field except `template` itself is byte-for-byte
+identical (scene start/end, audio placement, caption timing, total
+duration). Rendered all 3 through the real pipeline and visually confirmed
+distinct presentation with identical 5600ms duration on every run:
+- **Stock Social Reel**: bold lower-third caption (the existing default look).
+- **Business Promo**: top-positioned caption on a semi-transparent background
+  box, plus a green brand accent bar pinned to the top edge for the whole video.
+- **Kinetic Explainer**: large (96px vs 64px), screen-centered caption text
+  with a quick pop-in scale animation (run concurrently with, never added on
+  top of, the caption's own visible-time window - the same additive-duration
+  bug already fixed for transitions).
+
+All 3 confirmed via extracted frames, not just code inspection.
+
+### Sections 3/4 - production Docker changes (unzip, tracked patch, build-time Chromium)
+
+`main.Dockerfile` updated, not just the throwaway test container:
+- `unzip` added to the base stage's apt install (Chromium archive extraction).
+- `patches/` now copied into the `prod-deps` stage BEFORE `pnpm install --prod
+  --frozen-lockfile` - without this the tracked `--single-process` patch
+  would silently never apply in the real image (caught by
+  `dockerfileRevideoRequirements.test.ts`, which asserts the COPY happens
+  before the install line, not just that both exist somewhere in the file).
+- `puppeteer` added as an explicit direct dependency (previously only a
+  transitive dependency of `@revideo/renderer`) - needed so its own CLI is
+  resolvable at all under pnpm's strict `node_modules` layout, pinned to the
+  exact version (`25.10.0`) already resolved.
+- `ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer` (deliberately NOT under
+  `/app/data`, which is a host bind mount at runtime that fully shadows
+  whatever the image put there - the same reason Whisper needs its
+  bootstrap-copy dance). `RUN node_modules/.bin/puppeteer browsers install
+  chrome` bundles the exact pinned Chromium build for the installed
+  puppeteer version at BUILD time, in the same final stage as the existing
+  `RUN node dist/scripts/install.js` (Kokoro/Remotion-browser/Whisper) -
+  no internet access needed on a customer's first render. Fails the build
+  (not silently degrades) if the download is incomplete.
+- Found and fixed a real, Docker-only gap while building: `@ffprobe-installer/linux-x64`'s
+  postinstall was not yet in `pnpm-workspace.yaml`'s `allowBuilds` (only its
+  Windows counterpart had ever been needed on the dev machine) - added
+  alongside the existing `@ffmpeg-installer/linux-x64` entry.
+- Regression coverage: `dockerfileRevideoRequirements.test.ts` (4 tests)
+  statically asserts all of the above stay present and in the correct order.
+
+### Section 11/12 - VIDEO_RENDER_ENGINE wired into ShortCreator, fail-closed
+
+`Config.videoRenderEngine` (`legacy` default / `revideo`) now actually
+selects the render path in `ShortCreator.renderProductionSpec()`, alongside
+(not replacing) the existing `decideRenderStrategy()`-based legacy branches.
+No upstream stage duplicated - content generation, TTS, Pexels/media
+selection, Whisper alignment, and captioning all run completely unchanged
+before this point; only the render/composition stage branches.
+
+- **Found and fixed a subtle correctness trap while wiring this**: the scene
+  object already pushed for the legacy renderers carries `audio.duration =
+  targetSceneDuration`, which is the legacy engine's HELD-to-budget visual
+  duration (can be longer than the real narration) - not the true speech
+  length. Using it for Revideo would have silently reimported the exact
+  silence-padding bug this whole migration exists to fix. Added a new field,
+  `realNarrationDurationMs` (the true `sceneSpeechDuration`, already computed
+  upstream via ffprobe), at both scene-construction sites (single-segment and
+  multi-segment/multi-clip), and the Revideo path reads only that.
+  `productionTimelineFromLegacyScenes()` (`src/video-core/fromLegacyScenes.ts`,
+  3 tests) is the pure adapter mapping ShortCreator's already-resolved scene
+  data (via its existing `localPathForMediaUrl()` - reused, not duplicated)
+  into a `ProductionTimeline`.
+- Template selection: `business_promo` when the production has a product
+  composition overlay, `kinetic_explainer` for motion-graphics/animated-explainer
+  production modes, `stock_social_reel` otherwise.
+- **Fail-closed (section 12), verified by inspection of the actual diff**: the
+  `VIDEO_RENDER_ENGINE=revideo` branch has NO try/catch and no fallback to
+  legacy - if `RevideoRenderer.render()` throws for any reason, the whole
+  `renderProductionSpec()` call rejects and the production is marked failed
+  through the existing failure-metadata path, exactly like any other genuine
+  production failure. This is a deliberate asymmetry from the legacy
+  `ffmpeg_fast -> remotion` fallback already in the code - qualification
+  needs truth about whether Revideo actually works, not a silently-substituted
+  legacy render reported as a Revideo success.
+- The libass caption burn-in pass is skipped for the revideo engine too
+  (captions are already drawn by `timelineScene.tsx`, including Arabic RTL
+  shaping) - burning both would double the caption layer.
+- **Full regression check after this change**: `npm run typecheck` clean
+  (server + UI + revideo-project), `npx vitest run` 1173/1173 tests passing
+  (one test timed out at 5s when racing the concurrent Docker build for CPU;
+  re-ran in isolation and it passed in 913ms - confirmed resource contention,
+  not a regression), `npm run build` clean. `VIDEO_RENDER_ENGINE` still
+  defaults to `legacy` - this is all additive, zero behavior change for any
+  existing customer production until the flag is explicitly set.
+
+### Candidate image built and independently verified - reproducibility proven
+
+Built `abud-shorts-engine:revideo-candidate` from `main.Dockerfile` via a
+plain `docker build` (no `docker cp`, no manual `node_modules` edits, no
+container-startup patching) - this is the actual test of section 1's
+requirement ("reproducible from Git commit -> Docker build -> canonical
+render-worker"), not just an assertion. Two real Dockerfile bugs were caught
+and fixed by the build itself (both now covered by
+`dockerfileRevideoRequirements.test.ts`, 6 tests total):
+
+1. `tsconfig.revideo-project.json` was not copied into the `build` stage -
+   `npm run build` (which runs `typecheck:revideo-project`) failed with
+   `TS5058: The specified path does not exist`.
+2. The raw `revideo-project` TypeScript/JSX **source** was never present in
+   the final image at all - `tsconfig.build.json` deliberately excludes it
+   (different JSX pragma, see that file's own comment), so `tsc` never
+   emits it to `dist/`, but `@revideo/renderer`'s own Vite pipeline needs
+   the literal `.tsx` source at render time (it does its own transform, not
+   tsc's). Fixed by copying `src/video-core/revideo-project` directly into
+   `dist/video-core/revideo-project` in the final stage.
+
+**Independently verified inside a fresh container started from this exact
+image** (not the hand-patched throwaway container used earlier in this
+evaluation):
+- `node --version` -> `v22.23.2` (satisfies Revideo's `>=22.12.0` requirement).
+- Chromium 152.0.7977.75 already present under `/app/.cache/puppeteer` -
+  confirms build-time bundling worked, no first-render download.
+- `@revideo/renderer`'s installed `render-video.js` already contains the
+  `PATCHED` marker and no forced `--single-process` push - confirms the
+  tracked `pnpm patch` applies automatically from a clean install, exactly
+  as section 2 requires.
+- A real render (2-scene synthetic fixture, same as the original
+  proof-of-concept) completed successfully using ONLY the compiled `dist/`
+  artifacts (no ts-node, no dev tooling - production image, production deps
+  only) and verified with `ffprobe`: h264 1080x1920 + aac, 5.634s container
+  duration matching the 5.6s requested timeline.
+- One test-harness-only gotcha surfaced and resolved (not a product bug):
+  the first attempt placed scratch fixtures under `/tmp/`, disconnected from
+  `/app/node_modules`'s directory tree, so Vite's bare-specifier resolution
+  (which walks up from its `root` looking for a `node_modules` folder)
+  never found it. Real `ShortCreator` usage is unaffected -
+  `Config.tempDirPath` is `<DATA_DIR_PATH>/temp` = `/app/data/temp` in
+  Docker, which correctly resolves up to `/app/node_modules`. Re-ran with
+  fixtures placed under `/app/` and it worked - confirmed empirically, not
+  just reasoned about.
+
+**Image size**: old (`ghcr.io/3bud-zc/abud-shorts-engine:2.5.0`, currently
+live): 2,416,310,001 bytes (2.25 GiB). New (`revideo-candidate`):
+2,670,092,472 bytes (2.49 GiB). **Delta: +253,782,471 bytes (+242.0 MiB)** -
+the cost of `@revideo/*` packages, Puppeteer, and a bundled Chromium build.
+
+### Honest status - what still remains
+
+- Preview/render parity check (section 10) not yet done.
+- The real Arabic/English proof through the actual product pipeline
+  (sections 13-17) is the largest remaining piece. Given the live
+  `short-studio-app`/`short-studio-render-worker` containers currently serve
+  real customer-facing infrastructure, section 20's container
+  recreation is treated as its own later, explicit step - not something to
+  fold into the proof-job pass silently. Planning to exercise the real
+  `ShortCreator` pipeline (real Pexels/VoiceTut/Kokoro/Whisper, actual
+  content/TTS/media/caption code, `VIDEO_RENDER_ENGINE=revideo`) in an
+  isolated way that does not require replacing the live containers first.
+
+## PRODUCTION QUALIFICATION PASS - REAL PROOF JOBS (continuation 2)
+
+Ran the real Short Studio production pipeline end-to-end through the actual
+`ShortCreator.createShortNow()` entry point (same code path `src/index.ts`
+uses), inside a container started from the exact `revideo-candidate` image
+built above - real VoiceTut/Kokoro synthesis, real Whisper transcription,
+real Pexels search/download, real Revideo render, `VIDEO_RENDER_ENGINE=revideo`.
+No mocks, no stubs, `V2_ENABLED=false` only disables the Postgres-backed job-
+persistence layer this isolated proof container doesn't run - content,
+voice, media, caption and render code paths are all the real product code.
+
+### Real bug found and fixed: deterministic-caption-fallback silence-gap regression
+
+The first English proof attempt produced a `.mp4` with `actualFinalDuration:
+11.0`s against real narration totaling ~4.03s - a genuine 6.8s silence gap
+(t~4.16s-10.99s), failing the mid-video silence gate. Root-caused precisely
+(not patched around):
+
+- `ShortCreator.ts`'s `realNarrationDurationMs` field (added earlier this
+  pass) was confirmed CORRECT at the source: a diagnostic log line proved
+  scene 0/1 received `1359`/`2672` ms respectively - the real, tiny,
+  ffprobe-measured Kokoro narration lengths, not the padded legacy values.
+- `fromLegacyScenes.ts` and `buildTimeline.ts` were confirmed correct too:
+  `ProductionTimeline.durationMs` computed to exactly `1359+200+2672+400 =
+  4631` ms from those real values.
+- The actual defect: **caption word timings**. Both English proof scenes
+  triggered ShortCreator's shared deterministic-timing caption fallback
+  (`ShortCreator.ts` ~line 1274, used whenever Whisper's transcript diverges
+  too far from the canonical narration to trust its timing -
+  `scriptSimilarity` 0.5 and 0.57, both far below the 0.95 threshold). That
+  fallback distributes caption words evenly across `targetSceneDuration`,
+  which by that point in the function has been reassigned (line 1016) to
+  the **legacy held-to-budget visual duration** (5000ms / 6000ms) - not the
+  real narration length. That mismatch is invisible to the legacy renderer
+  (which pads visual hold time regardless of caption content), but
+  `timelineScene.tsx`'s Revideo scene runs its caption loop and visual loop
+  CONCURRENTLY via `all()` - so a caption word timed out to 5000ms silently
+  dragged the whole scene's on-screen time out to match the legacy budget,
+  reintroducing the exact "duration decided before real content" bug class
+  this whole migration exists to eliminate.
+- **Fix** (narrowest correct boundary, does not touch the shared legacy
+  caption computation any other render path depends on): added
+  `clampCaptionWordsToNarration(words, narrationDurationMs)` to
+  `fromLegacyScenes.ts`, applied only inside `runRevideoRender()`'s own
+  scene-mapping closure in `ShortCreator.ts`, clamping each scene's caption
+  words to its own real narration window before they ever reach the
+  Revideo timeline.
+- **Regression coverage**: 3 new tests in `fromLegacyScenes.test.ts`,
+  including one that reproduces the exact real English-proof regression
+  shape (a 5000ms-budget-timed caption word list against a real 1359ms
+  narration window) and asserts the clamp. Full suite: 80 files / 1178
+  tests passing, `npm run build` clean (typecheck:server + typecheck:ui +
+  typecheck:revideo-project + vite build), after this change.
+- Rebuilt `abud-shorts-engine:revideo-candidate` with the fix baked in
+  (plain `docker build`, same Dockerfile, no manual patching) and re-ran
+  BOTH real proof jobs fresh against that exact image - see below.
+
+### Real English proof (fixed image) - `real-proof-en`
+
+- Spec: engine=revideo, English, Kokoro (`af_heart`, local, free), topic
+  "Why small businesses should back up their files", 2 scenes, Stock Social
+  Reel template, real Pexels stock, real Whisper alignment.
+- `renderStrategy: "REVIDEO"`, `rendererVersion: "revideo-0.11.0"` in the
+  persisted metadata sidecar (confirms the earlier metadata-mislabeling fix
+  holds on real content, not just synthetic tests).
+- Duration: **4.633s actual**, exactly matching real measured narration +
+  gaps (1359+200+2672+400=4631ms) - NOT the requested 11s. This is a large,
+  honest `durationVariance` (6.37s) and drags `technicalScore` to 30 - but
+  it is the CORRECT audio-first behavior: Kokoro genuinely synthesized very
+  short audio for these two short sentences, and the fix's whole point is
+  that the video must reflect real narration length, never silently pad to
+  match a requested target. This is a Kokoro/content-length finding, not a
+  Revideo defect, and is recorded honestly rather than hidden.
+- `mixedSilenceGate`: `pass: true`, `criticalFailure: false`,
+  `longestSilenceRunMs: 489` (independently confirmed via `ffprobe`
+  `silencedetect`: one gap, 4.153s-4.631s = 478ms, the outro hold only) -
+  passes both the 900ms mid-video gate and the tighter 500ms outro
+  preference. No mid-video gap at all.
+- `blackFramePercent: 0`, `longestBlackRunMs: 0`. Stream check: H.264
+  1080x1920 + AAC 48kHz.
+- Real Pexels assets used (both winners and additional multi-segment
+  b-roll clips), by scene:
+  - Scene 0 ("laptop work"): winner `10374892` ("close-up on man hands
+    typing on laptop", RDNE Stock project) + 2 additional segments:
+    `7287768` ("man using bubble wrap in packaging", query "small business
+    office") and `34550102` ("behind-the-scenes filmmaking crew setup",
+    query "cinematic").
+  - Scene 1 ("data backup"): winner `38096885` ("organizing memory cards in
+    a professional case", Jakub Zerdzicki) + 1 additional segment:
+    `39009970` ("sunset view by industrial tanks", query "cloud storage").
+- **VISUAL RELEVANCE - honest mixed result, not force-fixed**: the
+  automated `visualRelevanceScore: 100` is NOT a genuine signal here - each
+  asset's `semanticAnalysis.runtime` is `"unavailable"` with
+  `error: "opencv_unavailable: No module named 'cv2'"` inside this proof
+  container, so the score is a non-diagnostic default, not a real semantic
+  check. Manual review of the actual clips: scene 0's primary asset (laptop
+  typing) and scene 1's primary asset (memory cards) are genuinely
+  on-topic; but the two additional-segment b-roll fills selected under
+  generic secondary queries are topically weak - "cinematic" resolved to
+  an unrelated filmmaking-crew clip, and "cloud storage" resolved to an
+  unrelated industrial-tanks-at-sunset clip. This is a stock-selection/
+  media-planning finding (query fallback breadth, semantic scoring being
+  non-functional in this environment), not something Revideo's render
+  layer can or should paper over - recorded per section 16 as required,
+  without blaming or force-fixing the render engine for it.
+- Voice/caption: both scenes used `timingSource: "deterministic_fallback"`
+  (`captionScriptSimilarity` 0.5 and 0.57 - genuinely low; Whisper's own
+  transcript diverged from canonical narration on this real content), which
+  is exactly the condition that surfaced the bug above - the caption TEXT
+  shown is still always the canonical narration script (never Whisper's
+  mis-transcription), only its timing came from the deterministic fallback,
+  now correctly clamped to the real narration window.
+- Delivery (section 17), verified against the real HTTP API running inside
+  the candidate-image container, not just the isolated script: thumbnail
+  `GET /api/videos/real-proof-en/thumbnail` -> 200; preview
+  `GET /api/short-video/real-proof-en` -> 200 (no Range) and 206 (with
+  `Range: bytes=0-100`); download `GET /api/videos/real-proof-en/download`
+  -> 200, `Content-Disposition: attachment;
+  filename="short-studio-back-up-your-files-real-proof-en.mp4"` (Short
+  Studio branding confirmed).
+
+### Real Arabic proof (fixed image) - `real-proof-ar`
+
+- Spec: engine=revideo, Egyptian Arabic, VoiceTut (local, GPU, free), topic
+  "أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة", 2 scenes, Stock Social
+  Reel template, real Pexels stock, real Whisper alignment.
+- `renderStrategy: "REVIDEO"`, `rendererVersion: "revideo-0.11.0"` confirmed
+  in metadata, same as English.
+- Duration: **5.2s actual** (again reflecting real, short VoiceTut
+  narration for these two sentences, not the requested 11s - same honest
+  duration-variance finding as English, same root cause: real narration is
+  simply shorter than the requested target for this short-form content,
+  not a Revideo defect).
+- `mixedSilenceGate`: `pass: true`, `criticalFailure: false`,
+  `longestSilenceRunMs: 487`. Independently confirmed via `ffprobe`
+  `silencedetect`: two gaps - 1.620s-1.967s (347ms, the inter-scene
+  breath gap) and 4.696s-5.173s (477ms, the outro hold) - both comfortably
+  under the 900ms mid-video / 500ms-preferred outro thresholds.
+- `blackFramePercent: 0`, `longestBlackRunMs: 0`. Stream check: H.264
+  1080x1920 + AAC 48kHz.
+- Real Pexels assets: identical winners/segments to the English proof
+  (`10374892`, `7287768`, `34550102`, `38096885`, `39009970`) - both specs
+  used the same `stockSearchTerms`, so the media-planning layer
+  deterministically picked the same clips. Same honest visual-relevance
+  finding as English applies (weak "cinematic"/"cloud storage" b-roll
+  fills; automated relevance score non-diagnostic in this environment).
+- Arabic captions: canonical Arabic narration script burned in (never
+  Whisper's transcript - `captionScriptSimilarity` 0.31 and 0.43, both
+  triggered the deterministic fallback, now correctly clamped). RTL
+  shaping/typography already independently verified earlier this pass
+  (section 9) using the bundled IBM Plex Sans Arabic font; not re-verified
+  pixel-by-pixel on this specific proof render, but uses the identical
+  `captionStyleFor()`/`textDirection` code path.
+- Delivery: identical verification as English - thumbnail 200, preview 200
+  (no Range) / 206 (Range), download 200 with
+  `Content-Disposition: ...filename="short-studio-real-proof-ar.mp4"`.
+
+### Stock-audio mute policy - reconfirmed on real content
+
+Copied out the intermediate Revideo visuals-only render
+(`real-proof-en.revideo-visuals.mp4`) and inspected it directly: it carries
+**no audio stream at all** (`ffprobe` shows only a video stream) - the
+muted stock-clip audio (`volume={sourceAudioVolume(asset)}` = 0 by default)
+is never even captured into this intermediate output, confirming the
+mechanism verified earlier this pass (section 6) holds on real Pexels
+content, not just the synthetic fixture.
+
+### Full automated gate (section 19) - all green
+
+- `npx tsc --noEmit -p tsconfig.build.json`: clean.
+- `npm run build` (typecheck:server + typecheck:ui +
+  typecheck:revideo-project + `tsc` + `vite build`): clean.
+- `npx vitest run`: **80 files / 1178 tests passing**, zero failures.
+- Python local-TTS API tests (`services/local-tts/tests/test_api.py`,
+  pytest): **8/8 passing** (health, capabilities, model/voice listing,
+  VoiceTut + KemeTone synthesis, token auth).
+- Pester host lifecycle tests
+  (`scripts/host/tests/local-voice-lib.tests.ps1`): **21/21 passing**
+  (voice-mode resolution, path layout, runtime-readiness checks, disk-space
+  checks, port resolution, service status, Windows auto-start
+  register/idempotency/unregister, uninstall-preserves-data).
+- No unexplained failures anywhere in the gate.
+
+### Performance comparison (section 18) - Revideo (real proofs) vs Legacy (existing measured evidence)
+
+Per section 18's explicit instruction, no new legacy render was generated
+for this comparison - the Legacy figures below are the already-recorded
+`FFMPEG_FAST` live benchmarks from "Live Fast-Render Benchmarks" earlier in
+this file. Output durations differ (legacy benchmarks were built to a
+20-25s target; these Revideo proofs are audio-first and came out at
+4.6s/5.2s because that's what the real narration actually was) - so this
+is presented as a side-by-side of full end-to-end job characteristics, not
+a like-for-like per-second cost model:
+
+| | Legacy (`FFMPEG_FAST`, "Business cold") | Legacy (`FFMPEG_FAST`, "Fitness") | Revideo (`real-proof-en`) | Revideo (`real-proof-ar`) |
+|---|---|---|---|---|
+| Output duration | 20.000s | 20.000s | 4.633s | 5.2s |
+| Total wall clock (full job: content+voice+media+captions+render) | 96,300ms | 95,482ms | 95,547ms | 76,890ms |
+| File size | 8,917,642 bytes | 7,156,367 bytes | 1,422,088 bytes | 1,733,471 bytes |
+| Approx. bitrate | 3,565 kbit/s | 2,861 kbit/s | ~2,457 kbit/s | ~2,667 kbit/s |
+| Render failures/retries | 0 | 0 | 0 | 0 |
+| Renderer | FFmpeg fast path (no Chromium) | FFmpeg fast path (no Chromium) | Revideo (Puppeteer/Chromium + ffmpeg exporter) | Revideo (Puppeteer/Chromium + ffmpeg exporter) |
+
+Full-job wall clock is in the same rough order of magnitude for both
+engines even though Revideo's real output was ~4x shorter, which is
+expected: the legacy figures are dominated by planning/voice/media stages
+common to both engines (per their own stage-timing breakdowns), and
+Revideo's render stage adds Chromium/Puppeteer startup + Vite dev-server
+boot overhead that legacy's FFmpeg-only fast path doesn't pay - a real,
+honest cost of the engine swap, not hidden here. Peak RAM/CPU were not
+independently profiled for this pass (no profiler wired into either proof
+run); recorded as not measured rather than estimated.
+
+### Candidate image identity (section 20, build only - container swap NOT yet performed)
+
+Rebuilt `abud-shorts-engine:revideo-candidate` a second time with the
+caption-clamp fix via a plain `docker build` (no `docker cp`, no manual
+`node_modules` edits) - image ID `sha256:b4c2a15d060b94a75e4969d5b73b93641
+ab20ab93fbe19c3b5c6097c45e82ff1`. Both real proof jobs above ran inside a
+container started from this exact single image tag; since the product
+architecture already uses one image for both the `short-studio-app` and
+`short-studio-render-worker` roles (differing only in command/role env,
+not image content), "app image ID == worker image ID" holds trivially once
+both are recreated from this tag - **that recreation has deliberately NOT
+been performed yet**. `short-studio-app` and `short-studio-render-worker`
+are still running the old `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` image
+(confirmed live and healthy at time of writing); PostgreSQL and n8n were
+never touched. Replacing the live containers is a real, hard-to-reverse
+change to shared production infrastructure serving actual data - holding
+that specific step for explicit owner confirmation rather than performing
+it autonomously, consistent with section 24's "Owner review still required
+after new real proof videos exist."
+
+### Decision gate (section 21)
+
+All listed technical conditions hold on the fixed candidate image, verified
+with real content rather than assertion:
+
+- Reproducible from Git commit -> Docker build -> canonical image: yes
+  (two independent `docker build` runs from the same Dockerfile, both
+  producing a working image with no manual patching).
+- Tracked `--single-process` patch applies automatically from a clean
+  install: yes (verified in the earlier candidate image; re-applies build to
+  build, no reason to expect otherwise given the patch is `pnpm patch`
+  content-addressed).
+- ffprobe asset-path defect: fixed, verified via real render with real
+  Pexels assets, not just the synthetic fixture.
+- Real Pexels stock renders correctly at 1080x1920 H.264: yes, both proofs.
+- Embedded stock-clip audio does not leak into the final mix: reconfirmed
+  on real content (visuals-only intermediate has no audio stream at all).
+- Arabic and English captions render with correct canonical text and
+  timing: yes, including the deterministic-fallback path exercised by both
+  real proofs, now correctly clamped to the real narration window.
+- Audio-first duration holds: yes - both real proofs' final duration comes
+  entirely from real measured narration + fixed gaps, with no artificial
+  padding and no artificial silence injected.
+- No large silence-gap regression: yes - both proofs pass the 900ms
+  mid-video / 500ms-preferred-outro gates, independently confirmed via
+  `ffprobe silencedetect`, not just the app's own self-reported metric.
+- Real Arabic and English productions pass the render/timeline gates: yes.
+- Media delivery works end-to-end: yes, all 4 delivery checks x2 languages.
+- Full automated gate passes with no unexplained failures: yes.
+
+**Decision: ADOPT REVIDEO - QUALIFIED CANDIDATE** for the render/composition
+stage, on the technical merits verified above. This is explicitly NOT a
+claim that Revideo solves stock visual relevance (it does not, and is not
+supposed to - that is the separate Pexels/media-planning layer, and this
+pass found and honestly recorded a real weakness there). Legacy Renderer
+remains in the codebase, untouched, and remains the default
+(`VIDEO_RENDER_ENGINE` defaults to `legacy`) - nothing about this decision
+changes current customer-facing behavior by itself.
+
+**Current field values**: Legacy Video Engine: QUALITY REJECTED / retained
+for fallback. Revideo Evaluation: PRODUCTION QUALIFICATION PASSED on the
+technical render/composition gates (real Arabic and English proofs both
+render correctly, silence gates pass, stock-audio mute holds, delivery
+works, full automated gate green). New Video Engine: REVIDEO - QUALIFIED
+CANDIDATE (render/composition stage only; `VIDEO_RENDER_ENGINE` default
+unchanged at `legacy`). Arabic Revideo Proof: PASSED (`real-proof-ar`,
+5.2s, silence gate pass, real VoiceTut+Pexels+Whisper). English Revideo
+Proof: PASSED (`real-proof-en`, 4.633s, silence gate pass, real
+Kokoro+Pexels+Whisper). Visual Relevance: MIXED - primary shots on-topic,
+some generic-query b-roll fills weak; recorded honestly, not a Revideo
+defect. Live Container Recreation (section 20): NOT YET PERFORMED - pending
+explicit owner confirmation, since it replaces currently-serving production
+containers. Owner Review: PENDING. Upload-Post: BLOCKED. GA: BLOCKED.
+

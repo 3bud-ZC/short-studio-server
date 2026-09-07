@@ -123,6 +123,13 @@ import {
 import { assertStorageReady } from "../server/v2/storage/storagePolicy";
 import { decideRenderStrategy, type RenderStrategyDecision } from "../server/v2/rendering/renderStrategy";
 import { renderFfmpegFast, type FastRenderClip, type FastRenderVoice } from "../server/v2/rendering/ffmpegFastRenderer";
+import {
+  productionTimelineFromLegacyScenes,
+  clampCaptionWordsToNarration,
+  type LegacySceneInput,
+} from "../video-core/fromLegacyScenes";
+import { RevideoRenderer } from "../video-core/renderers/revideoRenderer";
+import type { ProductionTemplate } from "../video-core/types";
 
 type RenderProgressEvent = {
   status:
@@ -1557,6 +1564,9 @@ export class ShortCreator {
             url: `http://localhost:${this.config.port}/api/tmp/${tempMp3FileName}`,
             duration: targetSceneDuration,
           },
+          // See the single-segment branch below for why this - not
+          // `audio.duration` above - is what an audio-first renderer must use.
+          realNarrationDurationMs: Math.round(sceneSpeechDuration * 1000),
           speechWindowsMs: [{ startMs: speechWindowStartMs, endMs: speechWindowEndMs }],
         });
       } else {
@@ -2374,6 +2384,14 @@ export class ShortCreator {
             url: `http://localhost:${this.config.port}/api/tmp/${tempMp3FileName}`,
             duration: targetSceneDuration,
           },
+          // The REAL, ffprobe-measured speech length - NOT `audio.duration`
+          // above, which is `targetSceneDuration` (the legacy engine's
+          // held-to-budget visual duration, can be longer than the actual
+          // narration). Revideo's audio-first timeline must never see the
+          // held value, or it silently reimports the exact silence-padding
+          // bug this migration exists to eliminate - see
+          // ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation" section 11.
+          realNarrationDurationMs: Math.round(sceneSpeechDuration * 1000),
           speechWindowsMs: [{ startMs: speechWindowStartMs, endMs: speechWindowEndMs }],
           productNobgUrl: visualAsset?.metadata?.productNobgUrl,
           productImageUrl: visualAsset?.metadata?.productImageUrl,
@@ -2437,7 +2455,7 @@ export class ShortCreator {
       durationSeconds: totalDurationSeconds,
     });
     let renderFallbackReason: string | undefined;
-    let renderEngineUsed: "ffmpeg_fast" | "hybrid_ffmpeg" | "remotion" | "remotion_fallback" =
+    let renderEngineUsed: "ffmpeg_fast" | "hybrid_ffmpeg" | "remotion" | "remotion_fallback" | "revideo" =
       renderDecision.strategy === "FFMPEG_FAST"
         ? "ffmpeg_fast"
         : renderDecision.strategy === "HYBRID"
@@ -2530,7 +2548,106 @@ export class ShortCreator {
       );
     };
 
-    if (renderDecision.fastPathEligible) {
+    // Revideo evaluation (ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation",
+    // section 11): builds a ProductionTimeline from the SAME already-resolved
+    // scene data the legacy renderers above consume - no TTS/Pexels/Whisper/
+    // planning is duplicated or re-run here, only the render/composition
+    // stage is replaced. Uses `realNarrationDurationMs` (the true,
+    // ffprobe-measured speech length), never `scene.audio.duration` (the
+    // legacy engine's held-to-budget visual duration) - see the field's own
+    // doc comment above for why that distinction is exactly the bug this
+    // migration exists to fix.
+    const runRevideoRender = async () => {
+      const width = orientation === OrientationEnum.portrait ? 1080 : 1920;
+      const height = orientation === OrientationEnum.portrait ? 1920 : 1080;
+      const revideoTemplate: ProductionTemplate = hasProductComposition
+        ? "business_promo"
+        : spec.productionMode === "motion_graphics" || spec.productionMode === "animated_explainer"
+          ? "kinetic_explainer"
+          : "stock_social_reel";
+
+      const revideoSceneInputs: LegacySceneInput[] = scenes.map((scene: any, sceneIdx: number) => {
+        const segments = Array.isArray(scene.segments) ? scene.segments : undefined;
+        const visualPath = this.localPathForMediaUrl(segments && segments.length > 0 ? segments[0].video : scene.video);
+        if (!visualPath || !fs.existsSync(visualPath)) {
+          throw new Error(`Revideo render: scene ${sceneIdx} visual asset is not available (${scene.video}).`);
+        }
+        const additionalVisualPaths = segments && segments.length > 1
+          ? segments.slice(1).map((segment: any) => {
+              const segmentPath = this.localPathForMediaUrl(segment.video);
+              if (!segmentPath || !fs.existsSync(segmentPath)) {
+                throw new Error(`Revideo render: scene ${sceneIdx} additional segment is not available.`);
+              }
+              return segmentPath;
+            })
+          : undefined;
+        const narrationPath = this.localPathForMediaUrl(scene.audio?.url);
+        if (!narrationPath || !fs.existsSync(narrationPath)) {
+          throw new Error(`Revideo render: scene ${sceneIdx} narration audio is not available.`);
+        }
+        // sceneMediaPlan.transitionToNext is attached to the OUTGOING scene;
+        // it becomes the transitionIn of the scene that follows it.
+        const previousScene = sceneIdx > 0 ? (scenes[sceneIdx - 1] as any) : undefined;
+        const narrationDurationMs =
+          Number(scene.realNarrationDurationMs) || Math.round((scene.audio?.duration || 0) * 1000);
+        // See clampCaptionWordsToNarration's own doc comment: the shared
+        // deterministic-timing caption fallback can time words against the
+        // legacy held-to-budget visual duration rather than real narration
+        // length, which would otherwise silently inflate Revideo's total
+        // render duration via its concurrent caption/visual loops.
+        const rawCaptionWords = spec.captionStyle === "none" ? [] : sceneCaptionWords[sceneIdx] || [];
+        const captionWords = clampCaptionWordsToNarration(rawCaptionWords, narrationDurationMs);
+        return {
+          id: `${videoId}-${sceneIdx}`,
+          sceneIndex: sceneIdx,
+          purpose: "scene",
+          visualPath,
+          additionalVisualPaths,
+          narrationPath,
+          narrationDurationMs,
+          captionWords,
+          transition: previousScene?.transition,
+        };
+      });
+
+      const revideoMusicPath = musicForRender?.file
+        ? this.localPathForMediaUrl(musicForRender.url) || path.join(this.config.musicDirPath, musicForRender.file)
+        : undefined;
+
+      const revideoTimeline = productionTimelineFromLegacyScenes({
+        id: videoId,
+        width,
+        height,
+        fps: 25,
+        template: revideoTemplate,
+        scenes: revideoSceneInputs,
+        musicPath: revideoMusicPath,
+        musicVolume: 0.18,
+      });
+
+      const revideoRenderer = new RevideoRenderer(
+        this.config.tempDirPath,
+        undefined,
+        undefined,
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+      );
+      const result = await revideoRenderer.render(revideoTimeline);
+      fs.ensureDirSync(path.dirname(this.getVideoPath(videoId)));
+      fs.copySync(result.outputPath, this.getVideoPath(videoId));
+      compositionMs = result.compositionMs;
+      finalEncodeMs = result.finalEncodeMs;
+      remotionFramesRendered = 0;
+    };
+
+    if (this.config.videoRenderEngine === "revideo") {
+      renderEngineUsed = "revideo";
+      // Fail-closed (section 12): deliberately no try/catch and no legacy
+      // fallback here. If Revideo fails, the whole production must fail
+      // clearly - qualification needs truth, not a silently-substituted
+      // legacy render reported as a Revideo success. Legacy remains
+      // available only via the explicit VIDEO_RENDER_ENGINE=legacy default.
+      await runRevideoRender();
+    } else if (renderDecision.fastPathEligible) {
       try {
         const fastCaptionAssPath = burnCaptionsWithLibass
           ? this.createTimelineCaptionAss({
@@ -2588,14 +2705,18 @@ export class ShortCreator {
       artifacts: {
         videoId,
         sceneCount: scenes.length,
-        renderStrategy: renderDecision.strategy,
+        renderStrategy: renderEngineUsed === "revideo" ? "REVIDEO" : renderDecision.strategy,
         fastPathEligible: renderDecision.fastPathEligible,
         fallbackReason: renderFallbackReason,
       },
       timingMs: Date.now() - renderStartedAt,
     });
 
-    if (burnCaptionsWithLibass && renderEngineUsed !== "ffmpeg_fast" && renderEngineUsed !== "hybrid_ffmpeg") {
+    // Revideo draws captions itself (timelineScene.tsx - including Arabic
+    // RTL shaping via a bundled font, see section 9), from the same
+    // sceneCaptionWords used above - never route it through the libass burn
+    // pass too, or captions would be drawn twice.
+    if (burnCaptionsWithLibass && renderEngineUsed !== "ffmpeg_fast" && renderEngineUsed !== "hybrid_ffmpeg" && renderEngineUsed !== "revideo") {
       const burnStartedAt = Date.now();
       await this.emitProgress(onProgress, {
         status: "rendering",
@@ -2894,8 +3015,14 @@ export class ShortCreator {
         error: professionalReady ? undefined : readinessFailureReasons.join(" "),
         professionalReady,
         mixedSilenceGate: mixedSilenceGate as unknown as Record<string, unknown>,
-        renderStrategy: renderDecision.strategy,
-        rendererVersion: "hybrid-fast-v1",
+        // renderDecision.strategy is computed unconditionally before the
+        // VIDEO_RENDER_ENGINE branch (see above) and never reflects it - it
+        // would otherwise misreport a Revideo-rendered video as
+        // "REMOTION_FULL" in its own metadata sidecar, exactly the kind of
+        // false record the Revideo evaluation's audit trail depends on not
+        // having. renderEngineUsed is the actual, post-render truth.
+        renderStrategy: renderEngineUsed === "revideo" ? "REVIDEO" : renderDecision.strategy,
+        rendererVersion: renderEngineUsed === "revideo" ? "revideo-0.11.0" : "hybrid-fast-v1",
         fastPathEligible: renderDecision.fastPathEligible,
         fastPathUsed: renderEngineUsed === "ffmpeg_fast" || renderEngineUsed === "hybrid_ffmpeg",
         renderFallbackReason,

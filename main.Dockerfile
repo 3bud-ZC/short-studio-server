@@ -74,6 +74,13 @@ RUN apt install -y \
       libpango-1.0-0 \
       libcairo2 \
       libcups2 \
+      # Revideo evaluation: @puppeteer/browsers (used to fetch Chromium for
+      # @revideo/renderer) extracts the downloaded archive with `unzip` -
+      # without it the download itself "succeeds" but leaves an empty,
+      # non-functional install directory with no build-time error, only
+      # discovered the first time a real render tries to launch Chromium.
+      # See ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation" section 3/4.
+      unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 # setup pnpm
@@ -84,6 +91,11 @@ RUN corepack enable
 
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* /app/
+# patches/ must be present before `pnpm install` runs: pnpm-workspace.yaml's
+# `patchedDependencies` (the tracked @revideo/renderer --single-process fix)
+# points at a file under here - without this COPY, the Docker build would
+# install the UNPATCHED package with no error, silently losing the fix.
+COPY patches* /app/patches/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 RUN pnpm install --prefer-offline --no-cache --prod
 
@@ -91,6 +103,7 @@ FROM prod-deps AS build
 COPY tsconfig.json /app
 COPY tsconfig.build.json /app
 COPY tsconfig.ui.json /app
+COPY tsconfig.revideo-project.json /app
 COPY vite.config.ts /app
 COPY src /app/src
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
@@ -119,6 +132,14 @@ COPY --from=install-whisper /whisper /app/data/libs/whisper
 COPY --from=install-whisper /whisper /app/bootstrap/whisper
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build /app/dist /app/dist
+# Revideo evaluation: @revideo/renderer's own Vite pipeline transforms the
+# project's .ts/.tsx SOURCE at render time (its jsxImportSource is
+# "@revideo/2d", not React) - it is not something tsc can precompile into
+# dist/ the normal way, which is exactly why tsconfig.build.json excludes
+# this folder (see its own comment). The raw source must still ship in the
+# image, at the same relative path RevideoRenderer resolves from its own
+# compiled location (dist/video-core/renderers/ -> ../revideo-project).
+COPY src/video-core/revideo-project /app/dist/video-core/revideo-project
 COPY package.json /app/
 
 # app configuration via environment variables
@@ -134,8 +155,25 @@ ENV WHISPER_MODEL=small
 ENV CONCURRENCY=1
 # video cache - 2000MB
 ENV VIDEO_CACHE_SIZE_IN_BYTES=2097152000
+# Revideo evaluation: pins where Puppeteer's own executable-path resolution
+# (used both by the install step below and by @revideo/renderer's
+# puppeteer.launch() at render time - see src/video-core/renderers/revideoRenderer.ts)
+# looks for Chromium. Deliberately NOT under /app/data: that path is a host
+# bind mount at runtime (docker-compose.prod.yml) that fully shadows
+# whatever the image put there, the same reason Whisper needs its
+# bootstrap-copy dance above - Chromium has no such fallback, so it must
+# live somewhere the bind mount never touches.
+ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer
 
 # install kokoro, headless chrome and ensure music files are present
 RUN node dist/scripts/install.js
+# Revideo evaluation: bundle Chromium for @revideo/renderer at BUILD time,
+# not on a customer's first render - no internet access should be required
+# to render after install. Uses puppeteer's own CLI so the exact pinned
+# build for the installed puppeteer version is fetched (matches what
+# puppeteer.launch() will look for at runtime), same PUPPETEER_CACHE_DIR as
+# above. Fails the build (not silently degrades) if the download is
+# incomplete - `puppeteer browsers install` exits non-zero on failure.
+RUN node_modules/.bin/puppeteer browsers install chrome
 
 CMD ["pnpm", "start"]

@@ -117,6 +117,15 @@ export class Config {
    */
   public hardwareAcceleration: "disable" | "if-possible" = "disable";
 
+  /**
+   * Selects the video-core render engine. "legacy" (default) leaves every
+   * existing customer production on the current Remotion/ffmpeg-fast/libass
+   * pipeline unchanged. "revideo" routes through the new video-core adapter
+   * (src/video-core/) - only meant to be flipped once the Revideo evaluation
+   * spike has passed its acceptance gates. See ABUD_SHORTS_ENGINE_STATUS.md.
+   */
+  public videoRenderEngine: "legacy" | "revideo" = "legacy";
+
   constructor() {
     this.dataDirPath =
       process.env.DATA_DIR_PATH ||
@@ -217,6 +226,7 @@ export class Config {
     );
     this.enableTestProviders = process.env.ENABLE_TEST_PROVIDERS === "true";
     this.hardwareAcceleration = process.env.ABUD_HARDWARE_ACCELERATION === "if-possible" ? "if-possible" : "disable";
+    this.videoRenderEngine = process.env.VIDEO_RENDER_ENGINE === "revideo" ? "revideo" : "legacy";
 
     if (process.env.WHISPER_MODEL) {
       this.whisperModel = process.env.WHISPER_MODEL as whisperModels;
