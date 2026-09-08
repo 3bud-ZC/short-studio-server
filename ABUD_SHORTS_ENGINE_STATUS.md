@@ -13262,3 +13262,175 @@ review: **OWNER REVIEW PENDING**. English libass review: **OWNER REVIEW
 PENDING**. Live Revideo Swap: **BLOCKED**. Upload-Post: **BLOCKED**.
 GA: **BLOCKED**.
 
+### Short Studio 2.5 - Bold Social style correction and final candidate production
+
+**Previous Libass Experimental Styling: OWNER REJECTED - style regression.**
+The owner watched real rendered output of the pass above and rejected the
+Bold Social/Auto Professional default: an oversized dark rectangular
+backdrop reading as a subtitle/debug panel, captions sitting too low, and
+hard-karaoke `\k` fill turning most of the phrase yellow by the end of each
+line.
+
+**Git-history audit, before touching anything.** Inspected every commit
+that ever touched `captionStyles.ts`/`arabicCaptionRendererV3.ts`
+(a51bf3a v2.2 creation through HEAD). Finding, reported to the owner before
+proceeding: the backdrop (`backgroundOpacity` 0.28-0.32) and the hard-`\k`
+karaoke fill have been **byte-identical since this V3 caption system's
+introduction at v2.2** - there is no earlier commit with a no-backdrop,
+single-word-highlight Bold Social design to revert to. The only real change
+since v2.4.0 was the Arabic font swapping `noto_kufi_arabic` to `cairo`.
+Per the owner's direction, implemented their written spec (sections 3-9 of
+the instruction) directly as new design-token values inside the existing
+libass architecture, rather than fabricating a "restoration" of something
+that never existed.
+
+**Correction (`captionStyles.ts`, `arabicCaptionRendererV3.ts`,
+`captionQa.ts`).** `bold_social`/`social_ad`: `backgroundOpacity` 0.28 -> 0
+(text + outline + shadow only, no plate); `bottomSafeRatio` 0.2 -> 0.18
+(~345px at 1920 tall - lower-middle, not bottom-attached). New
+`CaptionHighlightMode` `"karaoke_current_word"`: exactly one word
+highlighted at a time via per-token `\c` colour overrides, emitted as
+successive Dialogue events tiling the phrase's duration with no gaps -
+`\k` cannot express a non-accumulating highlight, since a "sung" word
+never reverts within one karaoke run. Bold Social/Social Ad now use this;
+the dedicated "Karaoke" preset keeps the original, stronger, accumulating
+`karaoke_fill` effect on purpose (explicitly not required to match, per
+instruction). `captionQa`'s highlight-overflow check now also covers the
+new mode. Two pre-existing tests that hardcoded `social_ad`'s old
+`karaoke_fill`/single-dialogue-event behaviour were retargeted at the
+"Karaoke" preset instead (where that behaviour is still real and correct);
+new tests cover the current-word behaviour. **Gates**: `npx tsc --noEmit`
+clean, `npx vitest run` **91 files / 1261 tests passing**, `npm run build`
+clean. Committed as `a3e4e09` on `v2.5-short-studio`.
+
+**Real defect found and fixed: `v2.Dockerfile` could not build at all.**
+Building the isolated candidate image (`docker build -f v2.Dockerfile`,
+the Dockerfile every real release actually uses per its own
+`docker buildx build --file v2.Dockerfile --push` history) failed twice
+in a row from HEAD of this branch:
+- Missing `pnpm-workspace.yaml`/`patches/` COPY before
+  `pnpm install --frozen-lockfile`, so pnpm had no local
+  `patchedDependencies` declaration to reconcile against the lockfile's
+  recorded `@revideo/renderer` patch hash -
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. A stray `|| true` on that command
+  masked the fatal error, so the stage "succeeded" with no `node_modules`
+  at all, surfacing only later as a confusing "not found" on an unrelated
+  COPY step.
+- Missing `tsconfig.revideo-project.json` COPY before `pnpm build`, which
+  runs `npm run typecheck` unconditionally (including
+  `typecheck:revideo-project`) even in this image, which never ships the
+  Revideo runtime at all (no Chromium/Puppeteer).
+
+Both gaps are `v2.Dockerfile` simply having fallen out of sync with
+`main.Dockerfile` (see next finding) on two mechanical points; fixed the
+same way `main.Dockerfile` already does it. Committed separately as
+`27afd82`. This means **no real release build has been possible from this
+branch's lockfile until this fix** - independent of captions, worth the
+owner's attention on its own.
+
+**Real finding: `main.Dockerfile` and `v2.Dockerfile` are two divergent
+images, and Revideo only exists in one of them.** `v2.Dockerfile` (real
+production) installs no Puppeteer/Chromium at all - Revideo
+(`@revideo/renderer`) cannot run in the real production image regardless
+of `VIDEO_RENDER_ENGINE`. `main.Dockerfile` is a separate,
+Revideo-evaluation-only track that does bundle Chromium. Every prior
+"Revideo: TECHNICALLY QUALIFIED" verification in this document was run
+against `main.Dockerfile` builds, never against the real production image.
+
+**Real finding: the Revideo/Chromium compose stage hangs indefinitely on
+real content.** Producing a real Arabic candidate via `VIDEO_RENDER_ENGINE=
+revideo` (on a `main.Dockerfile` image, `--shm-size=2g` to rule out shm
+starvation) reproducibly hung forever - zero CPU, zero network/disk I/O
+growth, no timeout anywhere in `revideoRenderer.ts` to ever recover -
+immediately after all scenes were transcribed, before the caption/ffmpeg
+stages were even reached (Revideo strips captions before this point in
+the intended hybrid design, so this is unrelated to the caption fix). The
+staged Pexels assets were confirmed valid, correctly-sized, decodable
+H.264 files - not corrupted. Not investigated further per explicit
+instruction not to change Revideo timeline architecture; reported as a
+real, reproducible defect for separate follow-up.
+
+**Real finding: `revideoLibassRenderer.ts` was never wired into
+`ShortCreator.ts`.** The hybrid pipeline this document's own history
+describes (`adac09b` - Revideo composes a caption-free intermediate, then
+libass burns real captions) was built and unit-tested
+(`revideoLibassRenderer.test.ts`) but the real `renderProductionSpec` call
+path never adopted it: `ShortCreator.ts` still calls `RevideoRenderer`
+directly, and explicitly skips the libass burn pass whenever
+`renderEngineUsed === "revideo"` (its own comment: "Revideo draws captions
+itself... never route it through the libass burn pass too"). So
+`VIDEO_RENDER_ENGINE=revideo` today means Revideo's own native
+(Motion-Canvas `Txt`) caption drawing - the system already owner-rejected
+once - not libass, contradicting this document's own stated architecture.
+Not fixed this pass (wiring it in would not fix the separate Chromium
+hang above); reported for the same follow-up.
+
+**Decision, given the two Revideo findings above (owner-approved):**
+produce the two final candidates through the actual default production
+path instead - `config.videoRenderEngine` defaults to `"legacy"`
+(`ffmpeg_fast`/`hybrid_ffmpeg` + real libass burn, the correction above's
+actual target), not Revideo. Real script (`LocalContentAIProvider`, no
+paid AI), real VoiceTut/Kokoro TTS, real Pexels footage, real Whisper
+alignment, real libass caption burn, through the real, now-fixed
+`v2.Dockerfile` image (`caption-restore-v2-a3e4e09`,
+commit `27afd82`/`a3e4e09`), isolated container, isolated data volume, no
+live-container swap.
+
+**Final English candidate: PASS, all gates green.** Topic "Why small
+businesses should back up their files", Kokoro af_heart, real Pexels
+(6 real clips, coherent to narration). Duration **11.16s** (target 11s,
+1.5% variance). `technicalScore: 100`, `audioQa.pass: true`, no issues.
+Metadata: `technicalReady`/`contentReady`/`professionalReady` all
+**true**, status `"ready"`. Direct frame inspection (hook/mid/CTA, all
+three, real footage) confirms the corrected Bold Social style exactly as
+specified: no backdrop, one word highlighted per phrase (never
+accumulating), clean outline/shadow, correct lower-middle placement, 2
+lines max, semantic phrase grouping. Delivery verified against the real
+running server: thumbnail **200**, preview **200**, preview with Range
+**206**, download **200** `video/mp4`. Exported to
+`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\` as
+`short-studio-final-en.mp4` / `short-studio-final-en-contactsheet.jpg`.
+
+**Final Arabic candidate: BLOCKED on two real, separate defects, neither
+caused by the caption fix.** Topic "أهمية النسخ الاحتياطي لملفات المشاريع
+الصغيرة", VoiceTut/Mohamed, real Pexels (4 clips). Real, reproducible
+failures found via direct render and frame inspection (not fabricated,
+not silently patched):
+1. **Duration budget overshoot.** Final duration **18.15s** against an
+   11s target (65% variance) - `validationResult.valid: false`,
+   `technicalScore: 30`, `contentReady`/`professionalReady`: **false**.
+   The content-AI's "bounded duration correction" expanded scene 0's
+   narration (`expansionRetries: 1`) and the render's real spoken audio
+   (17.11s) never got rebalanced back toward the 10-12s target. Same
+   ~18s overshoot reproduced identically across every attempt this pass
+   (both Revideo attempts and this legacy-engine run) - a genuine,
+   reproducible content-duration-planning defect for this specific
+   Arabic topic/prompt, not an artifact of render engine or environment.
+2. **Visible tofu/missing-glyph boxes in the rendered Arabic captions.**
+   Direct frame inspection of the real render (production-equivalent
+   Debian container, real Cairo font, real libass/HarfBuzz/FriBidi) shows
+   replacement-glyph boxes near the highlighted word. The regenerated ASS
+   script for the exact same narration text was inspected directly and is
+   syntactically clean (no stray characters, correct `\c` placement,
+   correct logical-order Arabic) - the source narration text's codepoints
+   were also checked and are all normal Arabic letters/punctuation with no
+   hidden marks. Root cause not yet isolated (a font-completeness or
+   shaping edge case specific to real content, first ever observed under
+   the new `karaoke_current_word` per-word colour-override rendering path
+   rather than the old single-run `\k` fill) - flagged honestly rather
+   than guessed at further.
+
+Arabic **not exported** to `FINAL-OWNER-REVIEW` - it does not meet the
+stated quality bar and should not be presented as a passing candidate.
+
+**Current field values**: Proven Caption Design Restoration: **PASS**
+(implemented owner's corrected spec; no earlier design existed to
+literally restore). v2.Dockerfile buildability: **FIXED** (`27afd82`).
+main.Dockerfile/v2.Dockerfile divergence: **DOCUMENTED, NOT RECONCILED**.
+Revideo Chromium compose hang: **REAL, REPRODUCIBLE, NOT FIXED** (out of
+this pass's authorized scope). revideoLibassRenderer.ts wiring gap:
+**REAL, NOT FIXED**. Final English Candidate: **OWNER REVIEW PENDING**
+(all automated gates PASS). Final Arabic Candidate: **BLOCKED** - duration
+overshoot + Arabic glyph defect, both real, neither self-approved. Live
+Revideo Swap: **BLOCKED**. Upload-Post: **BLOCKED**. GA: **BLOCKED**.
+
