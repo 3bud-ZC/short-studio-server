@@ -20,14 +20,102 @@ Technical Product: Short Studio Server
 
 Version: 2.5.0
 
-Stage: GENERAL AVAILABILITY CANDIDATE — the code/CLI/installer/UI rebrand from
-ABUD Shorts Engine 2.4.0, isolated fresh install, isolated migration rehearsal,
-LOCAL_SINGLE_USER qualification, Docker consolidation, permanent primary cutover
-to port 3130 at %ProgramData%\ShortStudio, Pexels activation, host-native Local
-Voice readiness, and owner-approved final Arabic/English video candidates are
-complete and verified. Remaining commercial closure gates: Upload-Post live
-activation, owner-authorized test publication, release/package closure, and
-final GA promotion. Do not read this entry as GA yet.
+Stage: GENERAL AVAILABILITY
+
+Release: RELEASED. Short Studio Server 2.5.0 is publicly released. Owner GA
+Authorization: APPROVED. The release was built once as a candidate from the
+frozen GA source and promoted digest-for-digest; no release-time rebuild
+occurred, and `release.yml` still has no tag-push trigger (verified empirically:
+pushing `v2.5.0` started no workflow).
+
+Repository: `3bud-ZC/short-studio-server` (renamed from `3bud-ZC/Abud-Shorts-Engine`
+as the final GA step). Old GitHub URLs redirect, which matters because the
+shipped package and the in-product updater both carry the old repository path:
+the frozen `packageUrl` and the `releases/latest/download/update-manifest.json`
+updater URL were both re-verified after the rename and still resolve to the
+correct 2.5.0 artifacts. The GHCR package name is deliberately unchanged
+(`ghcr.io/3bud-zc/abud-shorts-engine`) to preserve the existing release contract.
+
+**Public identity matrix.** Every binary and package identity traces to one
+frozen source tree:
+
+| Identity | Value |
+| --- | --- |
+| GA_PRODUCT_SHA | `d658dce6e8e94b2e7e622bd96d086e71e996eb0c` |
+| GA_MAIN_SHA | `73fc00834576862a6399c0b21cd065963b172260` |
+| v2.5.0 tag commit | `73fc00834576862a6399c0b21cd065963b172260` |
+| v2.5.0 tag object | `d52a84524a03a5812cdf87b4cf618fc607a94dc5` |
+| GHCR candidate tag | `sha-d658dce` |
+| GHCR candidate digest | `sha256:171ea6fa504d90bd19a4400596ecd3c625a9c89d416eab26b1ef6e833656b163` |
+| GHCR `2.5.0` digest | `sha256:171ea6fa504d90bd19a4400596ecd3c625a9c89d416eab26b1ef6e833656b163` |
+| GHCR `stable` digest | `sha256:171ea6fa504d90bd19a4400596ecd3c625a9c89d416eab26b1ef6e833656b163` |
+| linux/amd64 child digest | `sha256:908adf0a4a755ac2dc2925bbea1461036aa585b8c3299ef1d2e3130fe392f235` |
+| Image revision label | `d658dce6e8e94b2e7e622bd96d086e71e996eb0c` |
+| Package | `Short-Studio-Server-2.5.0.tar.gz` (97,849 bytes) |
+| Package SHA256 | `b63bfea32c3d93917c87930e644b67badd99f158020a95a64bd0061b165c177d` |
+| Manifest | version `2.5.0`, channel `stable`, schema `2.13.0`, minimumUpdaterVersion `2.2.0`, schemaBackwardsCompatible `true` |
+| GitHub Release | `v2.5.0` — "Short Studio Server 2.5.0", latest, not draft, not prerelease |
+
+The candidate, `2.5.0` and `stable` tags all resolve to the identical OCI
+digest, verified independently against the registry rather than from workflow
+output. The image's `org.opencontainers.image.revision` label equals
+GA_PRODUCT_SHA, and `main`'s tree hash (`212c1f36`) is byte-identical to the
+GA_PRODUCT_SHA tree, so the merge added only merge metadata.
+
+Client Delivery: RELEASED. The public assets were downloaded as an external
+customer would, the package SHA256 recomputed and matched, `verify-package.mjs`
+re-run against the downloaded archive (PASS), and the archive listed in full: no
+`.env`, keys, tokens, Provider Vault, customer database, customer media, QA or
+test-publication videos, backups, logs, coverage, `node_modules`, `.git`,
+application source, model weights or Python venv.
+
+Windows LOCAL_SINGLE_USER: GA QUALIFIED. An isolated release smoke installed the
+downloaded public package on a separate compose project, port (13911), data root
+and volumes: all four services healthy, version `2.5.0`, stage
+`General Availability`, schema `2.13.0`, channel `stable`, `accessMode: local`,
+`remoteAccess: disabled`, dashboard reachable with no login gate, 12 migrations
+applied, no secret leakage. The isolated environment was removed afterwards;
+primary volumes were never touched.
+
+Linux Native: NOT NATIVE-QUALIFIED — POST-2.5 OR FUTURE QUALIFICATION. This is
+not a Windows GA blocker. The Linux host scripts ship and are supported, and
+README, CLIENT_QUICK_START, CLIENT_HANDOFF, CLIENT_OPERATIONS, START-HERE and
+docs/SERVER_INSTALL were corrected to say plainly that native Linux host
+qualification is not part of this release's qualification. No customer-facing
+document now claims native Linux was GA-qualified.
+
+Test Video Title Cleanup: NOT PERFORMED — no supported mechanism was available.
+The owner authorized correcting the title of the existing YouTube test video
+(`Fy7MMJmHxhk`) to
+`أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة`. Neither authorized path was
+available. Upload-Post's published OpenAPI spec has no endpoint that edits an
+already-published post: its only `PATCH` is
+`/uploadposts/schedule/{job_id}`, which updates a *scheduled*, unpublished post.
+The YouTube Data API route does not exist either, because Short Studio holds no
+YouTube OAuth credential — the vault contains only `pexels`, `pixabay`,
+`elevenlabs` and `upload_post` keys, and the channel is authenticated inside
+Upload-Post rather than in Short Studio. The authenticated-browser route was
+unavailable: the Claude-in-Chrome extension is not connected, and the isolated
+browser has no Google session, which would have required entering the owner's
+credentials. As instructed, the title was not republished and no second post was
+created. The live post therefore still carries the harness-corrupted title
+`????? ????? ????????? ?????? ???????? ???????`, while the local record holds the
+correct Arabic. The remaining fix is a manual one-field edit in YouTube Studio.
+This is not a release-integrity defect in Short Studio: the product's own UTF-8
+path is proven correct by regression, and the corruption came from the retired
+QA harness.
+
+Publishing: PASS / LIVE VERIFIED. External Test Publication: PASS. Publishing
+Persistence: PASS / CLOSED. Metadata updates this pass: 0. New uploads: 0. New
+publications: 0. Duplicates: 0.
+
+Historical safety: the `v2.4.0` tag (`8b67eb92`), the `v2.3.1` tag
+(`aac26824`), the V2.4 GitHub Release and its assets are untouched, and the
+GHCR `2.4.0` (`sha256:9988fd43…`) and `2.3.1` (`sha256:5076022e…`) digests are
+unchanged, re-verified against the registry after promotion and again after the
+repository rename. No historical tag was moved, no force push was made, and
+branch protection was never disabled — the merge went through pull request
+`#1` on the protected route.
 
 Legacy: Formerly ABUD Shorts Engine. Built from `main` at commit `be44afe3`
 ("V2.4 client delivery closure & operational freeze") on branch
@@ -73,7 +161,7 @@ persists a completed Upload-Post publication automatically (status,
 provider_post_id, provider_url, remote_state, published_at) and reconciles a
 provider that finishes asynchronously, with no operator SQL. Fix: 6c38844.
 
-GA: READY FOR OWNER FINAL GA AUTHORIZATION.
+GA: RELEASED — Short Studio Server 2.5.0 is generally available.
 
 Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
 migration; no database migration was added or required for branding alone).
