@@ -13682,3 +13682,80 @@ PASS) stands. Evidence (candidate video, extracted frames, spec/results
 JSON) preserved in the session scratchpad and in the reused container's data
 volume for a follow-up captions-pipeline investigation.
 
+### Short Studio 2.5 - Final Arabic tofu / libass closure
+
+**Scope guard.** This closure resumed from `v2.5-short-studio` at `97be828`
+with the already-completed Arabic duration-aware content planning and topic
+relevance fixes preserved (`9db98cb`, `a81f98a`). No reset to `ac64e23`, no
+content-planning rerun, no VoiceTut recalibration, no duration-control change,
+no Revideo change, no Pexels change, and no English video regeneration were
+performed.
+
+**Root cause.** The final remaining Arabic blocker was downstream of the now
+passing Arabic content/duration pipeline: the Arabic Bold Social
+`karaoke_current_word` path emitted one ASS Dialogue event per active-word
+window and inserted inline `\c&H...` colour overrides at token boundaries.
+Real lossless pixel inspection of `final-owner-ar-v2.mp4` showed that path
+could produce visible missing-glyph boxes inside normal Arabic words even
+though the source text, timing JSON, `captionQa`, and metadata were green. The
+same real narration and deterministic fallback timings rendered cleanly when
+the Arabic phrase was emitted as one uninterrupted logical ASS phrase with no
+per-word/karaoke overrides, leaving shaping entirely to libass/HarfBuzz/FriBidi.
+
+**A/B/C evidence.** Input was the real latest Arabic narration/timings from
+`final-owner-ar-v2`:
+`لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس.` and
+`تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك.`
+A = current Arabic Bold Social (`social_ad`, `karaoke_current_word`, 23
+Dialogue events) reproduced visible tofu in the real production frames at the
+requested target words. B = one uninterrupted logical-Arabic libass phrase
+(`social_ad`, Cairo Bold, 3px outline, no backdrop, lower-middle, max 2 lines,
+no `\c`, no `\k`, 5 Dialogue events) rendered cleanly. C = uninterrupted
+static-accent phrase (same geometry, whole phrase in accent colour, no `\c`,
+no `\k`, 5 Dialogue events) also rendered cleanly, but was not adopted because
+B is the less visually disruptive policy.
+
+**Final Arabic caption policy.** Arabic Auto Professional / Bold Social now
+uses Cairo Bold through libass/HarfBuzz/FriBidi as uninterrupted logical
+phrases: 3px outline, no backdrop, lower-middle safe position, max 2 lines,
+and no animated Arabic karaoke/current-word override. English Bold Social keeps
+the existing current-word highlight unchanged.
+
+**Code and tests.** Implemented in `src/server/v2/captions/arabicCaptionRendererV3.ts`
+by resolving Arabic `social_ad`/`bold_social` away from `karaoke_current_word`
+at render time only; non-Arabic styles continue using the original style
+configuration. Regression coverage added in
+`src/server/v2/captions/arabicCaptionRendererV3.test.ts` and adjusted in
+`src/server/v2/creativeQualityV22.test.ts`. Verification: `npm run typecheck`
+PASS; focused caption tests PASS (`92` tests); full Vitest PASS (`91` files /
+`1275` tests); `npm run build` PASS.
+
+**Commit and image.** Caption fix commit: `6707b11`
+(`fix(captions): render Arabic bold social as plain libass phrases`). Built
+exactly from `v2.Dockerfile` as `abud-shorts-engine:v2-6707b11`; image ID
+`sha256:bf2f26cb8cfa06a037cf3765c44dee77f8ccd14e3c2f3b7d8995955bff343ff2`.
+
+**Final Arabic production.** Generated exactly one real final Arabic
+11-second candidate from the already-green real Arabic VoiceTut audio, real
+Pexels scene media, real deterministic caption timing JSON, and the new
+`v2.Dockerfile` image's libass/font stack. This avoided repeating content
+planning, VoiceTut, duration control, Revideo, Pexels, or English. Output media
+probe: H.264/AAC, 1080x1920, 25 fps, 275 frames, duration **11.000s**.
+Preserved accepted Arabic metadata gates from the source production:
+2 scenes, 0 duration corrections, `technicalReady: true`,
+`contentReady: true`, `professionalReady: true`, `technicalScore: 100`,
+`topicRelevanceScore: 0.8`, `validationResult.valid: true`,
+`audioQa.pass: true`, `mixedSilenceGate.pass: true`.
+
+**Pixel QA.** Extracted lossless PNG frames from the final Arabic v3 candidate
+at the requested words: `مشروع`, `فجأة`, `عشان`, `تعرف`, and `احتياطية`.
+Direct inspection found 0 tofu, 0 missing glyphs, and 0 broken joins. Final
+pixel QA result: **PASS**.
+
+**Export.** Because the final Arabic v3 candidate was clean, exported exactly:
+`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\short-studio-final-ar-v3.mp4`.
+The existing passing English video
+`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\short-studio-final-en-v2.mp4`
+was not regenerated. Upload-Post was not configured, nothing was published,
+`main` was not merged, and no `2.5.0` tag was created.
+
