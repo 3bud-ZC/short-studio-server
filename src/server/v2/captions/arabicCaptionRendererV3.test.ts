@@ -3,6 +3,7 @@ import {
   buildArabicAss,
   buildCurrentWordSegments,
   captionFontForWords,
+  captionStyleForWords,
   chunkIntoPhrases,
   fitFontSize,
   toAssColour,
@@ -91,6 +92,46 @@ describe("buildArabicAss - Arabic text integrity", () => {
     });
     // No dialogue event should contain a hard-karaoke \k tag.
     expect(built.content).not.toMatch(/\\k\d+/);
+  });
+
+  it("keeps English Bold Social current-word highlighting unchanged", () => {
+    const words: CaptionWord[] = [
+      { text: "backup", startMs: 0, endMs: 300 },
+      { text: "your", startMs: 300, endMs: 600 },
+      { text: "files", startMs: 600, endMs: 900 },
+    ];
+    const style = captionStyleForWords(resolveCaptionStyle("social_ad"), words);
+    expect(style.highlight).toBe("karaoke_current_word");
+    const built = buildArabicAss(words, { style: resolveCaptionStyle("social_ad"), frame: FRAME });
+    const dialogueLines = built.content
+      .split("\n")
+      .filter((line) => line.startsWith("Dialogue:"));
+    expect(dialogueLines).toHaveLength(3);
+    expect(built.content).toMatch(/\\c&H/);
+  });
+
+  it("renders Arabic Bold Social as uninterrupted logical phrases with no per-word overrides", () => {
+    const words: CaptionWord[] = [
+      { text: "مشروع", startMs: 0, endMs: 413 },
+      { text: "فجأة", startMs: 413, endMs: 826 },
+      { text: "احتياطية", startMs: 826, endMs: 1239 },
+    ];
+    const style = captionStyleForWords(resolveCaptionStyle("social_ad"), words);
+    expect(style.highlight).toBe("none");
+    expect(style.font).toBe("cairo");
+    expect(style.outlinePx).toBe(3);
+    expect(style.backgroundOpacity).toBe(0);
+
+    const built = buildArabicAss(words, { style: resolveCaptionStyle("social_ad"), frame: FRAME });
+    const dialogueLines = built.content
+      .split("\n")
+      .filter((line) => line.startsWith("Dialogue:"));
+    expect(dialogueLines).toHaveLength(built.phrases.length);
+    expect(built.content).not.toMatch(/\\c&H/);
+    expect(built.content).not.toMatch(/\\k\d+/);
+    for (const token of words.map((word) => word.text)) {
+      expect(built.content).toContain(token);
+    }
   });
 
   it("buildCurrentWordSegments tiles the phrase with no gaps and no overlaps", () => {

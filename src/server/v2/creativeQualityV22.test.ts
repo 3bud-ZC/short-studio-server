@@ -304,14 +304,12 @@ describe("Arabic caption renderer V3", () => {
     expect(dialogueLines.length).toBeLessThan(ARABIC_WORDS.length);
   });
 
-  it("Bold Social (social_ad) highlights one word at a time via colour overrides, never \\k", () => {
+  it("Arabic Bold Social (social_ad) renders one uninterrupted logical phrase, never per-word overrides", () => {
     const built = renderArabicCaptions(ARABIC_WORDS, "social_ad", FRAME);
     expect(built.content).not.toMatch(/\\k\d+/);
-    expect(built.content).toMatch(/\\c&H/);
-    // Every phrase's active-word text is still drawn as one shaped run per
-    // event - no duplicate positioned word over the phrase.
+    expect(built.content).not.toMatch(/\\c&H/);
     const dialogueLines = built.content.split("\n").filter((line) => line.startsWith("Dialogue:"));
-    expect(dialogueLines.length).toBeGreaterThanOrEqual(built.phrases.length);
+    expect(dialogueLines.length).toBe(built.phrases.length);
   });
 
   it("emits no karaoke markers for a phrase-level style", () => {

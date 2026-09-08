@@ -357,6 +357,32 @@ export function captionFontForWords(style: CaptionStyleSpec, words: CaptionWord[
   return hasArabic ? captionFontFor(style) : CAPTION_FONTS.inter;
 }
 
+function containsArabic(words: CaptionWord[]): boolean {
+  return words.some((word) => ARABIC_RANGE.test(word.text));
+}
+
+/**
+ * Arabic Auto Professional captions must stay as uninterrupted logical
+ * phrases. Real libass pixel inspection showed the per-word inline colour
+ * override path can surface missing-glyph boxes inside Arabic words, while the
+ * same text/timing renders cleanly when the phrase is emitted as one plain run.
+ * Keep the current-word policy for non-Arabic Bold Social captions.
+ */
+export function captionStyleForWords(style: CaptionStyleSpec, words: CaptionWord[]): CaptionStyleSpec {
+  if (
+    containsArabic(words) &&
+    (style.id === "social_ad" || style.id === "bold_social") &&
+    style.highlight === "karaoke_current_word"
+  ) {
+    return {
+      ...style,
+      highlight: "none",
+      animation: style.animation === "pop" ? "fade" : style.animation,
+    };
+  }
+  return style;
+}
+
 /**
  * Renders caption words into a complete ASS script.
  *
@@ -364,7 +390,8 @@ export function captionFontForWords(style: CaptionStyleSpec, words: CaptionWord[
  * is in output pixels and libass does not rescale our margins.
  */
 export function buildArabicAss(words: CaptionWord[], options: AssRenderOptions): AssBuildResult {
-  const { style, frame } = options;
+  const { frame } = options;
+  const style = captionStyleForWords(options.style, words);
   const font = captionFontForWords(style, words);
   const phrases = chunkIntoPhrases(words);
 
