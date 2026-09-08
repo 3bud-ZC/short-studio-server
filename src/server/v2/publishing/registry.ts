@@ -48,22 +48,27 @@ export class PublishingProviderRegistry {
     this.register(new TestPublishingProvider());
   }
 
+  private normalizeId(id: PublishingProviderId | string): PublishingProviderId {
+    return (id === "upload-post" ? "upload_post" : id) as PublishingProviderId;
+  }
+
   /**
    * Resolves a provider a caller asked for by name, enforcing internal-only
    * isolation. Returns undefined rather than the test provider when it is not
    * permitted, so the caller falls back to a real route or fails loudly.
    */
-  public getSelectableProvider(id: PublishingProviderId): PublishingProvider | undefined {
-    if (isInternalProvider(id) && !internalProvidersEnabled()) return undefined;
-    return this.providers.get(id);
+  public getSelectableProvider(id: PublishingProviderId | string): PublishingProvider | undefined {
+    const normalized = this.normalizeId(id);
+    if (isInternalProvider(normalized) && !internalProvidersEnabled()) return undefined;
+    return this.providers.get(normalized);
   }
 
   public register(provider: PublishingProvider): void {
     this.providers.set(provider.id, provider);
   }
 
-  public getProvider(id: PublishingProviderId): PublishingProvider | undefined {
-    return this.providers.get(id);
+  public getProvider(id: PublishingProviderId | string): PublishingProvider | undefined {
+    return this.providers.get(this.normalizeId(id));
   }
 
   public listProviders(includeInternal = false): PublishingProvider[] {
@@ -74,7 +79,7 @@ export class PublishingProviderRegistry {
 
   public getProviderForPlatform(
     platform: PublishingPlatform,
-    preferredProvider?: PublishingProviderId,
+    preferredProvider?: PublishingProviderId | string,
   ): PublishingProvider {
     if (preferredProvider) {
       const preferred = this.getSelectableProvider(preferredProvider);

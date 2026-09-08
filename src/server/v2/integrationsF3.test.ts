@@ -669,5 +669,6 @@ describe("Test provider isolation", () => {
     const registry = new PublishingProviderRegistry();
     expect(registry.getProviderForPlatform("youtube", "upload_post").id).toBe("upload_post");
     expect(registry.getProviderForPlatform("youtube", "youtube_direct").id).toBe("youtube_direct");
+    expect(registry.getProvider("upload-post")?.id).toBe("upload_post");
   });
 });
