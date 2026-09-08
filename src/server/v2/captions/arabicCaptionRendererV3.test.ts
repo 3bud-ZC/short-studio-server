@@ -121,3 +121,86 @@ describe("buildArabicAss - Arabic text integrity", () => {
     expect(built.content).toContain("Inter");
   });
 });
+
+describe("Arabic glyph-defect regression (Short Studio 2.5 closure pass)", () => {
+  // Isolated Arabic alef forms plus the joined forms they most commonly break
+  // in (lam-alef ligatures) - the exact set requested for the tofu/missing-
+  // glyph/broken-join regression fixture. Real render verification (libass +
+  // Cairo Bold, production Debian container) is a manual/CI step outside
+  // vitest's reach (no real libass rasterizer here); this test is the part
+  // that IS mechanically checkable - the renderer must carry every one of
+  // these codepoints through to the ASS output byte-for-byte, never
+  // dropping, substituting, or reordering them.
+  const ALEF_FORMS = ["ا", "أ", "إ", "آ", "لأ", "لا", "لإ", "لآ"];
+
+  // The exact real narration line that showed a tofu box mid-word ("مشروع"
+  // rendered as "مشر" + a missing-glyph box) in the real end-to-end Arabic
+  // production. Verified separately (see this pass's status-doc entry) to
+  // isolate to degenerate captionTimingSource: "deterministic_fallback" word
+  // windows (startMs > endMs) from ShortCreator's fallback distributing
+  // words across a stale pre-correction target instead of the real measured
+  // audio duration - not this ASS-generation layer, which was confirmed
+  // clean in isolation for the same text under all three highlight modes
+  // (none, karaoke_fill, karaoke_current_word).
+  const PREVIOUSLY_FAILING_PHRASE =
+    "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس. عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية.";
+
+  function wordsWithEvenTiming(text: string, totalMs: number): CaptionWord[] {
+    const tokens = text.split(/\s+/).filter(Boolean);
+    const perWord = totalMs / tokens.length;
+    return tokens.map((t, i) => ({
+      text: t,
+      startMs: Math.round(i * perWord),
+      endMs: Math.round((i + 1) * perWord),
+    }));
+  }
+
+  it("carries every alef form and lam-alef ligature through to the ASS text unmodified", () => {
+    const phraseText = ALEF_FORMS.join(" ");
+    const words = wordsWithEvenTiming(phraseText, 4000);
+    for (const style of [resolveCaptionStyle("social_ad"), resolveCaptionStyle("karaoke")]) {
+      const built = buildArabicAss(words, { style, frame: FRAME });
+      for (const form of ALEF_FORMS) {
+        expect(built.content).toContain(form);
+      }
+    }
+  });
+
+  it("renders the previously-failing narration complete, with no dropped or truncated words, under social_ad", () => {
+    const words = wordsWithEvenTiming(PREVIOUSLY_FAILING_PHRASE, 9000);
+    const built = buildArabicAss(words, { style: resolveCaptionStyle("social_ad"), frame: FRAME });
+    for (const token of PREVIOUSLY_FAILING_PHRASE.split(/\s+/).filter(Boolean)) {
+      // Every real word - including "مشروع", the one that showed a tofu box
+      // mid-word in the real render - must appear whole, never split.
+      expect(built.content).toContain(token.replace(/[.,،]$/, ""));
+    }
+    expect(built.content).not.toMatch(/[�□]/);
+  });
+
+  it("never drops a word's text when fed degenerate (startMs >= endMs) timing windows", () => {
+    // Reproduces the exact shape of the old deterministic-fallback bug: word
+    // windows computed against a stale, too-small total so later words'
+    // clamped endMs falls at or before their own startMs. The ASS builder
+    // must stay defensive here regardless of the ShortCreator-level fix -
+    // every word's text must still reach the output.
+    const tokens = PREVIOUSLY_FAILING_PHRASE.split(/\s+/).filter(Boolean);
+    const staleTotalMs = 2800;
+    const wordMs = 250; // the old forced minimum
+    const words: CaptionWord[] = tokens.map((t, i) => {
+      const startMs = i * wordMs;
+      const endMs = Math.min(staleTotalMs, startMs + wordMs);
+      return { text: t, startMs, endMs };
+    });
+    const style = resolveCaptionStyle("social_ad");
+    const phrases = chunkIntoPhrases(words);
+    for (const phrase of phrases) {
+      const phraseTokens = phrase.text.split(/\s+/).filter(Boolean);
+      const { lines } = fitFontSize(phraseTokens, style, FRAME);
+      const segments = buildCurrentWordSegments(phrase, style, lines);
+      const coveredText = segments.map((s) => s.body).join(" ");
+      for (const token of phrase.words.map((w) => w.text)) {
+        expect(coveredText).toContain(token.replace(/[.,،]$/, ""));
+      }
+    }
+  });
+});

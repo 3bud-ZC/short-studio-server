@@ -18,6 +18,7 @@ import {
   WHISPER_SCRIPT_SIMILARITY_THRESHOLD,
 } from "./libraries/whisperAlignment";
 import { validateScriptQuality, validateSentenceCompleteness } from "../server/v2/content-ai/scriptQuality";
+import { decideCorrectionAction } from "../server/v2/content-ai/scriptDurationController";
 import { renderArabicCaptions } from "../server/v2/captions/arabicCaptionRendererV3";
 import { runCaptionQa } from "../server/v2/captions/captionQa";
 import { resolveCaptionStyle } from "../server/v2/captions/captionStyles";
@@ -1033,31 +1034,49 @@ export class ShortCreator {
           }
         }
 
-        // Bounded post-TTS duration correction (ABUD_SHORTS_ENGINE_STATUS.md
-        // section 7). The speed-stretch above is deliberately capped at 0.82x
-        // to avoid unnatural-sounding audio, so it cannot close a large gap
-        // on its own (the real English/Arabic proofs measured ~1.4-2.8s of
-        // actual speech against 5-6s scene budgets - stretching that to fit
-        // would mean speaking at roughly a third of normal pace). When this
-        // scene came from a duration-aware content generator that offered
-        // real, grounded expansion sentences (narrationExpansionUnits - see
-        // scriptDurationController.ts), and the scene is still short even
-        // after the speed-stretch, append the next sentence and re-synthesize
-        // THIS SCENE'S VOICE ONLY - never by padding audio or inventing
-        // silence, and never more than 2 such attempts (never an unbounded
-        // loop). Other scenes' voice/media/Whisper artifacts are untouched.
-        const expansionCandidates = Array.isArray((originalSceneSpec as any).narrationExpansionUnits)
+        // Bounded, SYMMETRIC post-TTS duration correction (ABUD_SHORTS_ENGINE_
+        // STATUS.md sections 7 and the Short Studio 2.5 Arabic duration-defect
+        // closure pass). The speed-stretch above is deliberately capped at
+        // 0.82x to avoid unnatural-sounding audio, so it cannot close a large
+        // gap on its own. When this scene came from a duration-aware content
+        // generator that offered real, grounded expansion sentences
+        // (narrationExpansionUnits), decideCorrectionAction (already written
+        // and tested in scriptDurationController.ts, but never called from
+        // here until this pass - the actual root cause of the 18s Arabic
+        // overshoot) drives a bounded expand/condense loop off the REAL
+        // measured audio duration each round: too_short -> append the next
+        // unit and re-synthesize; too_long -> DROP the last-added unit and
+        // re-synthesize (walk back the exact over-correction that previously
+        // had no way to reverse); accept or give_up otherwise. Never by
+        // padding/truncating audio, inventing silence, or cutting a sentence
+        // mid-thought - only by choosing how many of the already-written,
+        // real narration units to speak. Bounded to `maxRetries` correction
+        // attempts total (never an unbounded loop). Other scenes' voice/
+        // media/Whisper artifacts are untouched.
+        const expansionUnits: string[] = Array.isArray((originalSceneSpec as any).narrationExpansionUnits)
           ? [...((originalSceneSpec as any).narrationExpansionUnits as string[])]
           : [];
+        const durationUnits = [requestedSpokenNarration, ...expansionUnits];
+        let unitsUsed = 1;
+        let correctionRetries = 0;
         let expandedSpokenNarration = requestedSpokenNarration;
-        let expansionRetries = 0;
-        while (
-          expansionCandidates.length > 0 &&
-          expansionRetries < 2 &&
-          actualVoiceDuration < targetSceneDuration * 0.85
-        ) {
-          const nextUnit = expansionCandidates.shift()!;
-          expandedSpokenNarration = `${expandedSpokenNarration} ${nextUnit}`.trim();
+        let gaveUpReason: string | undefined;
+        for (;;) {
+          const decision = decideCorrectionAction({
+            actualSeconds: actualVoiceDuration,
+            targetSeconds: targetSceneDuration,
+            unitsUsed,
+            unitsAvailable: durationUnits.length,
+            retriesSoFar: correctionRetries,
+            maxRetries: 2,
+          });
+          if (decision.action === "accept") break;
+          if (decision.action === "give_up") {
+            gaveUpReason = decision.reason;
+            break;
+          }
+          unitsUsed = decision.action === "expand" ? unitsUsed + 1 : unitsUsed - 1;
+          expandedSpokenNarration = durationUnits.slice(0, unitsUsed).join(" ").trim();
           voiceAudio = await this.voiceRegistry.synthesize({
             text: expandedSpokenNarration,
             language: spec.language,
@@ -1074,16 +1093,16 @@ export class ShortCreator {
             brandPronunciations: brandVoiceProfile?.pronunciationDictionary,
             pronunciationOverrides: jobPronunciationOverrides,
           });
-          const expansionProvider = voiceAudio.provider || voiceAudio.decision.providerId;
-          if (expansionProvider in artifactReuse.providerInvocations) {
-            artifactReuse.providerInvocations[expansionProvider as keyof typeof artifactReuse.providerInvocations]++;
+          const correctionProvider = voiceAudio.provider || voiceAudio.decision.providerId;
+          if (correctionProvider in artifactReuse.providerInvocations) {
+            artifactReuse.providerInvocations[correctionProvider as keyof typeof artifactReuse.providerInvocations]++;
           }
-          let expandedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, 1);
-          let expandedDuration = expandedNormalized.duration || voiceAudio.audioLength || actualVoiceDuration;
-          if (expandedDuration > targetSceneDuration * 1.08) {
-            speedFactor = Math.min(1.08, expandedDuration / targetSceneDuration);
-            expandedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, speedFactor);
-            expandedDuration = expandedNormalized.duration || expandedDuration;
+          let correctedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, 1);
+          let correctedDuration = correctedNormalized.duration || voiceAudio.audioLength || actualVoiceDuration;
+          if (correctedDuration > targetSceneDuration * 1.08) {
+            speedFactor = Math.min(1.08, correctedDuration / targetSceneDuration);
+            correctedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, speedFactor);
+            correctedDuration = correctedNormalized.duration || correctedDuration;
           } else {
             speedFactor = 1.0;
           }
@@ -1091,22 +1110,31 @@ export class ShortCreator {
           await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
           actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
           captionAudioPath = tempMasteredWavPath;
-          expansionRetries++;
+          correctionRetries++;
           logger.info(
             {
               sceneIndex: index,
-              expansionRetries,
+              action: decision.action,
+              correctionRetries,
               actualVoiceDuration,
               targetSceneDuration,
+              unitsUsed,
+              unitsAvailable: durationUnits.length,
               expandedSpokenNarration,
               expandedSpokenNarrationChars: expandedSpokenNarration.length,
-              preSpeedAdjustDuration: expandedNormalized.duration || voiceAudio.audioLength,
+              preSpeedAdjustDuration: correctedNormalized.duration || voiceAudio.audioLength,
               speedFactor,
             },
-            "Bounded duration correction: expanded scene narration and re-synthesized",
+            "Bounded duration correction: adjusted scene narration and re-synthesized",
           );
         }
-        if (expansionRetries > 0) {
+        if (gaveUpReason) {
+          logger.warn(
+            { sceneIndex: index, targetSceneDuration, actualVoiceDuration, gaveUpReason },
+            "Bounded duration correction gave up; scene duration may fall outside the accepted range",
+          );
+        }
+        if (correctionRetries > 0) {
           // Keep captions and the displayed/canonical narration in sync with
           // what was actually spoken - otherwise captions would silently
           // truncate before the audio finishes, reintroducing a caption/audio
@@ -1380,16 +1408,28 @@ export class ShortCreator {
       //    distributed across the scene. Used whenever no timing source
       //    above is trustworthy - the canonical text is always what gets
       //    shown, never invented and never a mistranscription.
+      //
+      //    Distributed across the REAL measured audio duration
+      //    (actualVoiceDuration), never the pre-correction planned
+      //    targetSceneDuration: a scene whose narration was expanded/
+      //    condensed above can end with real audio well outside its
+      //    original target, and distributing word timing against the
+      //    stale target then clamping each endMs to that same stale total
+      //    produced inverted windows (startMs > endMs) for every word past
+      //    the point where wIdx*wordMs first exceeds it - degenerate
+      //    caption timing that fed corrupted phrase/highlight boundaries
+      //    into the ASS builder (the real root cause isolated for the
+      //    Short Studio 2.5 Arabic glyph-defect closure pass).
       if (!rawCaptions || rawCaptions.length === 0) {
         timingSource = "deterministic_fallback";
         const captionText = String((originalSceneSpec as any).captionText || sceneTimeline.narration || "");
         const words = captionText.trim().split(/\s+/).filter(Boolean);
         if (words.length > 0) {
-          const totalMs = Math.round(targetSceneDuration * 1000);
-          const wordMs = Math.max(250, Math.floor(totalMs / words.length));
+          const totalMs = Math.round((actualVoiceDuration > 0 ? actualVoiceDuration : targetSceneDuration) * 1000);
+          const wordMs = Math.max(1, Math.floor(totalMs / words.length));
           rawCaptions = words.map((w, wIdx) => {
             const startMs = wIdx * wordMs;
-            const endMs = Math.min(totalMs, startMs + wordMs);
+            const endMs = wIdx === words.length - 1 ? totalMs : startMs + wordMs;
             return {
               text: (wIdx > 0 ? " " : "") + w,
               startMs,
@@ -2570,6 +2610,45 @@ export class ShortCreator {
         { videoId, requestedContentSeconds, plannedContentSeconds, spokenSeconds: totalDurationSeconds },
         "Planned scene duration diverges from the requested content budget",
       );
+    }
+
+    // Total-duration authority (Short Studio 2.5 Arabic duration-defect
+    // closure pass). Per-scene correction above already accepts/condenses
+    // each scene individually within its own tolerance, but per-scene
+    // tolerances can still compound into a total that misses the product's
+    // actual accepted window - exactly how the 18.15s-against-11s Arabic
+    // overshoot slipped through with every individual scene "accepted".
+    // Predict the final MP4 duration BEFORE spending time on render (real
+    // total narration already measured above, plus the bounded natural
+    // breath pause between scenes and the timeline's own bounded outro) and
+    // fail clearly instead of rendering a video already known to be
+    // invalid - never silently accept an overshoot/undershoot this large.
+    const boundedGapSeconds = Math.max(0, scenes.length - 1) * 0.16;
+    const predictedFinalSeconds = Math.round(
+      (totalDurationSeconds + boundedGapSeconds + (timeline.outroDurationSeconds || 0)) * 100,
+    ) / 100;
+    const durationToleranceSeconds = 1;
+    if (timeline.requestedDurationSeconds > 0) {
+      const lowerBound = timeline.requestedDurationSeconds - durationToleranceSeconds;
+      const upperBound = timeline.requestedDurationSeconds + durationToleranceSeconds;
+      if (predictedFinalSeconds < lowerBound || predictedFinalSeconds > upperBound) {
+        logger.error(
+          {
+            videoId,
+            requestedDurationSeconds: timeline.requestedDurationSeconds,
+            predictedFinalSeconds,
+            totalDurationSeconds,
+            boundedGapSeconds,
+            outroDurationSeconds: timeline.outroDurationSeconds || 0,
+            lowerBound,
+            upperBound,
+          },
+          "DURATION_TARGET_NOT_MET: predicted final duration falls outside the accepted range after bounded per-scene correction",
+        );
+        throw new Error(
+          `DURATION_TARGET_NOT_MET: predicted final duration ${predictedFinalSeconds}s falls outside the accepted [${lowerBound}, ${upperBound}]s range for a ${timeline.requestedDurationSeconds}s request.`,
+        );
+      }
     }
 
 
