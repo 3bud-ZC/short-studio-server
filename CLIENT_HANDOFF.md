@@ -16,7 +16,7 @@ its existing database, videos, Provider Vault, backups, and n8n data.
 Windows: extract the package, then run the Short Studio installer in the
 install folder and follow the Setup Wizard.
 
-Linux/VPS:
+Linux/VPS (host scripts provided; native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows):
 
 ```bash
 sudo ./install.sh --url https://shorts.yourdomain.com

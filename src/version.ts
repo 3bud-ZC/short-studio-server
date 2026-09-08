@@ -11,7 +11,7 @@ export const PRODUCT_SLUG = "short-studio";
 export const PREVIOUS_PRODUCT_NAME = "ABUD Shorts Engine";
 export const PREVIOUS_PRODUCT_VERSION = "2.4.0";
 export const PRODUCT_VERSION = "2.5.0";
-export const PRODUCT_STAGE = "General Availability Candidate";
+export const PRODUCT_STAGE = "General Availability";
 export const PRODUCT_BUILD = "2026.09.05.3";
 /**
  * The highest migration in `MIGRATIONS`. `verifySchemaVersion()` in the

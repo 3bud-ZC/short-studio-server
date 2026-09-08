@@ -49,7 +49,7 @@ Short Studio transforms text ideas and brand assets into high-engagement vertica
 
 | Requirement | Specification |
 | --- | --- |
-| **Operating System** | Windows 10/11 (with WSL2 & Docker Desktop), macOS 12+, or Linux (Ubuntu 20.04+, Debian 11+, RHEL 9+) |
+| **Operating System** | Windows 10/11 with Docker Desktop (the qualified target for 2.5). macOS 12+ and Linux (Ubuntu 20.04+, Debian 11+, RHEL 9+) host scripts are provided, but native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows. |
 | **Container Engine** | Docker Engine 24.0+ and Docker Compose v2.20+ |
 | **CPU** | 2 vCPUs minimum (4+ vCPUs recommended for faster rendering) |
 | **RAM** | 4 GB minimum (8 GB recommended) |

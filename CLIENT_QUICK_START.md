@@ -22,7 +22,7 @@ type a Docker command or touch source code.
 
 ### Linux or a server
 
-See `docs/SERVER_INSTALL.md`. In short:
+The Linux host scripts are provided and supported, but native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows. See `docs/SERVER_INSTALL.md`. In short:
 
 ```bash
 sudo ./install.sh --url https://shorts.yourdomain.com --behind-proxy

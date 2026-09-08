@@ -2,30 +2,34 @@ Short Studio 2.5.0
 ==================
 (formerly ABUD Shorts Engine)
 
-Windows
--------
+Windows  -  the qualified setup for this release
+------------------------------------------------
 1. Install and start Docker Desktop.
-2. Double-click INSTALL-ABUD-SHORTS.bat
+2. Double-click INSTALL-SHORT-STUDIO.bat
 3. Wait for the browser to open.
 4. Complete the Setup Wizard.
 5. Done.
 
 Day to day, on Windows:
-  START-ABUD-SHORTS.bat        Start the system
-  STOP-ABUD-SHORTS.bat         Stop the system (your data is never touched)
-  UPDATE-ABUD-SHORTS.bat       Install the latest version, safely
-  BACKUP-ABUD-SHORTS.bat       Create a backup now
-  DIAGNOSTICS-ABUD-SHORTS.bat  Write a support bundle
+  START-SHORT-STUDIO.bat        Start the system
+  STOP-SHORT-STUDIO.bat         Stop the system (your data is never touched)
+  UPDATE-SHORT-STUDIO.bat       Install the latest version, safely
+  BACKUP-SHORT-STUDIO.bat       Create a backup now
+  DIAGNOSTICS-SHORT-STUDIO.bat  Write a support bundle
 
 Updates:
-  Double-click UPDATE-ABUD-SHORTS.bat
+  Double-click UPDATE-SHORT-STUDIO.bat
 
 Linux / VPS
 -----------
   sudo ./install.sh
 
 Updates:
-  sudo abud-shorts update
+  sudo short-studio update
+
+  Note: the Linux host scripts are provided and supported, but native Linux
+  host qualification is not part of the Short Studio 2.5 release
+  qualification, which was carried out on Windows.
 
 More detail: CLIENT_QUICK_START.md
 Day-to-day operations, backup/update/rollback, troubleshooting: CLIENT_OPERATIONS.md

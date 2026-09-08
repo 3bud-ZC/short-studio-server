@@ -3,20 +3,119 @@
 **Product:** Short Studio
 **Technical Product:** Short Studio Server
 **Release Version:** `2.5.0`
-**Release Channel:** stable (candidate)
-**Stage:** General Availability Candidate
-**Database Schema:** `2.13.0` (unchanged from v2.4.0 - branding release, no schema migration required)
+**Release Channel:** stable
+**Stage:** General Availability
+**Database Schema:** `2.13.0` (unchanged from v2.4.0 - no migration required)
 **Previous Product:** ABUD Shorts Engine `2.4.0`
 
 Short Studio is the renamed, commercially productized continuation of ABUD
-Shorts Engine. This release carries no functional change to video production,
-captions, or providers beyond the 2.4.0 baseline documented below - it
-establishes the Short Studio product identity, CLI, container/volume naming,
-and installer/updater flow, with an explicit compatibility path so an
-installation upgraded from ABUD Shorts Engine 2.4.0 keeps its existing
-database, videos, Provider Vault, backups, and n8n data without
-re-provisioning. `abud-shorts` remains available as a legacy CLI alias for
-upgraded installations.
+Shorts Engine. An installation upgraded from ABUD Shorts Engine 2.4.0 keeps its
+existing database, videos, Provider Vault, backups and n8n data without
+re-provisioning; `abud-shorts` remains available as a legacy CLI alias.
+
+---
+
+## What's New in 2.5.0
+
+### Short Studio
+
+The product is now Short Studio, with `short-studio` as the operator command,
+Short Studio installer shortcuts, and consistent naming across the dashboard,
+backups, packages and diagnostics. The schema is unchanged, so upgrading is a
+version change, not a migration.
+
+### A workstation you just open
+
+Short Studio runs in `LOCAL_SINGLE_USER` mode on your own machine. The
+dashboard opens directly with no sign-in step and no login barrier, and the
+application binds strictly to `127.0.0.1` so nothing is exposed to your
+network. A server deployment behind a real domain remains available and keeps
+its own authenticated mode.
+
+### Video engine
+
+Production renders through the FFmpeg/hybrid engine, which is the supported
+route for this release. Captions are rasterized with libass, which is what
+makes Arabic shaping, joining and right-to-left layout correct in the final
+frames rather than only in the preview.
+
+### Arabic and English voice
+
+Arabic uses the local VoiceTut route for high-quality Egyptian Arabic on your
+own GPU, with a lighter local CPU route available on smaller machines. English
+uses the local Kokoro route. Both run locally: no per-word cloud voice bill,
+and no audio leaves the machine. ElevenLabs stays available as an optional
+premium route you can select explicitly.
+
+### Captions
+
+Arabic and English captions are generated, timed and burned in with the Bold
+Social style. This release corrects Arabic scene planning and duration handling
+so the spoken audio, the scene timing and the caption timing agree.
+
+### Publishing
+
+Publishing goes to Upload-Post, which reaches YouTube, TikTok, Instagram,
+Facebook, LinkedIn, X and Threads from one connected account. Pre-flight checks
+your video against the destination's real limits before a byte is uploaded, and
+each publication keeps a full attempt and event history.
+
+### Publishing persistence (new in this release)
+
+A successful publish is now recorded truthfully and automatically. Short Studio
+persists the provider post id, the public URL, the remote state and the publish
+time from the provider's own response, and a publication the platform is still
+processing is settled automatically once the platform finishes. Replaying the
+same provider result changes nothing, and the same idempotency key never
+creates a second publication. No manual database work is required to complete
+a publication.
+
+### Encrypted Provider Vault
+
+API keys are entered in the browser and stored AES-256-GCM encrypted. A stored
+credential always takes precedence over an installation environment value, and
+the dashboard tells you which source is actually in use. Secrets are never
+returned through the API, never logged, and never included in a client package,
+backup or diagnostics bundle.
+
+### Media, production and library
+
+Stock footage through Pexels and Pixabay, an AI production planner, a job queue
+with live progress, and a library where every finished video, its metadata and
+its publication history stay together.
+
+### Operations
+
+`short-studio status`, `doctor`, `backup`, `update` and `restart` cover the
+day-to-day lifecycle. Backups are verified and checksummed, updates are staged
+and reversible, and `doctor` produces a PASS/WARN/FAIL report that is safe to
+share because it never prints secrets.
+
+---
+
+## Supported platforms for 2.5
+
+| Platform | Status |
+| --- | --- |
+| Windows 11 with Docker Desktop, `LOCAL_SINGLE_USER` | **Qualified for this release.** |
+| Linux host / VPS | Host scripts are provided and supported, but native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows. |
+
+---
+
+## Upgrading from ABUD Shorts Engine 2.4.0
+
+The database schema is unchanged at `2.13.0`, so there is no migration to run.
+Use the normal updater. Your videos, database, Provider Vault, backups and n8n
+data are preserved, and the `abud-shorts` command keeps working.
+
+---
+
+## Known limitations
+
+- Revideo remains experimental and is deferred beyond 2.5. Production rendering
+  uses the FFmpeg/hybrid engine.
+- Native Linux host qualification is deferred, as described above.
+- The image is published for `linux/amd64` only.
 
 ---
 
