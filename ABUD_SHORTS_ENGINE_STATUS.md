@@ -84,7 +84,9 @@ docs/SERVER_INSTALL were corrected to say plainly that native Linux host
 qualification is not part of this release's qualification. No customer-facing
 document now claims native Linux was GA-qualified.
 
-Test Video Title Cleanup: NOT PERFORMED — no supported mechanism was available.
+Test Video Title Cleanup: NOT PERFORMED — manual YouTube Studio edit remains
+optional housekeeping. It is not a Short Studio product defect and not a GA
+blocker. No supported mechanism was available to this pass.
 The owner authorized correcting the title of the existing YouTube test video
 (`Fy7MMJmHxhk`) to
 `أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة`. Neither authorized path was
@@ -178,8 +180,8 @@ Permanent Install Root: %ProgramData%\ShortStudio
 Canonical Docker Project: short-studio
 Auth Architecture: PRESERVED for future secure_server mode
 
-Client Delivery: IN PROGRESS. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
-CLOSURE" near the end of this file for the live gate ledger.
+Client Delivery: RELEASED. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
+CLOSURE" and the GA record above for the completed gate ledger.
 
 Dev Folder: cleaned 2026-09-07 - the outer `Abud Shorts Engine\` directory
 now contains only `source\`. Removed: a stale linked git worktree
