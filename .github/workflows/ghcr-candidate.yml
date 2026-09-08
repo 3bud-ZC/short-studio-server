@@ -135,9 +135,9 @@ jobs:
 
       - name: Set up pnpm
         if: inputs.mode == 'candidate'
+        # No version pin here: package.json packageManager (pnpm@11.7.0) is the
+        # single source of truth, and pinning both makes the action refuse to run.
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Install dependencies
         if: inputs.mode == 'candidate'

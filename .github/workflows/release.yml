@@ -93,9 +93,9 @@ jobs:
           node-version: "22"
 
       - name: Set up pnpm
+        # No version pin here: package.json packageManager (pnpm@11.7.0) is the
+        # single source of truth, and pinning both makes the action refuse to run.
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
