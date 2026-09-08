@@ -104,4 +104,31 @@ describe("V2.4 Pass 4: real ffmpeg silence detection over an actual mixed track"
     expect(passResult.pass).toBe(true);
     expect(passResult.longestSilenceRunMs).toBe(0);
   }, 30000);
+
+  it("applies the tighter mid-video threshold (900ms) and the slightly more permissive outro threshold (1000ms) separately", async () => {
+    const ffmpeg = await FFMpeg.init();
+    const audioMastering = new AudioMasteringService(ffmpeg);
+
+    // A 950ms mid-video gap is well past the 900ms mid-video limit but under
+    // the old flat 1500ms/3000ms thresholds - this must now fail closed.
+    const midVideoPath = path.join(tmpDir, "mid-video-950ms.wav");
+    await synthesize(midVideoPath, [
+      { toneHz: 440, durationSeconds: 1 },
+      { durationSeconds: 0.95 },
+      { toneHz: 440, durationSeconds: 1 },
+    ]);
+    const midVideoResult = await audioMastering.analyzeMixedSilence(midVideoPath, { minDurationSeconds: 0.1 });
+    expect(midVideoResult.criticalFailure).toBe(true);
+    expect(midVideoResult.issues.some((i) => i.includes("Mid-video"))).toBe(true);
+
+    // The same ~950ms gap landing at the very end of the track is the outro,
+    // not mid-video dead air - it stays under the 1000ms outro limit.
+    const outroPath = path.join(tmpDir, "outro-950ms.wav");
+    await synthesize(outroPath, [
+      { toneHz: 440, durationSeconds: 1 },
+      { durationSeconds: 0.95 },
+    ]);
+    const outroResult = await audioMastering.analyzeMixedSilence(outroPath, { minDurationSeconds: 0.1 });
+    expect(outroResult.criticalFailure).toBe(false);
+  }, 30000);
 });

@@ -1,0 +1,34 @@
+{
+  // Canonical type-check configuration for src/video-core/revideo-project.
+  //
+  // Excluded from tsconfig.build.json (like src/ui) because it is bundled by
+  // Vite at render/preview time rather than emitted by tsc, and it needs a
+  // different JSX pragma: Revideo's own @revideo/2d node tree, not React -
+  // checking it under the main react-jsx config would misreport every
+  // <Video>/<Rect>/<Audio> element as an invalid React component.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@revideo/2d",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    // @revideo/2d@0.11.0 ships no package.json "exports" map, so plain
+    // subpath resolution of the jsxImportSource runtime (`@revideo/2d/jsx-runtime`)
+    // looks at the package root and misses the real file under lib/. Vite's
+    // own esbuild-based resolution handles this transparently; tsc does not,
+    // so this path mapping is only needed for the standalone typecheck.
+    "baseUrl": ".",
+    "paths": {
+      "@revideo/2d/jsx-runtime": ["node_modules/@revideo/2d/lib/jsx-runtime.d.ts"],
+      "@revideo/2d/jsx-dev-runtime": ["node_modules/@revideo/2d/lib/jsx-dev-runtime.d.ts"]
+    }
+  },
+  "include": ["src/video-core/revideo-project/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

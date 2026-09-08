@@ -294,7 +294,7 @@ describe("dashboard alerts", () => {
     expect(many[0].titleVars).toEqual({ count: 2 });
   });
 
-  it("raises the missing ElevenLabs key as information, not as a fault", () => {
+  it("raises a missing Arabic voice setup as information, not as a fault", () => {
     const alerts = buildDashboardAlerts({
       jobs: [],
       health: {
@@ -304,8 +304,9 @@ describe("dashboard alerts", () => {
             section: "providers",
             status: "healthy",
             optional: false,
+            messageKey: "health.msg.voiceEnglishOnly",
             message:
-              "Local English narration is available. Arabic narration requires ElevenLabs, which is not configured.",
+              "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone) - or an optional ElevenLabs connection.",
           },
         ],
       },
@@ -317,6 +318,26 @@ describe("dashboard alerts", () => {
       severity: "info",
       href: "/integrations",
     });
+  });
+
+  it("does not raise the Arabic voice alert once Local Voice alone is ready", () => {
+    const alerts = buildDashboardAlerts({
+      jobs: [],
+      health: {
+        items: [
+          {
+            id: "voice",
+            section: "providers",
+            status: "healthy",
+            optional: false,
+            messageKey: "health.msg.voiceReady",
+            message: "Local English and Local Voice Arabic narration are ready.",
+          },
+        ],
+      },
+      publishing: null,
+    });
+    expect(alerts.find((alert) => alert.id === "elevenlabs-missing")).toBeUndefined();
   });
 
   it("sorts critical before warning before information", () => {

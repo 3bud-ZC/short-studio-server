@@ -1,5 +1,20 @@
 allowBuilds:
+  "@ffmpeg-installer/linux-x64": true
+  # Same trust level as the ffmpeg-installer entry above - just chmod's the
+  # downloaded static binary executable. Only surfaces building for Linux
+  # (Docker); a Windows dev machine resolves @ffprobe-installer/win32-x64
+  # instead, which is why this wasn't already approved before @revideo/ffmpeg
+  # (a new dependency of this Revideo evaluation) pulled it in.
+  "@ffprobe-installer/linux-x64": true
+  # Postinstall only writes a local anonymous install UUID to ~/.revideo/id.txt
+  # (no network call at install time). Actual telemetry is disabled at render
+  # time via DISABLE_TELEMETRY=true - see src/video-core/renderers/revideoRenderer.ts.
+  '@revideo/telemetry': true
   esbuild: true
   onnxruntime-node: true
   protobufjs: true
+  # Downloads Chromium for headless rendering - required for @revideo/renderer.
+  puppeteer: true
   sharp: true
+patchedDependencies:
+  '@revideo/renderer@0.11.0': patches/@revideo__renderer@0.11.0.patch

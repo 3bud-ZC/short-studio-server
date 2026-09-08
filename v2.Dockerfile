@@ -28,11 +28,26 @@ RUN corepack enable
 
 FROM base AS deps
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
-COPY package.json pnpm-lock.yaml* /app/
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store bash -lc "set -euxo pipefail; pnpm config set fetch-timeout 600000; pnpm install --frozen-lockfile || true; pnpm approve-builds --all"
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* /app/
+# patches/ must be present before `pnpm install` runs: pnpm-workspace.yaml's
+# `patchedDependencies` (the tracked @revideo/renderer --single-process fix)
+# points at a file under here - without this COPY (and without
+# pnpm-workspace.yaml itself, both missing until now), `pnpm install
+# --frozen-lockfile` fails outright with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH
+# instead of silently losing the patch, because the lockfile records a patch
+# hash pnpm has no local declaration for. The previous `|| true` masked that
+# fatal error and let the build limp forward with no node_modules at all,
+# surfacing only as a confusing "not found" on the later COPY step.
+COPY patches* /app/patches/
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store bash -lc "set -euxo pipefail; pnpm config set fetch-timeout 600000; pnpm install --frozen-lockfile; pnpm approve-builds --all"
 
 FROM deps AS build
-COPY tsconfig.json tsconfig.build.json tsconfig.ui.json vite.config.ts remotion.config.ts /app/
+# tsconfig.revideo-project.json is required by `npm run typecheck` (part of
+# `pnpm build`) even here, where the Revideo runtime itself is never shipped
+# (this image has no Chromium/Puppeteer) - the typecheck step still needs the
+# config file present to type the checked-in src/video-core/revideo-project
+# source, matching main.Dockerfile's own build stage.
+COPY tsconfig.json tsconfig.build.json tsconfig.ui.json tsconfig.revideo-project.json vite.config.ts remotion.config.ts /app/
 COPY static /app/static
 COPY assets /app/assets
 COPY scripts /app/scripts

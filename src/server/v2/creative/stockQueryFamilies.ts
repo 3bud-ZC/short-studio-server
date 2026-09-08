@@ -225,6 +225,24 @@ const CONCEPTS: Concept[] = [
     industry: "finance",
   },
   {
+    id: "data_backup",
+    // Arabic alternatives are written without an assumed "ال" (definite
+    // article) prefix on the second word - "النسخ الاحتياطي" ("the backup")
+    // and "نسخة احتياطية" ("a backup copy") are both extremely common real
+    // phrasings and neither literal spelling is a substring of the other,
+    // so both must be listed explicitly. `back(?:s|ing|ed)?[\s-]?up`
+    // (not just literal "back up") is needed because natural narration says
+    // "backing up your files", not "back up your files" - a literal-only
+    // match on "back up" missed this proof's own real English scene 2.
+    match: /النسخ الاحتياطي|نسخة احتياطية|نسخ احتياطي|ملفات|فقدان البيانات|استرجاع|تخزين سحابي|back(?:s|ing|ed)?[\s-]?up|\bfiles\b|data loss|restore files|cloud storage|external drive|hard drive/i,
+    subject: ["laptop typing files close up", "external hard drive on desk"],
+    action: ["saving files to external drive", "syncing files to cloud storage"],
+    environment: ["home office desk laptop", "small business office desk"],
+    audience: ["small business owner using laptop", "freelancer working on laptop"],
+    support: ["memory cards and storage devices", "external drive close up"],
+    industry: "technology software",
+  },
+  {
     id: "team_service",
     match: /فريق|خدمة|دعم|شركة|عملاء|team|service|support|company|customer|agency/i,
     subject: ["support agent with headset", "team meeting around table"],
@@ -245,6 +263,32 @@ const GENERIC_FALLBACKS = [
   "office",
   "people",
 ];
+
+/**
+ * Bare mood/style/quality words that describe HOW a shot looks, never WHAT
+ * it is of - never acceptable as a standalone, ungrounded query on their
+ * own (section 11/15 of the Revideo real-content proof review: a bare
+ * "cinematic" query returned an unrelated behind-the-scenes filmmaking clip
+ * for a small-business file-backup scene). Combined into a longer,
+ * scene-grounded phrase (e.g. "laptop typing files cinematic") these words
+ * are fine as framing flavor - it is only the BARE, standalone form that is
+ * rejected here.
+ */
+const BANNED_STANDALONE_TERMS = new Set([
+  "cinematic",
+  "professional",
+  "quality",
+  "business",
+  "technology",
+  "modern",
+  "lifestyle",
+  "success",
+]);
+
+/** True when `query`, trimmed and lowercased, is EXACTLY a banned bare mood/style word with no other grounding. */
+export function isGenericStandaloneQuery(query: string): boolean {
+  return BANNED_STANDALONE_TERMS.has(query.trim().toLowerCase());
+}
 
 /**
  * Angle words added to a subject query so two families never return the same
@@ -372,8 +416,13 @@ export function buildStockQueryFamilies(input: QueryFamilyInput): QueryFamilyRes
 
   // Planner-supplied terms are kept: they may carry brief-specific vocabulary the
   // lexicon cannot know. They sit after the family queries rather than ahead of
-  // them, because a literal sentence is the weakest of the angles.
+  // them, because a literal sentence is the weakest of the angles. A bare
+  // mood/style word (see isGenericStandaloneQuery) is dropped rather than
+  // kept - it describes HOW a shot looks, never WHAT it is of, and an
+  // upstream bug (a since-fixed `enrichSearchTerms` default) once let one
+  // reach here as a "planner-supplied" term and return an unrelated clip.
   unique(input.providedTerms || []).forEach((term) => {
+    if (isGenericStandaloneQuery(term)) return;
     addQuery(term, concepts.length > 0 ? "support" : "subject", "term supplied by the planner");
   });
 

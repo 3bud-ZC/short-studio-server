@@ -1,4 +1,4 @@
-# ABUD Shorts Engine — Quick Start
+# Short Studio — Quick Start
 
 Everything below happens in an installer and a browser. You never edit a file,
 type a Docker command or touch source code.
@@ -13,8 +13,8 @@ type a Docker command or touch source code.
    [docker.com](https://www.docker.com/products/docker-desktop/) and start it.
    Wait for the whale icon in the system tray to stop animating.
 2. **Extract** the client package to a folder, for example
-   `C:\ABUD-Shorts-Engine`.
-3. **Double-click `INSTALL-ABUD-SHORTS.bat`.**
+   `C:\Short-Studio-Server`.
+3. **Double-click `INSTALL-SHORT-STUDIO.bat`.**
 4. Wait. The installer checks Docker, generates this machine's own secrets,
    creates the storage folders, downloads the application and starts it.
 5. When it finishes it prints your address, normally
@@ -22,7 +22,7 @@ type a Docker command or touch source code.
 
 ### Linux or a server
 
-See `docs/SERVER_INSTALL.md`. In short:
+The Linux host scripts are provided and supported, but native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows. See `docs/SERVER_INSTALL.md`. In short:
 
 ```bash
 sudo ./install.sh --url https://shorts.yourdomain.com --behind-proxy
@@ -104,8 +104,8 @@ To install an update:
 
 | Where you installed | What to do |
 | --- | --- |
-| Windows | Double-click `UPDATE-ABUD-SHORTS.bat`, or Start Menu → **ABUD Shorts → ABUD Shorts - Update** |
-| Linux / server | `sudo abud-shorts update` |
+| Windows | Double-click `UPDATE-SHORT-STUDIO.bat`, or Start Menu → **Short Studio → Short Studio - Update** |
+| Linux / server | `sudo short-studio update` |
 
 The updater takes a backup first, verifies the download before installing it,
 checks the system is healthy afterwards, and puts the previous version back
@@ -121,8 +121,8 @@ Full details, including rollback: `docs/UPDATING.md`.
 2. **Download Support Bundle** writes a diagnostic file with your version,
    database schema, service health and recent errors. It contains no passwords
    or API keys, so it is safe to send to support.
-3. **Restart**: Start Menu → **ABUD Shorts - Status** on Windows, or
-   `sudo abud-shorts restart` on Linux. Restarting never removes data.
+3. **Restart**: Start Menu → **Short Studio - Status** on Windows, or
+   `sudo short-studio restart` on Linux. Restarting never removes data.
 
 ---
 

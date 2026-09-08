@@ -1,13 +1,16 @@
-# ABUD Shorts Engine - Operations Guide
+# Short Studio - Operations Guide
 
 One place for everything after the first install: day-to-day operation,
 updates, backup/recovery, and troubleshooting. Everything here uses the
 supported product lifecycle - never Git, source edits, manual SQL, `docker cp`,
 or manual container commands.
 
-**Windows:** use the Start Menu shortcuts under **ABUD Shorts**, or run
-`scripts\host\abud-shorts.ps1 <command>` from an installed release directory.
-**Linux/VPS:** run `sudo abud-shorts <command>`.
+**Windows:** use the Start Menu shortcuts under **Short Studio**, or run
+`scripts\host\short-studio.ps1 <command>` from an installed release directory.
+This is the qualified route for 2.5.
+**Linux/VPS:** run `sudo short-studio <command>`. The Linux host scripts are
+provided and supported, but native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows.
+(`abud-shorts` remains as a compatibility alias for installations upgraded from 2.4.)
 
 ---
 

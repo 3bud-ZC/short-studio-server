@@ -204,7 +204,7 @@ const SystemPageContent: React.FC = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `abud_diagnostics_${Date.now()}.json`);
+      link.setAttribute("download", `short_studio_diagnostics_${Date.now()}.json`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -343,8 +343,10 @@ const SystemPageContent: React.FC = () => {
       )}
 
       {/* Arabic readiness is a product policy statement, not a fault: without
-          ElevenLabs, Arabic narration is blocked but English is unaffected, and
-          the banner says exactly that. */}
+          Local Voice (VoiceTut/KemeTone) or an explicit ElevenLabs connection,
+          Arabic narration is blocked but English is unaffected, and the banner
+          says exactly that. `ready` already reflects either route - see
+          /system/arabic-readiness - so this only shows when neither is set up. */}
       {arabicReadiness && !arabicReadiness.ready && (
         <Alert
           severity="info"

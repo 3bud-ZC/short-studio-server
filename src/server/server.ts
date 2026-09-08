@@ -168,13 +168,13 @@ export class Server {
   }
 
   public start(): http.Server {
-    const server = this.app.listen(this.config.port, () => {
+    const server = this.app.listen(this.config.port, this.config.bindHost, () => {
       logger.info(
-        { port: this.config.port, mcp: "/mcp", api: "/api" },
+        { host: this.config.bindHost, port: this.config.port, mcp: "/mcp", api: "/api" },
         "MCP and API server is running",
       );
       logger.info(
-        `UI server is running on http://localhost:${this.config.port}`,
+        `UI server is running on http://${this.config.bindHost}:${this.config.port}`,
       );
     });
 

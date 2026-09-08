@@ -24,8 +24,13 @@ const defaultDatabaseIdleTimeoutMs = 30_000;
 const defaultDatabaseConnectionTimeoutMs = 5_000;
 const defaultDatabaseStatementTimeoutMs = 60_000;
 const defaultRemotionRenderTimeoutMs = 420_000;
+const defaultBindHost = "127.0.0.1";
+
+export const REMOTE_ACCESS_REQUIRES_SECURE_SERVER_MODE =
+  "Remote access requires Secure Server Mode.";
 
 export type RuntimeEnvironment = "development" | "test" | "production";
+export type ShortStudioAccessMode = "local" | "secure_server";
 
 export type RuntimeConfigIssue = {
   severity: "warning" | "critical";
@@ -64,12 +69,16 @@ export class Config {
   public logLevel: pino.Level;
   public whisperVerbose: boolean;
   public port: number;
+  public bindHost: string;
+  public publicBindHost: string;
   public runningInDocker: boolean;
   public devMode: boolean;
   public whisperVersion: string = whisperVersion;
   public whisperModel: whisperModels = defaultWhisperModel;
   public kokoroModelPrecision: kokoroModelPrecision = "fp32";
   public serviceRole: "app" | "render-worker";
+  public accessMode: ShortStudioAccessMode;
+  public accessModeConfigValid: boolean;
   public databaseUrl?: string;
   public internalServiceToken: string;
   public providerVaultMasterKey: string;
@@ -108,6 +117,15 @@ export class Config {
    */
   public hardwareAcceleration: "disable" | "if-possible" = "disable";
 
+  /**
+   * Selects the video-core render engine. "legacy" (default) leaves every
+   * existing customer production on the current Remotion/ffmpeg-fast/libass
+   * pipeline unchanged. "revideo" routes through the new video-core adapter
+   * (src/video-core/) - only meant to be flipped once the Revideo evaluation
+   * spike has passed its acceptance gates. See ABUD_SHORTS_ENGINE_STATUS.md.
+   */
+  public videoRenderEngine: "legacy" | "revideo" = "legacy";
+
   constructor() {
     this.dataDirPath =
       process.env.DATA_DIR_PATH ||
@@ -136,9 +154,17 @@ export class Config {
     this.whisperVerbose = process.env.WHISPER_VERBOSE === "true";
     this.port = process.env.PORT ? parseInt(process.env.PORT) : defaultPort;
     this.runningInDocker = process.env.DOCKER === "true";
+    this.bindHost = process.env.BIND_HOST || process.env.HOST || (this.runningInDocker ? "0.0.0.0" : defaultBindHost);
+    this.publicBindHost =
+      process.env.SHORT_STUDIO_PUBLIC_BIND_HOST ||
+      process.env.PUBLIC_BIND_HOST ||
+      (this.runningInDocker ? defaultBindHost : this.bindHost);
     this.devMode = process.env.DEV === "true";
     this.serviceRole =
       process.env.SERVICE_ROLE === "render-worker" ? "render-worker" : "app";
+    const accessMode = parseAccessMode(process.env.SHORT_STUDIO_ACCESS_MODE);
+    this.accessMode = accessMode.value;
+    this.accessModeConfigValid = accessMode.valid;
     this.databaseUrl = process.env.DATABASE_URL;
     this.internalServiceToken = process.env.INTERNAL_SERVICE_TOKEN || "";
     this.providerVaultMasterKey = process.env.PROVIDER_VAULT_MASTER_KEY || "";
@@ -200,6 +226,7 @@ export class Config {
     );
     this.enableTestProviders = process.env.ENABLE_TEST_PROVIDERS === "true";
     this.hardwareAcceleration = process.env.ABUD_HARDWARE_ACCELERATION === "if-possible" ? "if-possible" : "disable";
+    this.videoRenderEngine = process.env.VIDEO_RENDER_ENGINE === "revideo" ? "revideo" : "legacy";
 
     if (process.env.WHISPER_MODEL) {
       this.whisperModel = process.env.WHISPER_MODEL as whisperModels;
@@ -286,6 +313,21 @@ export class Config {
     if (v2Enabled && this.serviceRole === "app" && !this.databaseUrl) {
       add("critical", "missing_database_url", "DATABASE_URL is required for the V2 app role.");
     }
+    if (!this.accessModeConfigValid) {
+      add("critical", "invalid_access_mode", "SHORT_STUDIO_ACCESS_MODE must be local or secure_server.");
+    }
+    if (
+      v2Enabled &&
+      this.serviceRole === "app" &&
+      this.accessMode === "local" &&
+      !isLocalAccessBoundary(this.publicBindHost, this.v2PublicUrl, process.env.TRUSTED_PROXY)
+    ) {
+      add(
+        "critical",
+        "remote_access_requires_secure_server",
+        REMOTE_ACCESS_REQUIRES_SECURE_SERVER_MODE,
+      );
+    }
     if (productionLike && this.enableTestProviders) {
       add("critical", "test_providers_enabled", "ENABLE_TEST_PROVIDERS must be false in production.");
     }
@@ -320,6 +362,48 @@ export const KOKORO_MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
 function normalizeEnvironment(value?: string): RuntimeEnvironment {
   if (value === "production" || value === "test") return value;
   return "development";
+}
+
+function parseAccessMode(value?: string): { value: ShortStudioAccessMode; valid: boolean } {
+  const normalized = (value || "local").trim().toLowerCase();
+  if (normalized === "local" || normalized === "local_single_user") {
+    return { value: "local", valid: true };
+  }
+  if (normalized === "secure_server" || normalized === "secure-server") {
+    return { value: "secure_server", valid: true };
+  }
+  return { value: "local", valid: false };
+}
+
+export function isLoopbackHost(value?: string): boolean {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\[/, "")
+    .replace(/\]$/, "");
+  if (!normalized) return false;
+  if (normalized === "localhost" || normalized === "::1") return true;
+  return /^127(?:\.\d{1,3}){3}$/.test(normalized);
+}
+
+function isTrustedProxyEnabled(value?: string): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return Boolean(normalized && !["0", "false", "off", "none"].includes(normalized));
+}
+
+export function isLocalAccessBoundary(
+  bindHost: string,
+  publicUrl: string,
+  trustedProxy?: string,
+): boolean {
+  if (!isLoopbackHost(bindHost) || isTrustedProxyEnabled(trustedProxy)) {
+    return false;
+  }
+  try {
+    return isLoopbackHost(new URL(publicUrl).hostname);
+  } catch {
+    return false;
+  }
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {

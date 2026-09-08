@@ -1,5 +1,5 @@
 # ==============================================================================
-# ABUD Shorts Engine V2 - Client Installer (Windows)
+# Short Studio Server - Client Installer (Windows)
 # ==============================================================================
 # Right-click install.ps1 -> Run with PowerShell, or:
 #
@@ -7,13 +7,19 @@
 #   .\install.ps1 -Port 3131
 #   .\install.ps1 -PublicUrl https://shorts.example.com
 #
-# What it produces:
+# What a fresh install produces:
 #
-#   %ProgramData%\AbudShorts\
+#   %ProgramData%\ShortStudio\
 #     current.txt                 the release directory in use
 #     releases\<version>\         this release, and every earlier one
 #     shared\                     EVERYTHING THE CUSTOMER OWNS
 #       data\ config\ backups\ logs\ state\ installation.json
+#
+# Re-running this installer over a machine that already has an ABUD Shorts
+# Engine 2.4 installation (%ProgramData%\AbudShorts\) is an upgrade, not a
+# fresh install: it keeps operating out of that same existing root instead of
+# creating a new ShortStudio\ one, so the owner account, jobs, videos,
+# Provider Vault and backups are never orphaned. See the detection below.
 #
 # Updating replaces a release directory. It never writes inside shared\, which
 # is why videos, uploads, brands, settings and backups survive every update.
@@ -26,9 +32,11 @@ param(
     [string]$InstallRoot = "",
     [string]$Image = "",
     [switch]$BehindProxy,
-    # Used by the isolated F4 rehearsal so a test installation cannot collide
-    # with a real one on the same machine.
-    [string]$ComposeProject = "abud-shorts",
+    # Used by the isolated rehearsal harness so a test installation cannot
+    # collide with a real one on the same machine. Left empty, it is resolved
+    # below to "abud-shorts" over a detected ABUD 2.4 install, or
+    # "short-studio" for a fresh one.
+    [string]$ComposeProject = "",
     [switch]$NoShortcuts,
     [switch]$NoBrowser,
     # AUTO detects hardware and picks the best supported Local Voice option.
@@ -43,7 +51,25 @@ param(
 $ErrorActionPreference = "Stop"
 $PackageDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-if (-not $InstallRoot) { $InstallRoot = Join-Path $env:ProgramData "AbudShorts" }
+$LegacyAbudRoot = Join-Path $env:ProgramData "AbudShorts"
+$FreshShortStudioRoot = Join-Path $env:ProgramData "ShortStudio"
+if (-not $InstallRoot) {
+    if (Test-Path (Join-Path $LegacyAbudRoot "shared\config\.env")) {
+        # An ABUD Shorts Engine 2.4 installation already lives here. Moving its
+        # data to a new root would itself be a risky migration this installer
+        # does not perform - the safe move is to keep operating where the real
+        # data already is.
+        $InstallRoot = $LegacyAbudRoot
+    } else {
+        $InstallRoot = $FreshShortStudioRoot
+    }
+}
+$ExistingEnvFile = Join-Path $InstallRoot "shared\config\.env"
+$IsLegacyAbudInstall = (($InstallRoot -eq $LegacyAbudRoot) -and (Test-Path $ExistingEnvFile))
+if (-not $IsLegacyAbudInstall -and $InstallRoot -and (Test-Path $ExistingEnvFile)) {
+    $legacyEnvLine = Get-Content $ExistingEnvFile | Where-Object { $_ -match "^ABUD_CONTAINER_PREFIX=" } | Select-Object -Last 1
+    $IsLegacyAbudInstall = [bool]$legacyEnvLine
+}
 $AbudShared      = Join-Path $InstallRoot "shared"
 $AbudReleases    = Join-Path $InstallRoot "releases"
 $AbudCurrentFile = Join-Path $InstallRoot "current.txt"
@@ -51,8 +77,17 @@ $AbudDataDir     = Join-Path $AbudShared "data"
 $AbudConfigDir   = Join-Path $AbudShared "config"
 $AbudEnvFile     = Join-Path $AbudConfigDir ".env"
 
+if (-not $ComposeProject) {
+    if ($IsLegacyAbudInstall) {
+        $existingPrefixLine = if (Test-Path $AbudEnvFile) { Get-Content $AbudEnvFile | Where-Object { $_ -match "^ABUD_CONTAINER_PREFIX=" } | Select-Object -Last 1 } else { $null }
+        $ComposeProject = if ($existingPrefixLine) { $existingPrefixLine.Substring("ABUD_CONTAINER_PREFIX=".Length) } else { "abud-shorts" }
+    } else {
+        $ComposeProject = "short-studio"
+    }
+}
+
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "  ABUD Shorts Engine - Installer" -ForegroundColor Cyan
+Write-Host "  Short Studio Server - Installer" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -135,7 +170,7 @@ Write-Host "[2/10] Checking disk space..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 $driveLetter = (Split-Path -Qualifier $InstallRoot).TrimEnd(":")
 $freeGb = [math]::Round((Get-PSDrive -Name $driveLetter).Free / 1GB, 1)
-if ($freeGb -lt 15) { Fail "$freeGb GB free. ABUD Shorts needs at least 15 GB to install." }
+if ($freeGb -lt 15) { Fail "$freeGb GB free. Short Studio needs at least 15 GB to install." }
 Write-Host "      $freeGb GB available." -ForegroundColor Green
 
 # ---------------------------------------------------------------------------
@@ -151,17 +186,19 @@ try {
 } catch { $portBusy = $false }
 if ($portBusy) {
     # The port being busy is only a problem if something ELSE has it. Re-running
-    # the installer over an existing ABUD Shorts installation - to repair it, or
-    # to move it to a newer package - is a legitimate action, and it must not be
-    # refused just because that installation is currently running.
+    # the installer over an existing installation - to repair it, or to move it
+    # to a newer package - is a legitimate action, and it must not be refused
+    # just because that installation is currently running. Matches both brands
+    # so an ABUD Shorts Engine 2.4 install in the middle of this same upgrade
+    # run is still recognized as "ours".
     $ownedByUs = $false
     try {
         $probe = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v2/system/info" -TimeoutSec 5 -ErrorAction Stop
-        $ownedByUs = ($probe.name -like "ABUD Shorts Engine*")
+        $ownedByUs = ($probe.name -like "Short Studio*") -or ($probe.name -like "ABUD Shorts Engine*")
     } catch { $ownedByUs = $false }
 
     if ($ownedByUs) {
-        Write-Host "      Port $Port is serving an existing ABUD Shorts installation; reinstalling over it." -ForegroundColor Yellow
+        Write-Host "      Port $Port is serving an existing installation; reinstalling over it." -ForegroundColor Yellow
         Write-Host "      Your videos, settings and backups are not touched."
     } else {
         Fail "Port $Port is already in use by another program on this machine. Choose another one: .\install.ps1 -Port 3131"
@@ -189,7 +226,7 @@ if (-not $PublicUrl) {
 Write-Host "[4/10] Reading this release..." -ForegroundColor Yellow
 $releaseJsonPath = Join-Path $PackageDir "release.json"
 if (-not (Test-Path $releaseJsonPath)) {
-    Fail "release.json is missing. This does not look like an ABUD Shorts client package."
+    Fail "release.json is missing. This does not look like a Short Studio Server client package."
 }
 $releaseInfo = Get-Content $releaseJsonPath -Raw | ConvertFrom-Json
 $ReleaseVersion = $releaseInfo.version
@@ -275,7 +312,6 @@ New-Item -ItemType Directory -Path "$ReleaseDir.incoming" -Force | Out-Null
 Get-ChildItem $PackageDir -Exclude "images" | Copy-Item -Destination "$ReleaseDir.incoming" -Recurse -Force
 if (Test-Path $ReleaseDir) { Remove-Item $ReleaseDir -Recurse -Force }
 Move-Item "$ReleaseDir.incoming" $ReleaseDir
-Write-TextFile $AbudCurrentFile $ReleaseDir
 Write-Host "      Installed to $ReleaseDir" -ForegroundColor Green
 
 # ---------------------------------------------------------------------------
@@ -289,23 +325,43 @@ function New-SecretHex([int]$Bytes) {
     return [System.BitConverter]::ToString($buffer).Replace("-", "").ToLower()
 }
 
+function Update-EnvLine([string[]]$Lines, [string]$Key, [string]$Value) {
+    $found = $false
+    $out = foreach ($line in $Lines) {
+        if ($line -match "^$([regex]::Escape($Key))=") { $found = $true; "$Key=$Value" } else { $line }
+    }
+    if (-not $found) { $out = @($out) + "$Key=$Value" }
+    return $out
+}
+function Test-EnvKeyPresent([string[]]$Lines, [string]$Key) {
+    return [bool]($Lines | Where-Object { $_ -match "^$([regex]::Escape($Key))=" })
+}
+
 if (-not (Test-Path $AbudEnvFile)) {
-    $pgPass = "abud_pg_" + (New-SecretHex 16)
+    # Never reached for an upgrade: $IsLegacyAbudInstall guarantees this file
+    # already exists whenever a real ABUD Shorts Engine 2.4 install is present.
+    # This is always a genuinely fresh installation.
+    $pgPass = "short_studio_pg_" + (New-SecretHex 16)
     $envContent = @"
-# ABUD Shorts Engine - installation configuration
+# Short Studio Server - installation configuration
 # Generated by the installer. Every secret below is unique to this machine;
 # there is no shared or default password anywhere in the product.
 
 HOST_PORT=$Port
 V2_PUBLIC_URL=$PublicUrl
 TRUSTED_PROXY=$TrustedProxyValue
+SHORT_STUDIO_ACCESS_MODE=local
+SHORT_STUDIO_PUBLIC_BIND_HOST=127.0.0.1
 
-ABUD_IMAGE=$ReleaseImage
-ABUD_RELEASE_CHANNEL=$ReleaseChannel
-ABUD_HOST_PLATFORM=windows
-ABUD_INSTALL_TYPE=docker_windows
-ABUD_COMPOSE_PROJECT=$ComposeProject
-ABUD_CONTAINER_PREFIX=$ComposeProject
+SHORT_STUDIO_IMAGE=$ReleaseImage
+SHORT_STUDIO_RELEASE_CHANNEL=$ReleaseChannel
+SHORT_STUDIO_HOST_PLATFORM=windows
+SHORT_STUDIO_INSTALL_TYPE=docker_windows
+SHORT_STUDIO_COMPOSE_PROJECT=$ComposeProject
+SHORT_STUDIO_CONTAINER_PREFIX=$ComposeProject
+SHORT_STUDIO_POSTGRES_VOLUME=$ComposeProject-postgres-data
+SHORT_STUDIO_N8N_VOLUME=$ComposeProject-n8n-data
+SHORT_STUDIO_NETWORK=$ComposeProject-v2
 
 NODE_ENV=production
 V2_ENABLED=true
@@ -314,11 +370,11 @@ GENERIC_TIMEZONE=Africa/Cairo
 WHISPER_MODEL=small
 KOKORO_MODEL_PRECISION=q4
 
-POSTGRES_DB=abud_shorts
-POSTGRES_USER=abud_shorts
+POSTGRES_DB=short_studio
+POSTGRES_USER=short_studio
 POSTGRES_PASSWORD=$pgPass
 
-INTERNAL_SERVICE_TOKEN=abud_v2_sec_$(New-SecretHex 32)
+INTERNAL_SERVICE_TOKEN=short_studio_sec_$(New-SecretHex 32)
 N8N_ENCRYPTION_KEY=$(New-SecretHex 16)
 SESSION_SECRET=$(New-SecretHex 32)
 PROVIDER_VAULT_MASTER_KEY=$(New-SecretHex 32)
@@ -336,34 +392,80 @@ PEXELS_API_KEY=
     Write-Host "      Generated a unique configuration with fresh secrets." -ForegroundColor Green
 } else {
     # An existing installation keeps its secrets and its data. Only the version
-    # pointers move.
+    # pointers move - and, for an install upgraded from ABUD Shorts Engine 2.4,
+    # the compose identity variables that keep it attached to its real,
+    # already-running containers and volumes instead of creating empty new ones.
     $lines = Get-Content $AbudEnvFile
-    function Update-EnvLine([string[]]$Lines, [string]$Key, [string]$Value) {
-        $found = $false
-        $out = foreach ($line in $Lines) {
-            if ($line -match "^$([regex]::Escape($Key))=") { $found = $true; "$Key=$Value" } else { $line }
+    $usesLegacyKeys = Test-EnvKeyPresent $lines "ABUD_CONTAINER_PREFIX"
+    if ($usesLegacyKeys) {
+        $lines = Update-EnvLine $lines "ABUD_IMAGE" $ReleaseImage
+        $lines = Update-EnvLine $lines "ABUD_RELEASE_CHANNEL" $ReleaseChannel
+        $lines = Update-EnvLine $lines "ABUD_COMPOSE_PROJECT" $ComposeProject
+        $lines = Update-EnvLine $lines "ABUD_CONTAINER_PREFIX" $ComposeProject
+        # The pre-2.5 compose file never set an explicit external `name:` on
+        # these, so Docker Compose applied its own default: "<project>_<key>".
+        # The real, already-existing volumes/network are therefore prefixed by
+        # this installation's actual compose project name (normally
+        # "abud-shorts", but whatever -ComposeProject it was originally
+        # installed with if that was customized) - NOT the bare key. The 2.5
+        # compose sets an explicit `name:`, so an upgrade must pin the real
+        # existing name here itself, once, the first time it sees this legacy
+        # .env. Getting the prefix wrong here is the one mistake that would
+        # silently create empty replacement volumes instead of reattaching.
+        if (-not (Test-EnvKeyPresent $lines "ABUD_POSTGRES_VOLUME")) {
+            $lines = Update-EnvLine $lines "ABUD_POSTGRES_VOLUME" "${ComposeProject}_abud-shorts-postgres-data"
         }
-        if (-not $found) { $out = @($out) + "$Key=$Value" }
-        return $out
+        if (-not (Test-EnvKeyPresent $lines "ABUD_N8N_VOLUME")) {
+            $lines = Update-EnvLine $lines "ABUD_N8N_VOLUME" "${ComposeProject}_abud-shorts-n8n-data"
+        }
+        if (-not (Test-EnvKeyPresent $lines "ABUD_NETWORK")) {
+            $lines = Update-EnvLine $lines "ABUD_NETWORK" "${ComposeProject}_abud-shorts-v2"
+        }
+    } else {
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_IMAGE" $ReleaseImage
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_RELEASE_CHANNEL" $ReleaseChannel
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_COMPOSE_PROJECT" $ComposeProject
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_CONTAINER_PREFIX" $ComposeProject
+        if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_POSTGRES_VOLUME")) {
+            $lines = Update-EnvLine $lines "SHORT_STUDIO_POSTGRES_VOLUME" "$ComposeProject-postgres-data"
+        }
+        if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_N8N_VOLUME")) {
+            $lines = Update-EnvLine $lines "SHORT_STUDIO_N8N_VOLUME" "$ComposeProject-n8n-data"
+        }
+        if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_NETWORK")) {
+            $lines = Update-EnvLine $lines "SHORT_STUDIO_NETWORK" "$ComposeProject-v2"
+        }
     }
-    $lines = Update-EnvLine $lines "ABUD_IMAGE" $ReleaseImage
-    $lines = Update-EnvLine $lines "ABUD_RELEASE_CHANNEL" $ReleaseChannel
-    $lines = Update-EnvLine $lines "ABUD_COMPOSE_PROJECT" $ComposeProject
-    $lines = Update-EnvLine $lines "ABUD_CONTAINER_PREFIX" $ComposeProject
+    if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_ACCESS_MODE")) {
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_ACCESS_MODE" "local"
+    }
+    if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_PUBLIC_BIND_HOST")) {
+        $lines = Update-EnvLine $lines "SHORT_STUDIO_PUBLIC_BIND_HOST" "127.0.0.1"
+    }
     Write-TextFile $AbudEnvFile (($lines -join "`r`n") + "`r`n")
     Write-Host "      Existing configuration kept; secrets and data untouched." -ForegroundColor Green
 }
 
-[ordered]@{
-    product         = "ABUD Shorts Engine"
+$installationJsonPath = Join-Path $AbudShared "installation.json"
+$priorInstallation = $null
+if (Test-Path $installationJsonPath) {
+    try { $priorInstallation = Get-Content $installationJsonPath -Raw | ConvertFrom-Json } catch { $priorInstallation = $null }
+}
+# Only true the very first time a 2.5+ installer runs over a real ABUD Shorts
+# Engine 2.4 installation - a truthful one-time migration record, not shown
+# again once installation.json itself already says Short Studio Server.
+$migratedFromAbud = $IsLegacyAbudInstall -and $priorInstallation -and ($priorInstallation.product -eq "ABUD Shorts Engine")
+$installationRecord = [ordered]@{
+    product         = "Short Studio Server"
+    previousProduct = $(if ($migratedFromAbud) { "ABUD Shorts Engine $($priorInstallation.currentVersion)" } else { $(if ($priorInstallation) { $priorInstallation.previousProduct } else { $null }) })
     currentVersion  = $ReleaseVersion
-    previousVersion = $null
+    previousVersion = $(if ($priorInstallation) { $priorInstallation.currentVersion } else { $null })
     image           = $ReleaseImage
     channel         = $ReleaseChannel
     publicUrl       = $PublicUrl
     installRoot     = $InstallRoot
     updatedAt       = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-} | ConvertTo-Json -Depth 6 | ForEach-Object { Write-TextFile (Join-Path $AbudShared "installation.json") $_ }
+}
 
 # ---------------------------------------------------------------------------
 # 8. Local Voice (Egyptian Arabic) - hardware detection, runtime/model
@@ -401,8 +503,8 @@ if ($LocalVoice -eq "SKIP") {
 
         if ($localVoiceResult.error) {
             Write-Host "      Local High Quality setup failed: $($localVoiceResult.error)" -ForegroundColor Yellow
-            Write-Host "      The rest of ABUD Shorts will still install and start normally." -ForegroundColor Yellow
-            Write-Host "      Retry from the Start Menu: ABUD Shorts - Repair Local Voice." -ForegroundColor Yellow
+            Write-Host "      The rest of Short Studio will still install and start normally." -ForegroundColor Yellow
+            Write-Host "      Retry from the Start Menu: Short Studio Doctor, or the Repair Local Voice shortcut." -ForegroundColor Yellow
             Write-Host "      ElevenLabs is not used automatically; Arabic jobs will report setup is required until this is fixed."
         } elseif ($localVoiceResult.resolvedMode -eq "SKIP") {
             Write-Host "      $($localVoiceResult.resolutionReason)" -ForegroundColor Yellow
@@ -413,36 +515,66 @@ if ($LocalVoice -eq "SKIP") {
         }
     } catch {
         Write-Host "      Local High Quality setup failed: $($_.Exception.Message)" -ForegroundColor Yellow
-        Write-Host "      The rest of ABUD Shorts will still install and start normally." -ForegroundColor Yellow
-        Write-Host "      Retry from the Start Menu: ABUD Shorts - Repair Local Voice." -ForegroundColor Yellow
+        Write-Host "      The rest of Short Studio will still install and start normally." -ForegroundColor Yellow
+        Write-Host "      Retry from the Start Menu: Short Studio - Repair Local Voice." -ForegroundColor Yellow
     }
 }
 
 # ---------------------------------------------------------------------------
 # 9. Start
 # ---------------------------------------------------------------------------
-Write-Host "[9/10] Starting ABUD Shorts..." -ForegroundColor Yellow
+Write-Host "[9/10] Starting Short Studio Server..." -ForegroundColor Yellow
+# Set both the new and legacy variable names directly - docker-compose.prod.yml
+# resolves the same real values regardless of which tier of its fallback
+# interpolation ends up matching, and an upgraded install's .env may only
+# define the ABUD_* keys (see the config step above).
+$env:SHORT_STUDIO_DATA_DIR = $AbudDataDir
 $env:ABUD_DATA_DIR = $AbudDataDir
+$env:SHORT_STUDIO_RELEASE_DIR = $ReleaseDir
 $env:ABUD_RELEASE_DIR = $ReleaseDir
+$env:SHORT_STUDIO_CONTAINER_PREFIX = $ComposeProject
 $env:ABUD_CONTAINER_PREFIX = $ComposeProject
+if (-not $IsLegacyAbudInstall) {
+    $env:SHORT_STUDIO_POSTGRES_VOLUME = "$ComposeProject-postgres-data"
+    $env:SHORT_STUDIO_N8N_VOLUME = "$ComposeProject-n8n-data"
+    $env:SHORT_STUDIO_NETWORK = "$ComposeProject-v2"
+}
+if ($IsLegacyAbudInstall) {
+    # Belt-and-suspenders alongside the .env write above: pins compose to the
+    # real, already-existing volumes/network from the pre-2.5 compose file
+    # (Docker Compose's own default "<project>_<key>" naming, since that file
+    # never set an explicit `name:`).
+    $env:ABUD_POSTGRES_VOLUME = "${ComposeProject}_abud-shorts-postgres-data"
+    $env:ABUD_N8N_VOLUME = "${ComposeProject}_abud-shorts-n8n-data"
+    $env:ABUD_NETWORK = "${ComposeProject}_abud-shorts-v2"
+}
 $composeFile = Join-Path $ReleaseDir "docker-compose.prod.yml"
 Invoke-Docker @("compose", "--project-name", $ComposeProject, "--env-file", $AbudEnvFile, "--file", $composeFile, "up", "-d", "--remove-orphans")
 if ($LASTEXITCODE -ne 0) { Fail "The system could not be started. Check that Docker Desktop has enough memory assigned." }
+Write-TextFile $AbudCurrentFile $ReleaseDir
+Write-TextFile $installationJsonPath ($installationRecord | ConvertTo-Json -Depth 6)
 
 # Start Menu shortcuts, so the customer never types a Docker command.
 if (-not $NoShortcuts) {
-    $cliPath = Join-Path $ReleaseDir "scripts\host\abud-shorts.ps1"
-    $startMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\ABUD Shorts"
+    $cliPath = Join-Path $ReleaseDir "scripts\host\short-studio.ps1"
+    $startMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\Short Studio"
+    # An install upgraded from ABUD Shorts Engine 2.4 leaves its old shortcut
+    # group behind under the previous name - remove it so the customer is not
+    # left with two folders for one product.
+    $legacyStartMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\ABUD Shorts"
+    if (Test-Path $legacyStartMenu) {
+        try { Remove-Item $legacyStartMenu -Recurse -Force } catch { }
+    }
     try {
         New-Item -ItemType Directory -Path $startMenu -Force | Out-Null
         $shell = New-Object -ComObject WScript.Shell
         $shortcuts = @(
-            @{ Name = "ABUD Shorts - Open";        Cmd = "start";       Desc = "Start ABUD Shorts and open the dashboard" },
-            @{ Name = "ABUD Shorts - Update";      Cmd = "update";      Desc = "Install the latest version, safely" },
-            @{ Name = "ABUD Shorts - Backup";      Cmd = "backup";      Desc = "Create a backup now" },
-            @{ Name = "ABUD Shorts - Diagnostics"; Cmd = "diagnostics"; Desc = "Write a support bundle" },
-            @{ Name = "ABUD Shorts - Status";      Cmd = "status";      Desc = "Show system health and version" },
-            @{ Name = "ABUD Shorts - Repair Local Voice"; Cmd = "local-voice repair"; Desc = "Retry Local Voice (Arabic) setup" }
+            @{ Name = "Short Studio - Open";        Cmd = "start";       Desc = "Start Short Studio and open the dashboard" },
+            @{ Name = "Short Studio - Update";      Cmd = "update";      Desc = "Install the latest version, safely" },
+            @{ Name = "Short Studio - Backup";      Cmd = "backup";      Desc = "Create a backup now" },
+            @{ Name = "Short Studio - Diagnostics"; Cmd = "diagnostics"; Desc = "Write a support bundle" },
+            @{ Name = "Short Studio - Status";      Cmd = "status";      Desc = "Show system health and version" },
+            @{ Name = "Short Studio - Repair Local Voice"; Cmd = "local-voice repair"; Desc = "Retry Local Voice (Arabic) setup" }
         )
         foreach ($entry in $shortcuts) {
             $link = $shell.CreateShortcut((Join-Path $startMenu "$($entry.Name).lnk"))
@@ -452,7 +584,7 @@ if (-not $NoShortcuts) {
             $link.Description = $entry.Desc
             $link.Save()
         }
-        Write-Host "      Start Menu shortcuts created under 'ABUD Shorts'." -ForegroundColor Green
+        Write-Host "      Start Menu shortcuts created under 'Short Studio'." -ForegroundColor Green
     } catch {
         Write-Host "      Note: Start Menu shortcuts could not be created (run as administrator to add them)." -ForegroundColor Yellow
         Write-Host "      Run operations from: $cliPath"
@@ -486,13 +618,16 @@ function Friendly([string]$s) {
 Write-Host ""
 Write-Host "=================================================================" -ForegroundColor Green
 if ($ready) {
-    Write-Host "  ABUD Shorts Engine $ReleaseVersion is installed and running" -ForegroundColor Green
+    Write-Host "  Short Studio Server $ReleaseVersion is installed and running" -ForegroundColor Green
 } else {
-    Write-Host "  ABUD Shorts Engine $ReleaseVersion is installed" -ForegroundColor Green
+    Write-Host "  Short Studio Server $ReleaseVersion is installed" -ForegroundColor Green
+}
+if ($migratedFromAbud) {
+    Write-Host "  Upgraded from ABUD Shorts Engine $($priorInstallation.currentVersion)" -ForegroundColor Green
 }
 Write-Host "=================================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  ABUD Shorts:   $(if ($ready) { 'Healthy' } else { 'Still starting' })"
+Write-Host "  Short Studio:  $(if ($ready) { 'Healthy' } else { 'Still starting' })"
 Write-Host "  Application:   $(Friendly (Get-Health "$ComposeProject-app"))"
 Write-Host "  Video Engine:  $(Friendly (Get-Health "$ComposeProject-render-worker"))"
 Write-Host "  Database:      $(Friendly (Get-Health "$ComposeProject-postgres"))"
@@ -505,8 +640,8 @@ Write-Host ""
 Write-Host "  Next step - open this address and create your administrator account:" -ForegroundColor Yellow
 Write-Host "      $PublicUrl/setup" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Day-to-day, use the Start Menu shortcuts under 'ABUD Shorts':"
-Write-Host "      ABUD Shorts - Status, Update, Backup, Diagnostics, Repair Local Voice"
+Write-Host "  Day-to-day, use the Start Menu shortcuts under 'Short Studio':"
+Write-Host "      Short Studio - Status, Update, Backup, Diagnostics, Repair Local Voice"
 Write-Host ""
 if (-not $ready) {
     Write-Host "  The system is taking longer than usual to start. Check it with the Status shortcut." -ForegroundColor Yellow

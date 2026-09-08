@@ -150,22 +150,46 @@ export class MediaIntelligenceService {
 
   /**
    * Enriches search terms with high-converting stock footage keywords.
+   *
+   * Every branch must be a concrete, scene-grounded phrase - never a bare
+   * mood/style word like "cinematic" or "professional". The previous
+   * fallback (a literal `"cinematic"`) fired for any of "people", "solution",
+   * "social_proof", "environment", or "detail" - five of the ten possible
+   * `VisualIntent` values, none of which have anything to do with a
+   * cinematography style - and that is exactly how an unrelated
+   * "behind-the-scenes filmmaking crew" clip got selected for a small
+   * business file-backup scene during the Revideo real-content proof (see
+   * ABUD_SHORTS_ENGINE_STATUS.md). An intent with no grounded modifier here
+   * now adds nothing rather than inventing an ungrounded one - `baseTerms`
+   * alone (already scene-specific) is safer than a generic word no scene
+   * actually asked for.
    */
   public enrichSearchTerms(baseTerms: string[], intent: VisualIntent, language: string): string[] {
     const terms = [...baseTerms];
-    const modifier = intent === "product_hero"
-      ? "closeup"
-      : intent === "lifestyle"
-        ? "people happy"
-        : intent === "problem"
-          ? "frustrated stress"
-          : intent === "technology"
-            ? "modern tech office"
-            : intent === "cta"
-              ? "smartphone shopping"
-              : "cinematic";
+    const modifier =
+      intent === "product_hero"
+        ? "closeup"
+        : intent === "lifestyle"
+          ? "people happy"
+          : intent === "problem"
+            ? "frustrated stress"
+            : intent === "technology"
+              ? "modern tech office"
+              : intent === "cta"
+                ? "smartphone shopping"
+                : intent === "people"
+                  ? "person using laptop"
+                  : intent === "solution"
+                    ? "person solving problem laptop"
+                    : intent === "social_proof"
+                      ? "satisfied customer testimonial"
+                      : intent === "environment"
+                        ? "modern interior daylight"
+                        : intent === "detail"
+                          ? "close up detail shot"
+                          : null;
 
-    if (!terms.some((t) => t.includes(modifier))) {
+    if (modifier && !terms.some((t) => t.includes(modifier))) {
       terms.push(modifier);
     }
 

@@ -275,12 +275,19 @@ export function resolveCtaProvenance(params: {
     };
   }
 
+  // Long enough to occupy a real CTA scene's typical share of a short
+  // video's runtime without running out of words well before the scene
+  // ends - a too-short safe fallback here left several seconds of dead air
+  // after the narration finished in the scene it renders into, which the
+  // real rendered-audio silence gate (not just the planned-duration one)
+  // correctly fails as a professional-readiness defect. Still fully
+  // generic and safe: no invented channel, discount, or claim.
   return {
     text: isArabic
       ? dialect === "egyptian"
-        ? "تابعنا وشوف التفاصيل"
-        : "تابعنا لمعرفة التفاصيل"
-      : "Follow for more details",
+        ? "تابعنا وشوف كل التفاصيل والنصايح المفيدة."
+        : "تابعنا لمعرفة كل التفاصيل والنصائح المفيدة."
+      : "Follow along to learn more and stay updated.",
     provenance: "SAFE_INFERRED",
     action: "Follow CTA",
   };

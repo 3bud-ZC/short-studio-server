@@ -11,4 +11,4 @@ if errorlevel 1 (
     exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\host\abud-shorts.ps1" stop -Pause
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\host\short-studio.ps1" backup -Pause

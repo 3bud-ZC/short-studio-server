@@ -1,3 +1,6 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import nock from "nock";
 import { KokoroVoiceProvider } from "./voice-providers/kokoroVoiceProvider";
@@ -36,6 +39,18 @@ const EGYPTIAN_TEST_SCRIPT =
   "فإنت غالباً بتسيب عملاء يروحوا لمنافسك من غير ما تحس. " +
   "موقع سريع وشكله احترافي ممكن يفرق معاك جداً. " +
   "ابدأ دلوقتي وخلي شغلك يظهر بالشكل اللي يستحقه.";
+
+/**
+ * LocalEgyptianTtsProvider (VoiceTut/KemeTone) reads real on-disk model state
+ * from ABUD_MODEL_CACHE_DIR (default: ./data-dev/models). On a machine that
+ * has them genuinely installed there for real production use, isConfigured()
+ * returns true and a real HTTP call to the local voice service follows -
+ * which then hangs in a bare test process. Point it at an empty directory so
+ * "ElevenLabs is the only route under test" is deterministic and offline.
+ */
+function stubLocalVoiceNotInstalled() {
+  vi.stubEnv("ABUD_MODEL_CACHE_DIR", fs.mkdtempSync(path.join(os.tmpdir(), "voice-providers-test-")));
+}
 
 function stubPiperConfigured() {
   vi.stubEnv("PIPER_BIN", process.execPath);
@@ -91,6 +106,7 @@ describe("Voice Providers & Registry", () => {
 
   it("VoiceRegistry keeps English on Kokoro if ElevenLabs is not configured", async () => {
     delete process.env.ELEVENLABS_API_KEY;
+    stubLocalVoiceNotInstalled();
     const registry = new VoiceRegistry(dummyKokoro, "");
     const provider = registry.getProvider("elevenlabs");
     expect(provider.id).toBe("kokoro");
@@ -122,6 +138,7 @@ describe("Voice Providers & Registry", () => {
 
   it("blocks Arabic production with an actionable error when ElevenLabs is not configured", () => {
     stubPiperConfigured();
+    stubLocalVoiceNotInstalled();
     vi.stubEnv("GOOGLE_CLOUD_PROJECT", "test-project");
     vi.stubEnv("EDGE_TTS_ENABLED", "true");
     delete process.env.ELEVENLABS_API_KEY;

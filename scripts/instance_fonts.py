@@ -1,5 +1,6 @@
 """
-Generates static weight instances from the bundled OFL variable Arabic fonts.
+Generates static weight instances from the bundled OFL variable fonts
+(Arabic and Latin).
 
 libass/FreeType render a variable font at its default instance, which is
 Regular. Caption styles need real SemiBold / Bold / ExtraBold weights, so the
@@ -22,6 +23,8 @@ INSTANCES = [
     ("NotoSansArabic-Variable.ttf", "NotoSansArabic-Medium.ttf", {"wght": 500}),
     ("NotoSansArabic-Variable.ttf", "NotoSansArabic-SemiBold.ttf", {"wght": 600}),
     ("Cairo-Variable.ttf", "Cairo-Bold.ttf", {"wght": 700}),
+    ("Inter-Variable.ttf", "Inter-Bold.ttf", {"wght": 700}),
+    ("Inter-Variable.ttf", "Inter-ExtraBold.ttf", {"wght": 800}),
 ]
 
 

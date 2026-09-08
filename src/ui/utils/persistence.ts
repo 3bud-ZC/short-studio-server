@@ -1,8 +1,8 @@
 import type { BrandKit } from "../../types/shorts";
 
 export const DEFAULT_BRAND_KIT: BrandKit = {
-  brandName: "Abud",
-  watermarkText: "Abud",
+  brandName: "Short Studio",
+  watermarkText: "Short Studio",
   primaryColor: "#7C3AED",
   accentColor: "#FFFFFF",
   captionStyle: "bold",

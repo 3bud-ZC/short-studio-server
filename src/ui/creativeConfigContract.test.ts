@@ -127,7 +127,7 @@ describe("Creative evidence in Video Details", () => {
 
   it("reports brand fields honestly rather than implying the engine knew them", () => {
     expect(detailsSource).toContain("suppliedBrandFields");
-    expect(detailsSource).toMatch(/ABUD defaults/);
+    expect(detailsSource).toMatch(/Short Studio defaults/);
   });
 });
 

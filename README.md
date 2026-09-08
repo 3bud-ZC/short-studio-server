@@ -1,7 +1,8 @@
-# ABUD Shorts Engine V2
+# Short Studio
 
-**Product:** ABUD Shorts Engine V2  
-**Version:** 2.4.0 (General Availability; full history is tracked in `ABUD_SHORTS_ENGINE_STATUS.md`)  
+**Product:** Short Studio  
+**Technical Product:** Short Studio Server  
+**Version:** 2.5.0 (General Availability Candidate; formerly ABUD Shorts Engine 2.4.0; full history is tracked in `ABUD_SHORTS_ENGINE_STATUS.md`)  
 **Canonical Dashboard:** http://localhost:3130  
 **License:** MIT  
 
@@ -30,7 +31,7 @@ An enterprise-grade, local-first short video generation, multi-platform publishi
 
 ## Overview & Capabilities
 
-ABUD Shorts Engine V2 transforms text ideas and brand assets into high-engagement vertical short videos with synchronized captions, motion transitions, background music, and direct social distribution.
+Short Studio transforms text ideas and brand assets into high-engagement vertical short videos with synchronized captions, motion transitions, background music, and direct social distribution.
 
 - **Dual Creation Modes**:
   - **Prompt Studio**: AI-powered scriptwriting in Egyptian Arabic, Gulf Arabic, Modern Standard Arabic (MSA), and English with automatic scene segmentation.
@@ -48,7 +49,7 @@ ABUD Shorts Engine V2 transforms text ideas and brand assets into high-engagemen
 
 | Requirement | Specification |
 | --- | --- |
-| **Operating System** | Windows 10/11 (with WSL2 & Docker Desktop), macOS 12+, or Linux (Ubuntu 20.04+, Debian 11+, RHEL 9+) |
+| **Operating System** | Windows 10/11 with Docker Desktop (the qualified target for 2.5). macOS 12+ and Linux (Ubuntu 20.04+, Debian 11+, RHEL 9+) host scripts are provided, but native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows. |
 | **Container Engine** | Docker Engine 24.0+ and Docker Compose v2.20+ |
 | **CPU** | 2 vCPUs minimum (4+ vCPUs recommended for faster rendering) |
 | **RAM** | 4 GB minimum (8 GB recommended) |
@@ -83,7 +84,7 @@ The installer performs all initialization steps automatically:
 2. Checks port availability (3130).
 3. Creates persistent host storage directories (`data/videos`, `data/cache`, `data/backups`, `data/logs`).
 4. Generates cryptographically secure secrets in `.env` (`INTERNAL_SERVICE_TOKEN`, `POSTGRES_PASSWORD`, `N8N_ENCRYPTION_KEY`, `SESSION_SECRET`, `PROVIDER_VAULT_MASTER_KEY`).
-5. Builds and launches the 4-tier Docker stack (`abud-shorts-app`, `abud-shorts-render-worker`, `abud-shorts-n8n`, `abud-shorts-postgres`).
+5. Builds and launches the 4-tier Docker stack (`short-studio-app`, `short-studio-render-worker`, `short-studio-n8n`, `short-studio-postgres`).
 6. Executes database schema migrations.
 7. Verifies health probes and presents the ready dashboard.
 
@@ -109,7 +110,7 @@ The interactive 10-step wizard configures:
 
 ## Free / Local Pipeline Mode
 
-ABUD Shorts Engine V2 is engineered so that you do **not** need paid third-party AI subscriptions to produce complete, professional videos:
+Short Studio is engineered so that you do **not** need paid third-party AI subscriptions to produce complete, professional videos:
 
 | Pipeline Stage | Free / Local Component | Function |
 | --- | --- | --- |
@@ -217,7 +218,7 @@ Access system diagnostics at `http://localhost:3130/system`:
 - **Real-Time Service Probes**: PostgreSQL latency, internal n8n status, render-worker responsiveness.
 - **Storage Breakdown**: Real-time byte accounting across `videos/`, `cache/`, `backups/`, and `logs/`.
 - **Sanitized Logs**: View recent system events with all passwords, tokens, and OAuth keys automatically redacted.
-- **One-Click Diagnostic Bundle**: Export `abud_diagnostics_<timestamp>.json` for technical support and troubleshooting.
+- **One-Click Diagnostic Bundle**: Export `short_studio_diagnostics_<timestamp>.json` for technical support and troubleshooting.
 
 ---
 
@@ -251,18 +252,20 @@ For remote hosting on a VPS or cloud server:
 ### 4. Container logs inspection
 - View live application logs:
   ```bash
-  docker logs --tail=100 -f abud-shorts-app
+  short-studio logs app
   ```
 - View render worker logs:
   ```bash
-  docker logs --tail=100 -f abud-shorts-render-worker
+  short-studio logs worker
   ```
+  (An installation upgraded from ABUD Shorts Engine 2.4 can still fall back to
+  `docker logs --tail=100 -f abud-shorts-app` / `abud-shorts-render-worker`.)
 
 ---
 
 ## License & Credits
 
-ABUD Shorts Engine V2 is licensed under the [MIT License](LICENSE).
+Short Studio is licensed under the [MIT License](LICENSE).
 
 ### Open-Source Acknowledgments
 - [Remotion](https://remotion.dev) — Programmatic video rendering in React.

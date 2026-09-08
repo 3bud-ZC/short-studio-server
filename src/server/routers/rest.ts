@@ -33,6 +33,8 @@ import {
 import type { SceneInputWithFallback } from "../../types/shorts";
 import { AuthService } from "../v2/auth/authService";
 import { ApiTokenService } from "../v2/auth/apiTokenService";
+import { isLocalSingleUserAccess, localSingleUserOwner } from "../v2/auth/localSingleUser";
+import { PRODUCT_SLUG } from "../../version";
 
 // todo abstract class
 export class APIRouter {
@@ -601,6 +603,11 @@ export class APIRouter {
         next();
         return;
       }
+      if (isLocalSingleUserAccess(this.config)) {
+        (req as any).v2Auth = { type: "local_owner", user: localSingleUserOwner() };
+        next();
+        return;
+      }
       const header = req.headers.authorization || "";
       const token = header.toLowerCase().startsWith("bearer ")
         ? header.slice(7).trim()
@@ -638,7 +645,7 @@ export function isSafeVideoId(videoId: string): boolean {
 
 export function sanitizeDownloadFilename(videoId: string): string {
   const sanitized = videoId.replace(/[^a-zA-Z0-9_-]/g, "");
-  return `abud-short-${sanitized}.mp4`;
+  return `${PRODUCT_SLUG}-${sanitized}.mp4`;
 }
 
 function sendVideoWithRange(

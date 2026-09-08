@@ -17,6 +17,8 @@ import { TelegramPublishingProvider } from "./publishing/providers/telegramProvi
 import { YouTubeDirectProvider } from "./publishing/providers/youtubeDirectProvider";
 import { aiMetadataGenerator } from "./publishing/aiMetadataGenerator";
 import { DEFAULT_PLATFORM_CAPABILITIES } from "./publishing/publishingProvider";
+import { providerSecrets } from "./provider-vault/providerSecrets";
+import { resolveUploadPostStatus } from "./integrations/credentialResolver";
 
 class FakePublishingDb {
   public enabled = true;
@@ -190,6 +192,20 @@ class FakePublishingDb {
       return [row];
     }
 
+    // The reconciliation sweep. Ordered oldest-check-first, exactly as the
+    // service asks for it, so a test can assert the drain order.
+    if (text.includes("WHERE status = 'processing' AND provider_post_id IS NOT NULL")) {
+      return Array.from(this.publications.values())
+        .filter((row) => row.status === "processing" && row.provider_post_id)
+        .sort((a, b) => {
+          const at = a.remote_state_checked_at ? new Date(a.remote_state_checked_at).getTime() : -1;
+          const bt = b.remote_state_checked_at ? new Date(b.remote_state_checked_at).getTime() : -1;
+          return at - bt;
+        })
+        .slice(0, Number(values[0]) || 10)
+        .map((row) => ({ id: row.id }));
+    }
+
     if (text.includes("FROM publications")) {
       if (text.includes("WHERE p.video_id = $1") || text.includes("WHERE video_id = $1") || text.includes("video_id = $")) {
         const rows: any[] = [];
@@ -218,20 +234,47 @@ class FakePublishingDb {
       const row = this.publications.get(id);
       if (!row) return [];
 
+      // Every reconciliation write is guarded on the row still being processing.
+      // Modelling that guard is the whole point: without it a replayed provider
+      // completion would look idempotent here and not in PostgreSQL.
+      const guardedOnProcessing = text.includes("AND status = 'processing'");
+      if (guardedOnProcessing && row.status !== "processing") return [];
+
       if (text.includes("status = 'failed'")) {
         row.status = "failed";
         row.last_error = values[1];
         row.technical_error = values[2];
+      } else if (text.includes("status = 'published'") && text.includes("published_at = COALESCE(published_at, now())")) {
+        // Terminal reconciliation.
+        row.status = "published";
+        if (values[2]) row.provider_url = values[2];
+        row.published_at = row.published_at || new Date();
+        row.remote_state = values[1];
+        row.remote_state_checked_at = new Date();
+        row.last_error = null;
+        row.technical_error = null;
+        row.updated_at = new Date();
+        return [{ id: row.id }];
       } else if (text.includes("provider_post_id = $3")) {
         // Provider accepted the upload. published_at is only stamped for a real
         // publish; a provider that is still processing must not look published.
         row.status = values[1];
         row.provider_post_id = values[2];
         row.provider_url = values[3];
-        row.remote_state = values[1];
+        // remote_state carries the provider's own word for the state, which is
+        // not always our local status ("completed" vs "published").
+        row.remote_state = values[4];
+        row.remote_state_checked_at = new Date();
         if (values[1] === "published") row.published_at = new Date();
         row.last_error = null;
         row.technical_error = null;
+      } else if (text.includes("remote_state = $2")) {
+        // Non-terminal poll: record what the remote said and when we asked.
+        row.remote_state = values[1];
+        row.remote_state_checked_at = new Date();
+        if (text.includes("provider_url = COALESCE(provider_url, $3)") && !row.provider_url && values[2]) {
+          row.provider_url = values[2];
+        }
       } else if (text.includes("attempt_count = COALESCE") || text.includes("last_error = CASE")) {
         row.status = values[1];
         if (values[2] !== null && values[2] !== undefined) row.attempt_count = values[2];
@@ -318,13 +361,39 @@ class FakePublishingDb {
 
     // 4. Publishing Attempts & Events
     if (text.includes("INSERT INTO publishing_attempts")) {
-      const row = { id: this.attempts.length + 1 };
+      const row: any = {
+        id: this.attempts.length + 1,
+        publication_id: values[0],
+        attempt_number: values[1],
+        status: "started",
+        provider_response: null,
+        error: null,
+        technical_error: null,
+      };
       this.attempts.push(row);
+      return [{ id: row.id }];
+    }
+
+    if (text.includes("UPDATE publishing_attempts")) {
+      const row = this.attempts.find((a) => String(a.id) === String(values[0]));
+      if (!row) return [];
+      row.status = values[1];
+      row.provider_response = values[2] ? JSON.parse(values[2]) : null;
+      row.error = values[3];
+      row.technical_error = values[4];
+      row.completed_at = new Date();
       return [row];
     }
 
     if (text.includes("INSERT INTO publishing_events")) {
-      this.events.push(values);
+      this.events.push({
+        publication_id: values[0],
+        status: values[1],
+        stage: values[2],
+        message: values[3],
+        technical_message: values[4],
+        payload: values[5] ? JSON.parse(values[5]) : null,
+      });
       return [];
     }
 
@@ -422,6 +491,8 @@ describe("Milestone V2-04: Publishing, Scheduling & Distribution Engine", () => 
   afterEach(async () => {
     nock.cleanAll();
     nock.enableNetConnect();
+    providerSecrets.unregisterResolver();
+    providerSecrets.invalidate();
     if (fs.existsSync(config.videosDirPath)) {
       fs.rmSync(config.videosDirPath, { recursive: true, force: true });
     }
@@ -450,6 +521,110 @@ describe("Milestone V2-04: Publishing, Scheduling & Distribution Engine", () => 
   });
 
   describe("2. UploadPostProvider Multi-Platform Publisher", () => {
+    it("uses Provider Vault credentials for live Upload-Post validation when env is unset", async () => {
+      delete process.env.UPLOAD_POST_API_KEY;
+      providerSecrets.registerResolver(async (providerId, credentialType) =>
+        providerId === "upload_post" && credentialType === "api_key" ? "vault-upload-post-key" : null,
+      );
+
+      const provider = new UploadPostProvider();
+
+      nock("https://api.upload-post.com")
+        .matchHeader("x-api-key", "vault-upload-post-key")
+        .get("/api/uploadposts/me")
+        .reply(200, {
+          id: "safe-upload-post-user",
+          name: "Upload-Post User",
+        });
+
+      const result = await provider.validateConnection();
+
+      expect(result.configured).toBe(true);
+      expect(result.healthy).toBe(true);
+      expect(result.status).toBe("healthy");
+      expect(result.accountDetails?.accountId).toBe("safe-upload-post-user");
+    });
+
+    it("B. Provider Vault key wins when both vault and environment keys exist", async () => {
+      process.env.UPLOAD_POST_API_KEY = "stale-env-key";
+      providerSecrets.registerResolver(async (providerId, credentialType) =>
+        providerId === "upload_post" && credentialType === "api_key" ? "vault-upload-post-key" : null,
+      );
+
+      const provider = new UploadPostProvider();
+
+      nock("https://api.upload-post.com")
+        .matchHeader("x-api-key", "vault-upload-post-key")
+        .get("/api/uploadposts/me")
+        .reply(200, {
+          id: "vault-user",
+          name: "Vault User",
+        });
+
+      const result = await provider.validateConnection();
+
+      expect(result.configured).toBe(true);
+      expect(result.healthy).toBe(true);
+      expect(result.status).toBe("healthy");
+      expect(result.accountDetails?.accountId).toBe("vault-user");
+    });
+
+    it("C. reports not configured when neither vault nor environment key exists", async () => {
+      delete process.env.UPLOAD_POST_API_KEY;
+      providerSecrets.registerResolver(async () => null);
+
+      const provider = new UploadPostProvider();
+      const result = await provider.validateConnection();
+
+      expect(result.configured).toBe(false);
+      expect(result.healthy).toBe(false);
+      expect(result.status).toBe("not_configured");
+      expect(result.message).toContain("not configured");
+    });
+
+    it("D. never exposes plaintext credentials in provider or status responses", async () => {
+      const secret = "secret-vault-token-xyz-987";
+      providerSecrets.registerResolver(async (providerId, credentialType) =>
+        providerId === "upload_post" && credentialType === "api_key" ? secret : null,
+      );
+
+      const provider = new UploadPostProvider();
+      nock("https://api.upload-post.com")
+        .get("/api/uploadposts/me")
+        .reply(200, { id: "safe-id", name: "Safe Name" });
+
+      const result = await provider.validateConnection();
+      expect(JSON.stringify(result)).not.toContain(secret);
+
+      const status = await resolveUploadPostStatus();
+      expect(JSON.stringify(status)).not.toContain(secret);
+      expect(status.configured).toBe(true);
+      expect(status.redactedKey).toBe("••••••••");
+    });
+
+    it("E. automatic normal customer publishing resolves to Upload-Post", () => {
+      const registry = new PublishingProviderRegistry();
+      (["youtube", "tiktok", "instagram", "facebook", "linkedin", "twitter", "threads"] as const).forEach((platform) => {
+        expect(registry.getProviderForPlatform(platform).id).toBe("upload_post");
+      });
+    });
+
+    it("F. unsupported Upload-Post platform does not silently route to a legacy adapter", () => {
+      const registry = new PublishingProviderRegistry();
+      expect(() => registry.getProviderForPlatform("telegram")).toThrow(
+        /not supported by Upload-Post and no explicit legacy provider was requested/,
+      );
+    });
+
+    it("G. legacy direct provider remains explicitly addressable internally where required", () => {
+      const registry = new PublishingProviderRegistry();
+      expect(registry.getProviderForPlatform("telegram", "telegram_bot").id).toBe("telegram_bot");
+      expect(registry.getProviderForPlatform("youtube", "youtube_direct").id).toBe("youtube_direct");
+      expect(registry.getProviderForPlatform("tiktok", "tiktok_direct").id).toBe("tiktok_direct");
+      expect(registry.getProviderForPlatform("instagram", "meta_direct").id).toBe("meta_direct");
+      expect(registry.getProviderForPlatform("facebook", "meta_direct").id).toBe("meta_direct");
+    });
+
     it("publishes video successfully on 200 response", async () => {
       const provider = new UploadPostProvider({ apiKey: "test-api-key" });
 
@@ -1042,4 +1217,255 @@ describe("Milestone V2-04: Publishing, Scheduling & Distribution Engine", () => 
       expect(testProvider.invocationCount).toBe(3); // 1 YT + 1 TT failed + 1 TT retried = 3
     });
   });
+
+  /**
+   * Short Studio 2.5 publishing-persistence closure.
+   *
+   * The owner-authorized YouTube test publication succeeded externally, but the
+   * local record had to be repaired with hand-written SQL afterwards. Two
+   * separate things were wrong, and this suite pins both.
+   *
+   * 1. `POST /api/upload` reports per-platform outcomes keyed by platform, not
+   *    as a list. Only the list shape was understood, so a real success carried
+   *    no public URL and `provider_url` was persisted null.
+   * 2. Nothing ever called `getStatus()`. A provider that accepted the bytes and
+   *    finished later left the publication in `processing` permanently, because
+   *    no code owned the processing -> published transition.
+   *
+   * The payloads below are the ones Upload-Post actually returned for request
+   * `753d09d288124b7c8e76bc8f7820f793`, reduced to the fields the engine reads.
+   */
+  describe("12. Upload-Post Terminal Persistence & Automatic Reconciliation", () => {
+    const ARABIC_TITLE = "أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة";
+    const REQUEST_ID = "753d09d288124b7c8e76bc8f7820f793";
+    const YOUTUBE_URL = "https://www.youtube.com/watch?v=Fy7MMJmHxhk";
+
+    /** `POST /api/upload`, terminal in one call: results keyed by platform. */
+    const UPLOAD_COMPLETED_BODY = {
+      success: true,
+      status: "completed",
+      request_id: REQUEST_ID,
+      job_id: "7fdafe6a9b014c75af6ed949e4a2d1cf",
+      results: {
+        youtube: {
+          success: true,
+          status: "completed",
+          post_id: "Fy7MMJmHxhk",
+          url: YOUTUBE_URL,
+          attempts: 1,
+        },
+      },
+    };
+
+    /** `GET /api/uploadposts/status`, terminal: results as a list. */
+    const STATUS_COMPLETED_BODY = {
+      status: "completed",
+      completed: 1,
+      total: 1,
+      request_id: REQUEST_ID,
+      results: [
+        {
+          success: true,
+          platform: "youtube",
+          platform_post_id: "Fy7MMJmHxhk",
+          post_url: YOUTUBE_URL,
+          error_message: null,
+        },
+      ],
+    };
+
+    async function createArabicPublication(overrides: Record<string, unknown> = {}) {
+      return publishingService.createPublication({
+        videoId: "vid_123",
+        platform: "youtube",
+        provider: "upload_post",
+        title: ARABIC_TITLE,
+        caption: ARABIC_TITLE,
+        idempotencyKey: "closure_ar_v3_unlisted",
+        ...overrides,
+      } as any);
+    }
+
+    it("persists a synchronous Upload-Post completion without any manual repair", async () => {
+      let receivedBody = "";
+      nock("https://api.upload-post.com")
+        .post("/api/upload", (body) => {
+          receivedBody = typeof body === "string" ? body : String(body);
+          return true;
+        })
+        .reply(200, UPLOAD_COMPLETED_BODY);
+
+      const pub = await createArabicPublication();
+      await publishingService.publishPublication(pub.id);
+      const final = await publishingService.getPublication(pub.id);
+
+      // Everything the operator previously had to write by hand.
+      expect(final?.status).toBe("published");
+      expect(final?.providerPostId).toBe(REQUEST_ID);
+      expect(final?.providerUrl).toBe(YOUTUBE_URL);
+      expect(final?.publishedAt).toBeInstanceOf(Date);
+
+      const row = fakeDb.publications.get(pub.id);
+      expect(row.remote_state).toBe("completed");
+      expect(row.remote_state_checked_at).toBeInstanceOf(Date);
+
+      // Exactly one attempt, and it is recorded as having succeeded.
+      const attempts = fakeDb.attempts.filter((a) => a.publication_id === pub.id);
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0].status).toBe("succeeded");
+      expect(attempts[0].attempt_number).toBe(1);
+
+      // The lifecycle is legible from the event trail alone.
+      const stages = fakeDb.events.filter((e) => e.publication_id === pub.id).map((e) => e.stage);
+      expect(stages).toEqual(["created", "preflight", "upload_started", "provider_accepted"]);
+
+      // The Arabic title survives the round trip as UTF-8, both in the multipart
+      // body that leaves the process and in the stored record. The corrupted
+      // title on the live post came from the temporary QA harness, not here.
+      expect(receivedBody).toContain(ARABIC_TITLE);
+      expect(final?.title).toBe(ARABIC_TITLE);
+      expect(final?.title).not.toMatch(/\?{3,}/);
+
+      expect(fakeDb.publications.size).toBe(1);
+    });
+
+    it("drives processing to published from provider truth, with no operator step", async () => {
+      nock("https://api.upload-post.com")
+        .post("/api/upload")
+        .reply(202, { request_id: REQUEST_ID, status: "in_progress", message: "Queued" });
+
+      const pub = await createArabicPublication();
+      await publishingService.publishPublication(pub.id);
+
+      // The provider has only accepted the bytes so far.
+      const accepted = await publishingService.getPublication(pub.id);
+      expect(accepted?.status).toBe("processing");
+      expect(accepted?.providerPostId).toBe(REQUEST_ID);
+      expect(accepted?.providerUrl ?? null).toBeNull();
+      expect(accepted?.publishedAt).toBeUndefined();
+
+      nock("https://api.upload-post.com")
+        .get("/api/uploadposts/status")
+        .query(true)
+        .reply(200, STATUS_COMPLETED_BODY);
+
+      const settled = await publishingService.reconcileProcessingPublications();
+      expect(settled).toBe(1);
+
+      const final = await publishingService.getPublication(pub.id);
+      expect(final?.status).toBe("published");
+      expect(final?.providerPostId).toBe(REQUEST_ID);
+      expect(final?.providerUrl).toBe(YOUTUBE_URL);
+      expect(final?.publishedAt).toBeInstanceOf(Date);
+      expect(fakeDb.publications.get(pub.id).remote_state).toBe("completed");
+
+      const stages = fakeDb.events.filter((e) => e.publication_id === pub.id).map((e) => e.stage);
+      expect(stages).toEqual([
+        "created",
+        "preflight",
+        "upload_started",
+        "provider_accepted",
+        "provider_completed",
+      ]);
+
+      // Still one publication and one attempt: reconciliation settles a record,
+      // it does not re-publish one.
+      expect(fakeDb.publications.size).toBe(1);
+      expect(fakeDb.attempts.filter((a) => a.publication_id === pub.id)).toHaveLength(1);
+    });
+
+    it("replaying the same provider completion changes nothing", async () => {
+      nock("https://api.upload-post.com")
+        .post("/api/upload")
+        .reply(202, { request_id: REQUEST_ID, status: "in_progress" });
+      nock("https://api.upload-post.com")
+        .get("/api/uploadposts/status")
+        .query(true)
+        .times(3)
+        .reply(200, STATUS_COMPLETED_BODY);
+
+      const pub = await createArabicPublication();
+      await publishingService.publishPublication(pub.id);
+      await publishingService.reconcileProcessingPublications();
+
+      const afterFirst = await publishingService.getPublication(pub.id);
+      const publishedAt = afterFirst?.publishedAt?.getTime();
+      const eventCount = fakeDb.events.filter((e) => e.publication_id === pub.id).length;
+
+      // Replay the identical completion twice, by both entry points.
+      await publishingService.reconcilePublication(pub.id);
+      await publishingService.reconcileProcessingPublications();
+
+      const afterReplay = await publishingService.getPublication(pub.id);
+      expect(afterReplay?.status).toBe("published");
+      expect(afterReplay?.publishedAt?.getTime()).toBe(publishedAt);
+      expect(afterReplay?.providerUrl).toBe(YOUTUBE_URL);
+      expect(fakeDb.events.filter((e) => e.publication_id === pub.id)).toHaveLength(eventCount);
+      expect(fakeDb.attempts.filter((a) => a.publication_id === pub.id)).toHaveLength(1);
+      expect(fakeDb.publications.size).toBe(1);
+    });
+
+    it("the same idempotency key never creates a second publication", async () => {
+      nock("https://api.upload-post.com").post("/api/upload").reply(200, UPLOAD_COMPLETED_BODY);
+
+      const first = await createArabicPublication();
+      await publishingService.publishPublication(first.id);
+
+      const second = await createArabicPublication();
+      const third = await createArabicPublication({ title: "A different title entirely" });
+
+      expect(second.id).toBe(first.id);
+      expect(third.id).toBe(first.id);
+      expect(third.title).toBe(ARABIC_TITLE);
+      expect(fakeDb.publications.size).toBe(1);
+
+      // The already-published record is not re-sent to the provider either.
+      await publishingService.publishPublication(first.id);
+      expect(fakeDb.attempts.filter((a) => a.publication_id === first.id)).toHaveLength(1);
+      expect(nock.pendingMocks()).toHaveLength(0);
+    });
+
+    it("a per-platform failure inside a completed request is not reported as published", async () => {
+      nock("https://api.upload-post.com")
+        .post("/api/upload")
+        .reply(200, {
+          success: true,
+          status: "completed",
+          request_id: REQUEST_ID,
+          results: {
+            youtube: { success: false, status: "failed", error_message: "Channel rejected the upload." },
+          },
+        });
+
+      const pub = await createArabicPublication({ idempotencyKey: "closure_ar_v3_partial_fail" });
+      await publishingService.publishPublication(pub.id);
+
+      const final = await publishingService.getPublication(pub.id);
+      expect(final?.status).toBe("failed");
+      expect(final?.publishedAt).toBeUndefined();
+      expect(final?.providerUrl ?? null).toBeNull();
+    });
+
+    it("the scheduler heartbeat is what settles a processing publication in production", async () => {
+      nock("https://api.upload-post.com")
+        .post("/api/upload")
+        .reply(202, { request_id: REQUEST_ID, status: "in_progress" });
+      nock("https://api.upload-post.com")
+        .get("/api/uploadposts/status")
+        .query(true)
+        .reply(200, STATUS_COMPLETED_BODY);
+
+      const pub = await createArabicPublication({ idempotencyKey: "closure_ar_v3_scheduler" });
+      await publishingService.publishPublication(pub.id);
+      expect((await publishingService.getPublication(pub.id))?.status).toBe("processing");
+
+      const scheduler = new PublishingScheduler(fakeDb as any, publishingService, { pollIntervalMs: 999_999 });
+      await scheduler.tick();
+
+      const final = await publishingService.getPublication(pub.id);
+      expect(final?.status).toBe("published");
+      expect(final?.providerUrl).toBe(YOUTUBE_URL);
+    });
+  });
+
 });

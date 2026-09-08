@@ -71,25 +71,35 @@ describe("no hardcoded product version in customer copy", () => {
 
 describe("no stale provider claims", () => {
   it("does not present Piper as a production voice path", () => {
-    // Arabic production is ElevenLabs. Piper is legacy: historical jobs stay
-    // readable, but no screen may present it as how Arabic is produced.
+    // Arabic production is Local Voice (VoiceTut/KemeTone) by default, with
+    // ElevenLabs as an opt-in premium alternative. Piper is legacy: historical
+    // jobs stay readable, but no screen may present it as how Arabic is produced.
     for (const file of CUSTOMER_FACING) {
       const code = codeWithoutComments(read(file));
       expect(code, `${file} mentions Piper`).not.toMatch(/piper/i);
     }
   });
 
-  it("names ElevenLabs as the Arabic narration route in Setup", () => {
-    expect(CATALOGS.en["setup.welcomeBodyVoice"]).toMatch(/ElevenLabs/);
-    expect(CATALOGS.ar["setup.welcomeBodyVoice"]).toMatch(/ElevenLabs/);
-    expect(CATALOGS.en["setup.arabicRequiresElevenLabs"]).toMatch(/ElevenLabs/);
+  it("names Local Voice, not ElevenLabs, as the default Arabic narration route in Setup", () => {
+    // ElevenLabs may still be *mentioned* as the optional premium alternative,
+    // so this checks the local-voice framing is present rather than absence
+    // of the word "ElevenLabs".
+    expect(CATALOGS.en["setup.welcomeBodyVoice"]).toMatch(/VoiceTut/);
+    expect(CATALOGS.ar["setup.welcomeBodyVoice"]).toMatch(/VoiceTut/);
+    expect(CATALOGS.en["setup.arabicRequiresElevenLabs"]).toMatch(/locally/i);
+    expect(CATALOGS.en["setup.arabicRequiresElevenLabs"]).not.toMatch(/^Arabic narration requires ElevenLabs/);
   });
 
-  it("says Arabic needs ElevenLabs without claiming the system is broken", () => {
-    // English production is unaffected by a missing key, and the copy has to
-    // say so or an operator will read it as an outage.
-    expect(CATALOGS.en["health.arabicNotReadyBody"]).toMatch(/English/);
-    expect(CATALOGS.en["dashboard.alerts.elevenLabsMissingBody"]).toMatch(/English/);
+  it("says Arabic needs local voice setup without claiming the system is broken, and never claims ElevenLabs is required", () => {
+    // English production is unaffected by missing Arabic voice setup, and the
+    // copy has to say so or an operator will read it as an outage. It must
+    // also never claim ElevenLabs specifically is required, since Local Voice
+    // (VoiceTut/KemeTone) is the actual default, free route.
+    for (const key of ["health.arabicNotReadyBody", "dashboard.alerts.elevenLabsMissingBody"] as const) {
+      expect(CATALOGS.en[key]).toMatch(/English/);
+      expect(CATALOGS.en[key]).toMatch(/Local Voice/);
+      expect(CATALOGS.en[key]).not.toMatch(/requires ElevenLabs/i);
+    }
   });
 });
 

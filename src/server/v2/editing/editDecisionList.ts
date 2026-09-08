@@ -82,6 +82,8 @@ export type VisualShot = {
   searchTerms?: string[];
   /** Why the router picked this source; recorded so hybrid choices are auditable. */
   routingReason?: string;
+  /** Concept IDs (stockQueryFamilies.ts) recognised in this shot's query - empty when nothing was recognised. Feeds visualCoherence.ts's adjacent-shot domain-jump check. */
+  matchedConcepts?: string[];
 };
 
 export type EditDecisionList = {

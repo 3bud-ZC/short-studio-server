@@ -21,6 +21,15 @@ import {
 } from "../creative/ctaPolicy";
 import { matchFactPack, type FactPackEntry } from "./factPacks";
 import { detectContentStyle } from "./contentStyleDetector";
+import { extractTopicConcepts } from "./scriptQuality";
+import { estimateSpeechSeconds, getSpeakingRate, type SpeakingRateProfile } from "./voiceSpeakingRate";
+import {
+  allocateBeatDurations,
+  buildContentDurationBudget,
+  checkContentDurationFeasibility,
+  composeNarrationForDuration,
+  type NarrationUnit,
+} from "./scriptDurationController";
 
 function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
@@ -220,7 +229,39 @@ export class LocalContentAIProvider implements ContentAIProvider {
       durationSeconds,
       contentStyle,
       brandName: params.brandName || params.brandKit?.brandName,
+      voiceProvider: params.voiceProvider,
+      voiceId: params.voiceId,
     }), prompt, isAr, dialect, resolvedCta);
+
+    // Pre-TTS fail-closed feasibility gate (Short Studio 2.5 Arabic content-
+    // planning closure, section 8): even after the planner has already
+    // chosen how many scenes to keep and how to size them, ask whether the
+    // resulting narration could plausibly ever land within its own scene's
+    // target - using the SAME real calibrated speaking rate and the SAME
+    // bounded natural speed-adjustment ceiling the post-TTS corrector is
+    // allowed to use - before spending a single real TTS call on content
+    // already known to be impossible (e.g. a request too short to hold
+    // even the minimal required message). The post-TTS `decideCorrectionAction`
+    // + total-duration authority gate in ShortCreator remain the final,
+    // real-audio authority; this is strictly an earlier, cheaper guard.
+    const planningRate = getSpeakingRate(params.voiceProvider || "", params.voiceId || "", isAr ? "ar" : "en");
+    const sceneEstimates = scenes.map((s) => estimateSpeechSeconds(s.narration, planningRate));
+    const durationBudget = buildContentDurationBudget({
+      requestedVideoSeconds: durationSeconds,
+      reservedOutroSeconds: Math.min(2.5, Math.max(1.5, Math.round(durationSeconds * 0.1 * 10) / 10)),
+      sceneEstimatedSeconds: sceneEstimates,
+    });
+    const feasibility = checkContentDurationFeasibility(
+      scenes.map((s, i) => ({ durationSeconds: s.durationSeconds, estimatedSeconds: sceneEstimates[i] })),
+      durationBudget,
+      2.5,
+      0.5,
+    );
+    if (!feasibility.feasible) {
+      throw new Error(
+        `CONTENT_DURATION_BUDGET_NOT_MET: ${feasibility.reason} (requested ${durationSeconds}s, narration budget ${(durationBudget.narrationBudgetMs / 1000).toFixed(1)}s, estimated narration ${(durationBudget.estimatedNarrationMs / 1000).toFixed(1)}s across ${durationBudget.selectedSceneCount} scene(s)).`,
+      );
+    }
 
     const ctaText = resolvedCta.text;
     const contentProvenance = factPackMatch ? "DETERMINISTIC" : curiosityStyle ? "SAFE_GENERIC" : "DETERMINISTIC";
@@ -256,6 +297,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
       metadata: {
         planner: "LocalContentAIProvider",
         plannerVersion: "3.0.0",
+        durationBudget,
         promptCompiler: {
           version: "prompt_compiler.v3",
           rawPromptLeakGuard: true,
@@ -374,9 +416,17 @@ export class LocalContentAIProvider implements ContentAIProvider {
     durationSeconds: number;
     contentStyle: string;
     brandName?: string;
+    voiceProvider?: string;
+    voiceId?: string;
   }): ProductionSceneSpec[] {
-    const { prompt, isArabic: isAr, dialect, durationSeconds, contentStyle, brandName } = context;
+    const { prompt, isArabic: isAr, dialect, durationSeconds, contentStyle, brandName, voiceProvider, voiceId } = context;
     const lower = prompt.toLowerCase();
+    // Real, measured calibration when the exact voice is already known (see
+    // voiceSpeakingRate.ts); a language-level default otherwise. Used only by
+    // duration-aware content packs (currently: the backup/tech vertical) to
+    // size how much narration to write BEFORE TTS - the real synthesized
+    // audio duration remains the only authority for the final timeline.
+    const speakingRate = getSpeakingRate(voiceProvider || "", voiceId || "", isAr ? "ar" : "en");
 
     // Outro budget deduction
     const outroTime = Math.min(2.5, Math.max(1.5, Math.round(durationSeconds * 0.1 * 10) / 10));
@@ -402,6 +452,15 @@ export class LocalContentAIProvider implements ContentAIProvider {
     const sceneCount = durationSeconds <= 22 ? 3 : 4;
     const durPerScene = Math.round((contentBudget / sceneCount) * 10) / 10;
 
+    // "back up"/"backing up" (two words, or with a gerund/past-tense suffix)
+    // is the natural phrasing customers actually type - a literal-only
+    // "backup" substring test missed this proof's own real request ("Why
+    // small businesses should back up their files") entirely and fell
+    // through to the generic template instead of the real backup content
+    // pack (ABUD_SHORTS_ENGINE_STATUS.md section 4).
+    const isBackupTopicEn = /back(?:s|ing|ed)?[\s-]?up|\bfiles\b|data loss|cloud storage/i.test(lower);
+    const isBackupTopicAr = /نسخ|احتياطي|ملفات|فقدان البيانات/i.test(prompt);
+
     if (isAr) {
       if (lower.includes("موقع") || lower.includes("مواقع") || lower.includes("ويب") || lower.includes("web") || lower.includes("تصميم")) {
         return this.buildWebDesignScenesArabic(dialect, durPerScene, brandName, durationSeconds);
@@ -418,6 +477,9 @@ export class LocalContentAIProvider implements ContentAIProvider {
       if (lower.includes("عقار") || lower.includes("شقة") || lower.includes("فيلا") || lower.includes("كمبوند")) {
         return this.buildRealEstateScenesArabic(dialect, durPerScene, brandName);
       }
+      if (isBackupTopicAr) {
+        return this.buildTechEducationalScenesArabic(contentBudget, speakingRate, brandName);
+      }
       return this.buildGenericArabicScenes(prompt, dialect, durPerScene, brandName);
     }
 
@@ -431,8 +493,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
     if (lower.includes("fitness") || lower.includes("gym") || lower.includes("workout") || lower.includes("training") || lower.includes("studio")) {
       return this.buildFitnessScenesEnglish(durPerScene, brandName);
     }
-    if (lower.includes("backup") || lower.includes("cloud") || lower.includes("software") || lower.includes("tech")) {
-      return this.buildTechEducationalScenesEnglish(durPerScene, brandName);
+    if (isBackupTopicEn || lower.includes("software") || lower.includes("tech")) {
+      return this.buildTechEducationalScenesEnglish(contentBudget, speakingRate, brandName);
     }
     return this.buildGenericEnglishScenes(prompt, durPerScene, brandName);
   }
@@ -931,14 +993,22 @@ export class LocalContentAIProvider implements ContentAIProvider {
     dur: number,
     brand?: string,
   ): ProductionSceneSpec[] {
-    const cleanPrompt = prompt.replace(/[^\w\s\u0600-\u06FF]/gi, "").slice(0, 40);
+    // Previously spliced an arbitrarily-truncated raw substring of the
+    // user's own prompt straight into the narration (sliced to 40 chars with
+    // no regard for word boundaries - a genuine raw-prompt-leak defect).
+    // Replaced with the same deterministic topic-concept extraction the
+    // script-quality gate itself uses, so this fallback (used whenever the
+    // prompt matches no curated Arabic vertical) stays about the customer's
+    // actual subject regardless of what it is.
+    const topicConcepts = extractTopicConcepts(prompt, "ar").slice(0, 3);
+    const topicPhrase = topicConcepts.length > 0 ? topicConcepts.join(" \u0648") : "\u0627\u062D\u062A\u064A\u0627\u062C\u0627\u062A\u0643";
     return [
       {
         sceneIndex: 0,
         purpose: "hook",
         durationSeconds: dur,
-        narration: `هل تبحث عن أفضل طريقة للوصول إلى ${cleanPrompt} بكل سهولة وسرعة؟`,
-        onScreenText: cleanPrompt,
+        narration: `إليك أسهل طريقة للاهتمام بـ ${topicPhrase} بكل سهولة وسرعة.`,
+        onScreenText: topicPhrase,
         stockSearchTerms: ["modern technology", "business meeting", "lifestyle"],
         visualPrompt: "Dynamic modern visual scene representing progress and success",
         visualSource: "stock",
@@ -949,7 +1019,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         sceneIndex: 1,
         purpose: "solution",
         durationSeconds: dur,
-        narration: "نقدم لك حلولاً مصممة خصيصاً لتمنحك أعلى جودة وأفضل تجربة.",
+        narration: `نقدم لك حلولاً حقيقية تساعدك في ${topicPhrase} بأعلى جودة وأفضل تجربة.`,
         onScreenText: "أعلى جودة وأفضل تجربة",
         stockSearchTerms: ["quality service", "happy customer", "innovation"],
         visualPrompt: "Focused modern professional delivering high quality results",
@@ -972,60 +1042,307 @@ export class LocalContentAIProvider implements ContentAIProvider {
     ];
   }
 
+  /**
+   * Duration-aware backup/tech content pack (ABUD_SHORTS_ENGINE_STATUS.md
+   * section 4-9). Each beat (hook/problem/solution/cta) has one REQUIRED
+   * line - the scene's core meaning, always included - plus real, grounded
+   * OPTIONAL supporting sentences that are added only as needed to reach
+   * this scene's share of `contentBudget` at the given voice's calibrated
+   * speaking rate (see scriptDurationController.ts). Nothing here is
+   * invented filler: every optional sentence is a genuine, on-topic
+   * elaboration a human copywriter would recognise as real ad copy for this
+   * exact vertical, not a padding trick.
+   */
   private buildTechEducationalScenesEnglish(
-    dur: number,
+    contentBudget: number,
+    rate: SpeakingRateProfile,
     brand?: string,
   ): ProductionSceneSpec[] {
-    return [
+    const beats: Array<{
+      id: string;
+      essential: boolean;
+      purpose: ProductionSceneSpec["purpose"];
+      onScreenText: string;
+      stockSearchTerms: string[];
+      visualPrompt: string;
+      transition: ProductionSceneSpec["transition"];
+      units: NarrationUnit[];
+    }> = [
       {
-        sceneIndex: 0,
+        id: "hook",
+        essential: true,
         purpose: "hook",
-        durationSeconds: dur,
-        narration: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?",
         onScreenText: "60% of Businesses Lose Data",
         stockSearchTerms: ["server room blinking", "cyber security tech", "business computer"],
         visualPrompt: "Dramatic illuminated server rack with blinking security lights",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "cut",
+        units: [
+          {
+            role: "required",
+            text: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?",
+          },
+          {
+            role: "optional",
+            text: "It rarely happens with any warning - one bad drive, one power surge, and years of records are gone.",
+          },
+          {
+            role: "optional",
+            text: "Client contracts, financial records, years of project files - all of it can vanish in a single moment.",
+          },
+        ],
       },
       {
-        sceneIndex: 1,
+        id: "problem",
+        essential: false,
         purpose: "problem",
-        durationSeconds: dur,
-        narration: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations.",
         onScreenText: "The Real Cost of Downtime",
         stockSearchTerms: ["stressed worker computer", "cyber attack graphic", "technology failure"],
         visualPrompt: "Stressed professional staring at frozen screen with error warning",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "cut",
+        units: [
+          {
+            role: "required",
+            text: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations.",
+          },
+          {
+            role: "optional",
+            text: "Every hour spent trying to recover lost files is an hour not spent serving customers.",
+          },
+          {
+            role: "optional",
+            text: "And by the time you notice something is wrong, the version you need to restore might already be overwritten.",
+          },
+        ],
       },
       {
-        sceneIndex: 2,
+        id: "solution",
+        essential: false,
         purpose: "solution",
-        durationSeconds: dur,
-        narration: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress.",
         onScreenText: "Automated Encrypted Backups",
         stockSearchTerms: ["cloud computing data", "secure backup progress", "cyber security"],
         visualPrompt: "Sleek holographic backup synchronization with green checkmarks",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "fade",
+        units: [
+          {
+            role: "required",
+            text: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress.",
+          },
+          {
+            role: "optional",
+            text: "A good backup routine runs quietly in the background, so protecting your work never becomes another task on your list.",
+          },
+          {
+            role: "optional",
+            text: "Whether it is a laptop, a shared drive, or a cloud folder, the same simple habit keeps everything recoverable.",
+          },
+        ],
       },
       {
-        sceneIndex: 3,
+        id: "cta",
+        essential: true,
         purpose: "cta",
-        durationSeconds: dur,
-        narration: "Follow for more essential tech tips and secure your business infrastructure today.",
         onScreenText: "Follow For Daily Tech Tips",
         stockSearchTerms: ["technology team success", "smiling engineer", "software development"],
         visualPrompt: "Confident IT professional giving thumbs up with clean modern office background",
-        visualSource: "stock",
-        visualProvider: "pexels",
         transition: "cut",
+        units: [
+          {
+            role: "required",
+            // Explicitly names "back up" and "files" (not just generic "tech
+            // tips") so the topic stays clear even when a tight budget drops
+            // the "problem"/"solution" beats and this required sentence ends
+            // up carrying the CTA alone (allocateBeatDurations).
+            text: "Follow for more tips on backing up your business files and keeping your work protected.",
+          },
+          {
+            role: "optional",
+            text: brand
+              ? `${brand} can help you set up a reliable backup routine in less time than you think.`
+              : "Setting up a reliable backup routine takes less time than you think.",
+          },
+          {
+            role: "optional",
+            text: "Start today, before the next hardware failure decides the timeline for you.",
+          },
+        ],
       },
     ];
+
+    // Scene-level rebalancing (section 9): a single required sentence at
+    // Kokoro's real calibrated rate can take longer than an equal 1/4 share
+    // of a short requested duration - allocate each beat's share
+    // proportional to its own required narration's real length instead, and
+    // drop the least-essential beats first if even the essential ones alone
+    // would not fit. See allocateBeatDurations's own doc comment.
+    const allocations = allocateBeatDurations(
+      beats.map((b) => ({ id: b.id, units: b.units, essential: b.essential })),
+      contentBudget,
+      rate,
+    );
+    const allocationById = new Map(allocations.map((a) => [a.id, a]));
+
+    return beats
+      .filter((beat) => allocationById.get(beat.id)?.included)
+      .map((beat, sceneIndex) => {
+        const targetSeconds = allocationById.get(beat.id)!.targetSeconds;
+        const composed = composeNarrationForDuration(beat.units, targetSeconds, rate);
+        const nextUnits = beat.units.slice(composed.unitsUsed);
+        return {
+          sceneIndex,
+          purpose: beat.purpose,
+          durationSeconds: targetSeconds,
+          narration: composed.text,
+          onScreenText: beat.onScreenText,
+          stockSearchTerms: beat.stockSearchTerms,
+          visualPrompt: beat.visualPrompt,
+          visualSource: "stock",
+          visualProvider: "pexels",
+          transition: beat.transition,
+          narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
+        };
+      });
+  }
+
+  /**
+   * Arabic counterpart of buildTechEducationalScenesEnglish - previously
+   * missing entirely (any Arabic backup/tech prompt fell through to the
+   * topic-neutral generic Arabic template). Same duration-aware composition.
+   *
+   * Short Studio 2.5 Arabic content-planning closure: this function used to
+   * split `contentBudget` into a fixed, equal quarter per beat regardless of
+   * duration - the actual root cause of the real Arabic overshoot (a scene
+   * planned for ~2.8s of an 11s budget, whose own REQUIRED sentence alone
+   * needs ~4.8s at VoiceTut/Mohamed's real calibrated rate, has no way to
+   * fit). `buildTechEducationalScenesEnglish` already solved this correctly
+   * via `allocateBeatDurations` - proportional, real-length-aware
+   * allocation that drops non-essential beats first when the budget is
+   * tight - but the Arabic counterpart never adopted it. Now it does,
+   * beat-for-beat identical in structure to the English version: hook/cta
+   * are essential (a short video is not useful without them), problem/
+   * solution are optional and are the first to be dropped for a tight
+   * budget, exactly like English already does. This is what makes scene
+   * count duration-aware instead of a hardcoded four, and reuses the same
+   * tested allocator rather than inventing Arabic-specific logic.
+   */
+  private buildTechEducationalScenesArabic(
+    contentBudget: number,
+    rate: SpeakingRateProfile,
+    brand?: string,
+  ): ProductionSceneSpec[] {
+    const beats: Array<{
+      id: string;
+      essential: boolean;
+      purpose: ProductionSceneSpec["purpose"];
+      onScreenText: string;
+      stockSearchTerms: string[];
+      visualPrompt: string;
+      transition: ProductionSceneSpec["transition"];
+      units: NarrationUnit[];
+    }> = [
+      {
+        id: "hook",
+        essential: true,
+        purpose: "hook",
+        onScreenText: "لو بتشتغل على مشروع صغير",
+        stockSearchTerms: ["laptop typing files close up", "small business office desk"],
+        visualPrompt: "Close-up of hands typing on a laptop with business files visible",
+        transition: "cut",
+        units: [
+          { role: "required", text: "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس." },
+          { role: "optional", text: "عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية." },
+          { role: "optional", text: "عقود عملائك، حساباتك، وكل ملفات مشروعك، ممكن تختفي في لحظة واحدة." },
+        ],
+      },
+      {
+        id: "problem",
+        essential: false,
+        purpose: "problem",
+        onScreenText: "خسارة الملفات بتكلفك وقتك",
+        stockSearchTerms: ["stressed business owner laptop", "frustrated worker computer"],
+        visualPrompt: "Frustrated small business owner staring at a frozen laptop screen",
+        transition: "cut",
+        units: [
+          { role: "required", text: "من غير نسخة احتياطية، أي مشكلة بسيطة ممكن توقفك عن شغلك تماماً." },
+          { role: "optional", text: "كل ساعة بتضيع في محاولة استرجاع ملفاتك، هي ساعة كنت ممكن تخدم فيها عملائك." },
+          { role: "optional", text: "وأحياناً لما تكتشف المشكلة، بيكون الوقت اتأخر والنسخة اللي محتاجها راحت خلاص." },
+        ],
+      },
+      {
+        id: "solution",
+        essential: false,
+        purpose: "solution",
+        onScreenText: "نسخة احتياطية يومية تلقائية",
+        stockSearchTerms: ["external hard drive close up", "cloud storage sync laptop"],
+        visualPrompt: "External hard drive connected to a laptop with a sync progress indicator",
+        transition: "fade",
+        units: [
+          { role: "required", text: "عشان كده لازم تعمل نسخة احتياطية لملفاتك بشكل دوري، وتحافظ على شغلك من الضياع." },
+          { role: "optional", text: "نسخة احتياطية منظمة بتشتغل من غير ما تحس، وتضمنلك إنك ترجع شغلك في دقايق." },
+          { role: "optional", text: "سواء الملفات على اللاب توب أو على السحابة، نفس العادة البسيطة بتحافظ على كل حاجة." },
+        ],
+      },
+      {
+        id: "cta",
+        essential: true,
+        purpose: "cta",
+        onScreenText: "ابدأ دلوقتي",
+        stockSearchTerms: ["small business owner smiling laptop", "satisfied entrepreneur office"],
+        visualPrompt: "Small business owner smiling confidently while working on a laptop",
+        transition: "cut",
+        units: [
+          // Explicitly names "نسخة احتياطية" (backup copy) - not just generic
+          // "protect your files" - so the topic stays clear even when a
+          // tight budget drops the problem/solution beats (allocateBeatDurations)
+          // and this required sentence ends up carrying the CTA alone. Same
+          // length as the sentence it replaced (60 chars) to keep the same
+          // duration profile; mirrors the equivalent English CTA fix
+          // (buildTechEducationalScenesEnglish's own comment on this same
+          // pattern).
+          { role: "required", text: "تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك." },
+          {
+            role: "optional",
+            text: brand
+              ? `${brand} بيساعدك تظبط نظام نسخ احتياطي موثوق في وقت أقل مما تتخيل.`
+              : "تنظيم نسخة احتياطية موثوقة بياخد وقت أقل بكتير مما تتخيل.",
+          },
+          { role: "optional", text: "ابدأ من دلوقتي، قبل ما عطل مفاجئ يحدد لك الميعاد بدل ما تختاره إنت." },
+        ],
+      },
+    ];
+
+    // Scene-level rebalancing (mirrors buildTechEducationalScenesEnglish
+    // exactly): allocate each beat's share of contentBudget proportional to
+    // its own required narration's real estimated length, dropping the
+    // least-essential beats first (problem, then solution) if even the
+    // essential ones alone would not fit. This is what makes scene count
+    // duration-aware for Arabic instead of a hardcoded four.
+    const allocations = allocateBeatDurations(
+      beats.map((b) => ({ id: b.id, units: b.units, essential: b.essential })),
+      contentBudget,
+      rate,
+    );
+    const allocationById = new Map(allocations.map((a) => [a.id, a]));
+
+    return beats
+      .filter((beat) => allocationById.get(beat.id)?.included)
+      .map((beat, sceneIndex) => {
+        const targetSeconds = allocationById.get(beat.id)!.targetSeconds;
+        const composed = composeNarrationForDuration(beat.units, targetSeconds, rate);
+        const nextUnits = beat.units.slice(composed.unitsUsed);
+        return {
+          sceneIndex,
+          purpose: beat.purpose,
+          durationSeconds: targetSeconds,
+          narration: composed.text,
+          onScreenText: beat.onScreenText,
+          stockSearchTerms: beat.stockSearchTerms,
+          visualPrompt: beat.visualPrompt,
+          visualSource: "stock",
+          visualProvider: "pexels",
+          transition: beat.transition,
+          narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
+        };
+      });
   }
 
   private buildCafeScenesEnglish(
@@ -1139,12 +1456,21 @@ export class LocalContentAIProvider implements ContentAIProvider {
     dur: number,
     brand?: string,
   ): ProductionSceneSpec[] {
+    // This fallback runs whenever the prompt matched no curated English
+    // vertical (web design/cafe/fitness/tech). It used to be pure filler
+    // with zero connection to what was actually asked for ("Here's
+    // something worth seeing... Here is what makes it worth your
+    // attention.") - topic-anchored with the same deterministic concept
+    // extraction the script-quality gate itself uses, so this template
+    // stays about the customer's actual subject regardless of what it is.
+    const topicConcepts = extractTopicConcepts(prompt, "en").slice(0, 3);
+    const topicPhrase = topicConcepts.length > 0 ? topicConcepts.join(", ") : "what matters most here";
     return [
       {
         sceneIndex: 0,
         purpose: "hook",
         durationSeconds: dur,
-        narration: "Here's something worth seeing.",
+        narration: `Here's what you need to know about ${topicPhrase}.`,
         stockSearchTerms: ["cinematic hero shot", "modern lifestyle", "close up detail"],
         visualPrompt: "High energy cinematic establishing shot introducing the subject",
         visualSource: "stock",
@@ -1155,7 +1481,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         sceneIndex: 1,
         purpose: "solution",
         durationSeconds: dur,
-        narration: "Here is what makes it worth your attention.",
+        narration: `When it comes to ${topicPhrase}, it's easier to get right than you'd expect - and worth doing today.`,
         stockSearchTerms: ["quality craftsmanship", "detail shot", "modern technology"],
         visualPrompt: "Close up detail showcasing quality and craft",
         visualSource: "stock",

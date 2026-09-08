@@ -1,4 +1,4 @@
-# ABUD Shorts Engine V2 — Status
+# Short Studio Server — Status
 
 > **Canonical status file.** This file, at the repository root
 > (`source/ABUD_SHORTS_ENGINE_STATUS.md`), is the single status document used for
@@ -9,9 +9,109 @@
 > the repository are snapshots and are not maintained. Everything under "Current
 > Product State" describes the state right now; every section below it is a
 > historical milestone record, preserved as written at the time, including
-> superseded Piper and provider evidence.
+> superseded Piper and provider evidence. It keeps its historical filename
+> through the Short Studio rebrand for continuity.
 
 ## Current Product State
+
+Product: Short Studio
+
+Technical Product: Short Studio Server
+
+Version: 2.5.0
+
+Stage: GENERAL AVAILABILITY CANDIDATE — the code/CLI/installer/UI rebrand from
+ABUD Shorts Engine 2.4.0, isolated fresh install, isolated migration rehearsal,
+LOCAL_SINGLE_USER qualification, Docker consolidation, permanent primary cutover
+to port 3130 at %ProgramData%\ShortStudio, Pexels activation, host-native Local
+Voice readiness, and owner-approved final Arabic/English video candidates are
+complete and verified. Remaining commercial closure gates: Upload-Post live
+activation, owner-authorized test publication, release/package closure, and
+final GA promotion. Do not read this entry as GA yet.
+
+Legacy: Formerly ABUD Shorts Engine. Built from `main` at commit `be44afe3`
+("V2.4 client delivery closure & operational freeze") on branch
+`v2.5-short-studio`; `main`, the `v2.4.0` tag and the V2.4 GitHub Release are
+untouched by this work.
+
+Video: Production Ready — FFmpeg/hybrid (`ffmpeg_fast`/`hybrid_ffmpeg`) is the
+**canonical, final 2.5 production renderer**, with libass as the final caption
+rasterizer. This is a settled product decision, not a placeholder: Revideo
+(`@revideo/renderer`) is **experimental/deferred post-2.5** - real, preserved
+in source, not wired into the default path, and explicitly **not part of the
+2.5 GA gate**. See "Short Studio 2.5 Final Video Engine Closure" near the end
+of this file for the full reasoning (a reproducible Chromium compose hang on
+real content, the production image never having shipped Chromium at all, and
+the Revideo+libass hybrid renderer existing but never wired into
+`ShortCreator`). No further Revideo work is expected before GA.
+
+Arabic Voice: VoiceTut Local High Quality is the production default
+(`ARABIC_PRODUCTION_PROVIDER` in `src/server/v2/voice-providers/types.ts`),
+KemeTone Local Lightweight is the CPU fallback, ElevenLabs is an explicit
+opt-in premium alternative — never a silent default or requirement. This pass
+found and fixed several UI/health surfaces (Setup Wizard copy, system health
+messages, dashboard alerts) that had drifted back to a stale "Arabic requires
+ElevenLabs" framing predating VoiceTut; they now correctly report local-voice
+readiness first.
+
+Video Gate: CLOSED / PASS. Final Arabic Owner Review: APPROVED. Final English
+Owner Review: APPROVED. Arabic Content Planning: PASS. Arabic Duration: PASS.
+Arabic Caption Tofu: PASS.
+
+2.5 Renderer: FFMPEG/HYBRID - FINAL. Final Caption Renderer: LIBASS. Revideo:
+EXPERIMENTAL / DEFERRED POST-2.5.
+
+Publishing: Upload-Post is AUTHENTICATED & LIVE VERIFIED. Single owner-authorized
+test publication to YouTube (NeuralCraft / @neuralcraft-c8c) SUCCEEDED:
+video short-studio-final-ar-v3.mp4 published as UNLISTED (Provider ID:
+753d09d288124b7c8e76bc8f7820f793, YouTube ID: Fy7MMJmHxhk, URL:
+https://www.youtube.com/watch?v=Fy7MMJmHxhk). Exactly 1 external upload/post,
+0 duplicates.
+
+Publishing Persistence: CLOSED / PASS. The normal product lifecycle now
+persists a completed Upload-Post publication automatically (status,
+provider_post_id, provider_url, remote_state, published_at) and reconciles a
+provider that finishes asynchronously, with no operator SQL. Fix: 6c38844.
+
+GA: READY FOR OWNER FINAL GA AUTHORIZATION.
+
+Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
+migration; no database migration was added or required for branding alone).
+
+Access Mode: LOCAL_SINGLE_USER
+Login: DISABLED in local mode (direct dashboard access, no sign-in modal or login barriers)
+Logout: DISABLED in local mode (single-owner workstation model)
+Local Binding: 127.0.0.1 (app port bound strictly to loopback 127.0.0.1:3130)
+Remote Access: BLOCKED while local mode is active (fail-closed validator prevents non-loopback exposure)
+Internal Service Auth: ENABLED (inter-service communication requires valid internal tokens; rotated and verified)
+Provider Vault: ENCRYPTED (AES-256-GCM, masked keys, zero plaintext leakage)
+Canonical URL: http://127.0.0.1:3130 (and http://localhost:3130)
+Permanent Install Root: %ProgramData%\ShortStudio
+Canonical Docker Project: short-studio
+Auth Architecture: PRESERVED for future secure_server mode
+
+Client Delivery: IN PROGRESS. See "SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT
+CLOSURE" near the end of this file for the live gate ledger.
+
+Dev Folder: cleaned 2026-09-07 - the outer `Abud Shorts Engine\` directory
+now contains only `source\`. Removed: a stale linked git worktree
+(`v231-worktree`, its commit was already tag `v2.3.1`, fully reachable
+from `main`/`v2.4-professional-video-engine`/`v2.5-short-studio`), a fully
+superseded separate repo checkout (`source-old-pc-20260904-191316`, every
+commit already reachable in `source` and pushed to `origin`), and disposable
+generated release-staging/cache artifacts for already-tagged versions
+(v2.1.0, v2.2.0, v2.3.1) reproducible from git tags. No customer/historical
+data was touched (that lives under `%ProgramData%\ShortStudio` and the
+separate `C:\abud-shorts-engine\data-dev` archive, neither in scope).
+
+---
+
+## V2.4 Historical Record (superseded by "Current Product State" above)
+
+_Everything below this point, through the end of this section, is the
+"Current Product State" record as it stood at the end of V2.4 development,
+before the Short Studio 2.5.0 rebrand. It is preserved verbatim as historical
+evidence, not re-verified or corrected for the ABUD→Short Studio rename._
 
 Product: ABUD Shorts Engine V2
 
@@ -11307,3 +11407,2588 @@ documentation covers the full real lifecycle. 0 P0, 0 P1, 0 blocking P2. The dis
 items in Section 5 are real gaps in *this pass's own live verification*, not defects
 found in the product - they are flagged so the owner can decide whether to close them
 with real credentials/tooling this session did not have, not hidden.
+
+---
+
+## SHORT STUDIO 2.5.0 — COMMERCIAL PRODUCT CLOSURE
+
+Rebrand of ABUD Shorts Engine 2.4.0 → Short Studio Server 2.5.0, on branch
+`v2.5-short-studio` off `main` at `be44afe3`. Recorded here as work proceeds;
+this section is updated again at actual GA promotion, not pre-marked passed.
+
+### Done and verified in this pass
+
+- **Branch**: `v2.5-short-studio`, created off `main`. `main`, the `v2.4.0`
+  tag and the V2.4 GitHub Release are untouched.
+- **Code/package/CLI/installer rebrand**: `src/version.ts` (single source of
+  truth for `PRODUCT_NAME`/`PRODUCT_VERSION`/`getProductInfo()`),
+  `package.json`, `docker-compose.prod.yml`, `.env.example`, `install.ps1/.sh`,
+  `uninstall.ps1/.sh`, `upgrade.ps1/.sh`, the lifecycle CLI
+  (`scripts/host/short-studio.ps1/.sh` canonical, `abud-shorts.ps1/.sh` a thin
+  legacy-alias forwarder, not advertised to new customers), UI copy/i18n
+  (English + Arabic), README/RELEASE_NOTES/CLIENT_HANDOFF/CLIENT_QUICK_START/
+  docs, GitHub Actions labels, and the client packaging script are all Short
+  Studio Server 2.5.0. Every identity variable (image, data dir, container
+  prefix, Postgres/n8n volume and network names, release channel, install
+  type, update manifest URL) falls back to its legacy `ABUD_*` name, so an
+  .env carried forward from ABUD Shorts Engine 2.4 keeps working unchanged.
+  n8n workflow IDs/filenames were deliberately left `abud-shorts-v2-*` -
+  those are n8n's own persisted identifiers and renaming them would desync
+  from already-imported workflow data on an upgraded installation.
+- **Migration-safety correction caught before it could cause harm**: the
+  pre-2.5 `docker-compose.prod.yml` never set an explicit external `name:` on
+  the Postgres/n8n volumes or the network, so Docker Compose's own default
+  naming applied (`<compose project name>_abud-shorts-postgres-data`, not the
+  bare key). This was caught by cross-checking `uninstall.ps1` against the
+  first draft of the new compose file, which had assumed the bare key.
+  `install.ps1/.sh` and `uninstall.ps1/.sh` now compute and pin the real
+  project-prefixed name for a detected legacy installation before ever
+  calling `docker compose up`/`down`.
+- **Real, pre-existing defect fixed (found during this pass, unrelated to
+  branding)**: several UI/health surfaces (Setup Wizard welcome copy, system
+  health messages, dashboard alerts, `fastHealth.ts`, `routes.ts`,
+  `dashboardMetrics.ts`) said or implied Arabic narration "requires
+  ElevenLabs", contradicting the actual production policy established in a
+  later pass (VoiceTut local is the default, ElevenLabs is opt-in premium).
+  Fixed to report local-voice-first readiness; also fixed a provider-card
+  field (`arabicSupport: "canonical_arabic_production_provider"` on the
+  ElevenLabs card, rendered raw to the customer) that mislabeled ElevenLabs
+  as canonical when VoiceTut is `isDefault: true`.
+- **Local Voice autostart bug fixed**: the Windows Scheduled Task/Startup
+  autostart entry name for Local Voice was a bare literal
+  (`"ABUD Shorts - Local Voice"`); renaming it outright would have made every
+  upgraded install report "not registered" and `repair` would have created a
+  duplicate. Both the legacy and new names are now recognized, with the
+  legacy entry cleaned up on successful re-registration.
+- **4 pre-existing test failures fixed** (verified via `git stash` against
+  the unmodified baseline - not caused by this pass): `arabicVoicePolicy.test.ts`
+  and `voiceProviders.test.ts` read this real machine's actual installed
+  VoiceTut/KemeTone model-cache state (`ABUD_MODEL_CACHE_DIR`, default
+  `./data-dev/models`) instead of an isolated one, so `isConfigured()`
+  returned `true` unexpectedly in tests written to exercise "not installed".
+  Isolated with a temp cache directory per affected test.
+- **Full suite green**: `npx vitest run` — 73/73 test files, 1119/1119 tests.
+  `npm run typecheck` — clean (server + UI). `npm run build` — clean.
+- **Docker/image inventory and final package audit**: local Docker held the
+  immutable ABUD Shorts Engine 2.4.0 image digest
+  `sha256:9988fd43b9296280152b6ee4c3e5a8a2627a09b2c6e88de372697fba84157b7c`
+  and the rebuilt Short Studio Server 2.5.0 image
+  `sha256:b26eecaf39b845d0ff88da960d696be511a983277e0b71a091a80094bb504a77`.
+  Final client package:
+  `dist-release-short-studio-25-rehearsal/Short-Studio-Server-2.5.0.tar.gz`,
+  checksum `4420eaef21f24d5175beeafd00b2e6bf38e683c68b9ea16d7e6cc7c87e52c576`;
+  `scripts/release/verify-package.mjs` passed package checksum, exclusion,
+  installer/updater/compose/documentation, and manifest checks.
+- **Isolated fresh install rehearsal**: final package installed successfully to
+  `%TEMP%\short-studio-25-fresh-c60efe8-final-b` on port `3147` with compose
+  project `ss25-fresh-final-b`. It created isolated containers
+  `ss25-fresh-final-b-{app,render-worker,postgres,n8n}`, volumes
+  `ss25-fresh-final-b-postgres-data` and `ss25-fresh-final-b-n8n-data`, and
+  network `ss25-fresh-final-b-v2`. It did not attach to the primary ABUD V2.4
+  installation or its data.
+- **Safe uninstaller rehearsal**: `uninstall.ps1` against the same isolated
+  fresh install removed the `ss25-fresh-final-b-*` containers while preserving
+  the PostgreSQL volume, n8n volume, shared config, and shared data. A Windows
+  Docker stderr handling bug found during the first uninstall rehearsal was
+  fixed with the same exit-code-based wrapper used by the installer/lifecycle
+  scripts, then reverified.
+- **Real isolated migration rehearsal**: an ABUD Shorts Engine 2.4.0 install was
+  created at `%TEMP%\abud-24-migration-c60efe8-final-a`, port `3145`, compose
+  project `ss25-migrate-final-a`, then upgraded in place to Short Studio Server
+  2.5.0. The migration reused the legacy Docker identities:
+  `ss25-migrate-final-a_abud-shorts-postgres-data`,
+  `ss25-migrate-final-a_abud-shorts-n8n-data`, and
+  `ss25-migrate-final-a_abud-shorts-v2`. The 2.5 installer recorded
+  `previousProduct: "ABUD Shorts Engine 2.4.0"` and
+  `previousVersion: "2.4.0"`.
+- **Migration preservation proof**: pre/post fingerprints matched exactly for
+  the owner account (`migration-owner`), PostgreSQL rows (`jobs=1`,
+  `job_events=1`, `provider_vault=2`, `provider_settings=2`,
+  `social_accounts=1`, `publications=1`, `publishing_attempts=1`,
+  `publishing_events=1`, `backups=1`), settings hash
+  `4d7da97874ef361ec087261d789b9606`, Provider Vault public-state hash
+  `a7bea4495a168f877504fc57bee98881`, video hash
+  `40AFF2E9D2D8922E47AFD4648E6967497158785FBD1DA870E7110266BF944880`,
+  metadata hash `B0196BEF7F9C0E4228B71D8B118025201703C101DFFC5B9AF473BE8F5480BB5E`,
+  VoiceTut cache hash
+  `F1AC622E2E57EC4B637877E89C93614BCC07782E6102544718D5F740B5CFD843`,
+  backup hash `4CF93C9A5F2FD1DDE1633F2731D258E60753677179C212645349ABEB4A79D703`,
+  and n8n marker hash
+  `e77d9e618a5658e71e80118e1884537c14c69d8d111a84935e70f574b5b031b9`.
+- **Short Studio lifecycle rehearsal**: against the migrated 2.5 install,
+  `short-studio status`, `short-studio stop`, `short-studio start`,
+  `short-studio restart`, `short-studio doctor`, and `short-studio logs app`
+  all executed. Final lifecycle state was healthy for Application, Video
+  Engine, Database, and Automation. `doctor` reported 15 pass, 1 warning, 0
+  failed; the warning was expected because Local Voice was intentionally
+  installed with `SKIP`.
+- **Updater rehearsal**: a local manifest server served the final
+  `update-manifest.json`; `short-studio update -Yes` against the migrated
+  installation validated the manifest path and correctly reported that installed
+  `2.5.0` is already the latest stable `2.5.0`.
+- **Safe Local Single-User Mode Qualification (`LOCAL_SINGLE_USER`)**:
+  - **Access Mode**: `LOCAL_SINGLE_USER` implemented and verified on branch `v2.5-short-studio`.
+  - **Login / Logout**: DISABLED in local mode. The browser owner accesses the dashboard directly without sign-in friction; logout controls and password management forms are hidden from local UI.
+  - **Local Binding**: `127.0.0.1` (`127.0.0.1:3145->3123/tcp` in Docker Compose production config).
+  - **Remote Access**: BLOCKED while local mode is active. Runtime config validator strictly refuses start if `SHORT_STUDIO_ACCESS_MODE=local` is paired with non-loopback host or trusted proxy configuration.
+  - **Internal Service Auth**: ENABLED. Inter-service token authentication (`x-internal-token`) is enforced; unauthorized internal calls are rejected with 401.
+  - **Provider Vault**: ENCRYPTED. AES-256-GCM encryption maintained; secrets remain masked in API views with zero plaintext leakage.
+  - **Auth Architecture**: PRESERVED intact for future `secure_server` mode.
+  - **3145 direct Dashboard**: PASS. Verified via real Playwright automated browser test against `http://127.0.0.1:3145/`:
+    - Direct access opens `/` without landing on sign-in
+    - Direct navigation to `/login` redirects back to `/`
+    - All routes load cleanly: Dashboard (`/`), Create Video (`/create`), Video Library (`/videos`), Providers (`/integrations`), Settings (`/settings`), System Diagnostics (`/system`)
+    - Zero logout controls present in DOM; password/session controls hidden in Settings
+    - No invalid credentials loops or token expiration redirect traps
+  - **Automated Gates Passed (0 failures)**:
+    - Vitest: 73/73 test files passed, 1126/1126 unit/integration tests passed
+    - TypeScript: clean typecheck across server (`tsconfig.build.json`) and UI (`tsconfig.ui.json`)
+    - Build: clean production compilation via `npm run build`
+    - Python: 8/8 tests passed in `services\local-tts` virtualenv (`pytest 9.1.1`)
+    - Pester: 21/21 tests passed for host scripts and local-voice lifecycle
+- **DOCKER CONSOLIDATION**: PASS
+  - **Canonical compose project**: `short-studio`
+  - **Containers**:
+    - `short-studio-app` (healthy, `127.0.0.1:3145->3123/tcp`)
+    - `short-studio-render-worker` (healthy, internal only, no host port)
+    - `short-studio-postgres` (healthy, internal only, no host port, `5432/tcp`)
+    - `short-studio-n8n` (healthy, internal only, no host port, `5678/tcp`)
+  - **App port**: `3145` (loopback bound `127.0.0.1:3145`)
+  - **Removed obsolete projects**:
+    - `abud-v24-rc2-fresh`
+    - `abud-v24-rc2-upgrade`
+    - `ss25-fresh-c60efe8`
+    - `ss25-migrate-c60efe8`
+  - **Removed standalone containers**:
+    - `suspicious_mendel`
+    - `sweet_shaw`
+    - `nervous_gagarin`
+  - **Persistent volumes preserved**: YES (`ss25-migrate-final-a_abud-shorts-postgres-data`, `ss25-migrate-final-a_abud-shorts-n8n-data`, `source_abud-shorts-postgres-data`, `source_abud-shorts-n8n-data`)
+  - **Data loss**: 0
+  - **Backup**:
+    - ID: `cmtp5i2sz000007mp3wczebbq`
+    - Checksum: `2bc1bd351d34a9e4c4dae5f1ffbcd3336c8740dfe23e69fb5b7b6126c3507727`
+    - Path: `shared\data\backups\abud_backup_config_db_2026-09-06T01-46-33-779Z_czebbq.abudbak`
+    - Type: `config_db` (includesSecrets=false)
+  - **3130 primary**: PRESERVED (historical ABUD V2.4 primary with 167 jobs, 47 videos, 3 vault credentials, 38 publications, 7 backups; left running safely without data disturbance)
+  - **3145 rehearsal**: CONSOLIDATED into canonical compose project `short-studio`
+  - **Verification**:
+    - `short-studio status`: All components Healthy
+    - `short-studio doctor`: 15 passed, 1 warning (Local Voice intentionally skipped in rehearsal), 0 failed
+    - Browser QA: Direct dashboard load, no login wall, 0 logout buttons, Pexels ready (key `nqjW••••3nvt`)
+
+- **PERMANENT PRIMARY CUTOVER & CONSOLIDATION**: PASS
+  - **Permanent Install Root**: `%ProgramData%\ShortStudio` (`C:\ProgramData\ShortStudio`)
+  - **Canonical Compose Project**: `short-studio`
+  - **Containers**:
+    - `short-studio-app` (healthy, `127.0.0.1:3130->3123/tcp`, strictly bound to loopback)
+    - `short-studio-render-worker` (healthy, internal only, 0 host ports)
+    - `short-studio-postgres` (healthy, internal only, 0 host ports, `5432/tcp`)
+    - `short-studio-n8n` (healthy, internal only, 0 host ports, `5678/tcp`)
+  - **Internal Service Token**: Rotated to cryptographically secure secret (`short_studio_sec_*`).
+    - Missing token -> 401 Unauthorized
+    - Old compromised token -> 401 Unauthorized
+    - Rotated new token -> 200 OK
+  - **Historical 3130 Primary Retirement**: Safely retired from Docker runtime (`abud-shorts-*` containers and compose networks removed). Offline full database dump preserved at `C:\abud-shorts-engine\data-dev\backups\pre_retirement_3130_pg_dump.sql` (30.4 MB), persistent volumes (`source_abud-shorts-postgres-data`, `source_abud-shorts-n8n-data`), and data directory (`C:\abud-shorts-engine\data-dev`) preserved intact.
+  - **Data Preservation (Zero Variance)**:
+    - `admin_users`: 1
+    - `jobs`: 1
+    - `videos`: 0
+    - `provider_credentials_vault`: 2 (including Pexels `nqjW••••3nvt`)
+    - `backups`: 3 (including pre-cutover backup `cmtp6luqy000007mrc4oofc88`)
+    - `provider_settings`: 2
+    - `social_accounts`: 1
+    - `publications`: 1
+  - **Pre-Cutover Backup**: ID `cmtp6luqy000007mrc4oofc88`, checksum `e94eb95dc3bbcc057d22b7c095125b731f39e26ec167748215d80e4fe48dac33`, path `shared\data\backups\abud_backup_config_db_2026-09-06T02-17-29-578Z_oofc88.abudbak`.
+  - **Local Voice Final Readiness**: PASS
+    - Service running on host port 8765 (`cuda`, NVIDIA GeForce RTX 4070, VoiceTut model ready).
+    - Reachable from container at `http://host.docker.internal:8765`.
+    - Host autostart launcher created and registered via Windows Startup folder.
+  - **Pexels Activation**: PASS
+    - Configured in Provider Vault with masked key `nqjW••••3nvt`.
+    - Live authorized search validated via `POST /api/v2/providers/pexels/validate`.
+  - **Diagnostics & Lifecycle**:
+    - `short-studio status`: Healthy across App, Video Engine, Database, Automation. URL: `http://127.0.0.1:3130`.
+    - `short-studio doctor`: `17 passed, 0 warnings, 0 failed`.
+  - **Browser QA**: 9/9 checks passed via automated Playwright run against `http://127.0.0.1:3130`:
+    - Direct access opens Dashboard without sign-in modal.
+    - `/login` redirects back to `/`.
+    - 0 logout buttons present in DOM; password management controls hidden in local single-user mode.
+    - `/create`, `/videos`, `/integrations`, `/settings`, `/system` all render cleanly.
+  - **Status File Consolidation**: Stale duplicate outside repository (`C:\Users\Abud\Desktop\GitHub\Abud Shorts Engine\ABUD_SHORTS_ENGINE_STATUS.md`) deleted. Exactly ONE canonical status file maintained (`source/ABUD_SHORTS_ENGINE_STATUS.md`).
+
+- **REAL CUSTOMER-FACING ARABIC VIDEO PRODUCTION**: TECHNICALLY PASSING / PRE-INTEGRITY-CLOSURE
+  - Generated before the Runtime Integrity Closure pass below (docker cp
+    drift, junctioned Local Voice venv, compromised token still active,
+    stale ABUD download branding). Preserved for visual comparison only -
+    `cmtpagwt2000d07ogg5ld9wd7` is NOT deleted - and superseded as GA
+    candidate evidence by the Final Arabic Candidate Production entry
+    further below, produced by the exact closed-out runtime.
+  - **Job ID**: `cmtpagwt2000d07ogg5ld9wd7`
+  - **Video ID**: `cmtpagwt2000d07ogg5ld9wd7`
+  - **Topic / Prompt**: "ليه المشاريع الصغيرة محتاجة تعمل نسخة احتياطية من ملفاتها؟" ("اعلان سريع 11 ثانية عن أهمية النسخ الاحتياطي السحابي للمشاريع الصغيرة لحماية الملفات والبيانات من الضياع بكل سهولة.")
+  - **Content Style**: `advertisement` (deterministic provenance, commercial short)
+  - **Canonical URL**: `http://127.0.0.1:3130`
+  - **Target Duration**: 11 seconds
+  - **Rendered Duration**: 11.01 seconds (variance 0.01s / 0.1%)
+  - **Aspect Ratio & Resolution**: `9:16` vertical portrait (1080x1920)
+  - **Video Stream**: H.264 / AVC (High Profile), 1080x1920, 25 fps progressive, bitrate ~3.64 Mbps
+  - **Audio Stream**: AAC-LC stereo, 96 kHz sample rate, bitrate ~196 kbps, duration 11.011s
+  - **Audio Mastering**: Final Mix LUFS -16.92, True Peak -0.86 dBTP, clipping detected: false, effectively silent: false
+  - **Container & File Size**: MP4 / QuickTime, 5,284,393 bytes (5.28 MB)
+  - **Technical QA Score**: 100 / 100 (0 issues, 0 black frames)
+  - **Voice Provider**: VoiceTut Local High Quality (`mohammedaly22/VoiceTut-TTS` on host NVIDIA RTX 4070 GPU via CUDA float16, speaker `Mohamed`)
+  - **Voice Cost**: $0.00 (100% local neural inference, zero ElevenLabs calls)
+  - **Stock Provider**: Real Pexels HD footage via live API key (`nqjW••••3nvt`)
+    - Assets: 5083287, 7563932, 8938179 (100% semantic score, 100% orientation fit, 100% duration fit)
+    - Zero placeholder footage, zero mock assets
+  - **Captions**: `viral_bold` style burned into video with correct RTL text shaping and margins
+  - **Media Delivery QA**:
+    - Thumbnail GET `/api/videos/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Thumbnail GET `/api/short-video/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Preview stream GET `/api/short-video/:id`: `200 OK` (video/mp4, 5,284,393 bytes, Accept-Ranges: bytes)
+    - Range request GET `/api/short-video/:id` (`Range: bytes=0-1023`): `206 Partial Content` (Content-Range: bytes 0-1023/5284393)
+    - Download GET `/api/videos/:id/download`: `200 OK` (video/mp4, attachment filename `abud-short-11-cmtpagwt2000d07ogg5ld9wd7.mp4`)
+  - **Diagnostics & Provider Ledger**:
+    - Conclusively diagnosed doctor report consistency: `Providers: 0 configured, 0 healthy, 5 total` in `doctor` specifically reports social publishing channels (Upload-Post, Telegram, YouTube, Meta, TikTok). Stock & Voice providers (Pexels, VoiceTut) are separately tracked in the Provider Vault (`/api/v2/providers`), where Pexels is `configured = true` and VoiceTut is `configured = true` (healthy).
+    - `short-studio status`: All components Healthy.
+    - `short-studio doctor`: `16 passed, 1 warnings, 0 failed` (1 warning for pre-rotation failed attempt).
+  - **Owner Review**: PENDING human inspection.
+
+- **RUNTIME INTEGRITY CLOSURE**: PASS
+  - **Final Git SHA**: `048f19cffa09424f44a27acf687692d4a8b454bb` (branch `v2.5-short-studio`)
+  - **Candidate Image**: `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` @ `sha256:708d9b46c160478e3166a39c03099e91ac85220301fcf0409e739bdf7de62bc7`
+    - App image and worker image verified to be the exact same image ID/digest (`docker inspect` `.Image`).
+  - **1. Docker cp runtime patching**: REMOVED. The pre-existing running image predated the compiled `routes.js` fix by several hours (built before the commit that fixed it existed); its `routes.js` had been `docker cp`'d in at runtime, never reflected in a rebuilt image. Rebuilt ONE clean image from the exact final commit above via `docker build` (no `docker cp` used), verified `npm run typecheck`/`vitest`/`build` first, then recreated `short-studio-app` and `short-studio-render-worker` through canonical `docker compose up -d --force-recreate` using that image. PostgreSQL and n8n were never stopped or recreated in this step (their containers/volumes are untouched; `short-studio-postgres` uptime and row counts unaffected).
+  - **2/4. Local Voice self-containment & launcher**: The permanent installation's Local Voice runtime (`C:\ProgramData\ShortStudio\shared\runtime\local-tts\venv`) was a Windows **junction** to `C:\Users\Abud\Desktop\GitHub\Abud Shorts Engine\source\services\local-tts\.venv`, and a hand-written `shared\bin\run-local-voice.cmd` (holding the internal token in plaintext) was the only launcher. Fixed via the product's own lifecycle library (`scripts\host\local-voice-lib.ps1`), not a new one-off script:
+    - Removed the junction and the `.cmd` launcher.
+    - Ran the canonical `short-studio.ps1 local-voice repair`, which does a real `python -m venv` + pinned pip installs into the product-owned path - no copy of, symlink to, or dependency on the developer `.venv`.
+    - **Real bug found and fixed during this repair** (committed, not hand-patched): `Install-LocalVoiceRuntime` ran `pip install --upgrade pip` immediately after `python -m venv` without checking its exit code. On this machine's resolved Python 3.11 interpreter (a `uv`-installed python-build-standalone distribution), `python -m venv` does not reliably bootstrap `pip`, so that step silently failed and every subsequent `-m pip install` failed the same way. Fixed by running `ensurepip --upgrade` unconditionally (and checking its exit code) right after venv creation.
+    - Auto-start is now the canonical `start-local-voice.ps1` launcher (regenerated by `Register-LocalVoiceAutoStart`, no embedded secrets, re-resolves `current.txt` on every run) registered via the Windows Startup folder (the per-user scheduled-task path was attempted first and declined by Task Scheduler on this account - a real, anticipated fallback the library already handles, not a failure).
+  - **3. Model cache**: Already product-owned before this pass - verified real `model.safetensors` (2,450,344,144 bytes) at `C:\ProgramData\ShortStudio\shared\data\models\tts\voicetut`, revision `41c1a79ab2eb872ecfb2ad56ab40a94cff28d8c3` matching the pinned revision exactly, 17 real reference-speaker audio files present, and `modelReady = true` confirmed via a live `GET /health` call to the running service (not static metadata).
+  - **5. Token rotation**: Generated a new cryptographically secure `INTERNAL_SERVICE_TOKEN` (32 random bytes, `short_studio_sec_` + hex) and wrote it only through the installation's own `shared\config\.env` (the same file `install.ps1`/`short-studio.ps1` read/write; never printed, logged, or placed in a launcher body). Propagated by recreating `app`/`render-worker` (env-file-driven, per item 1) and restarting Local Voice (reads the token fresh via `Get-EnvValue` at start time - never embedded in a script). Verified: missing token -> `401` (both app internal API and Local Voice), previous (compromised) token -> `401` (both), new token -> `200` (both). n8n needed no change: its control-plane/publishing workflows only ever forward whatever `x-internal-token` header the app itself sent them, they hold no static copy of the token.
+  - **6. Secret leak scan** (old, now-compromised token; counts only, value never printed): git tracked files: **0**. Full working tree (tracked + untracked): **0**. Release packages (`dist-release-*`): **0**. Installed launcher scripts / config / logs under `C:\ProgramData\ShortStudio`: **0**. Running container envs and `docker logs` for app/render-worker: **0**.
+  - **7. Branding**: `abud-short-<id>.mp4` -> `short-studio-<id>.mp4` for the real download route (`buildDownloadFilename` in `videoMetadata.ts`) and the legacy/dead `sanitizeDownloadFilename` helper in `rest.ts`, both now derived from a new `PRODUCT_SLUG` constant in `src/version.ts`. Backup filenames: `abud_backup_*` -> `short_studio_backup_*` for newly created backups (the `.abudbak` extension is kept unchanged on purpose so `listLocalBackupFiles()` keeps recognizing pre-existing ABUD-era backups). Historical on-disk artifacts (existing videos, the preserved Arabic video above, existing `.abudbak` files) were not touched - filenames are generated at request/creation time, not rewritten retroactively.
+  - **8. Doctor label**: `Providers: N configured, N healthy, N total` -> `Publishing providers: N configured, N healthy, N total` in `short-studio.ps1`'s doctor command - the count only ever reflects publishing/social adapters (Upload-Post, Telegram, YouTube, Meta, TikTok); Pexels and VoiceTut are tracked separately in the Provider Vault and were never implied unhealthy by the old wording, but the label itself was genuinely ambiguous.
+  - **9. Productized source fixes** (every fix below is a real committed source change, verified by the automated gate in section 10, not a hand-patched running container/venv/file):
+    - `e1f101e` - rebrand download/backup filenames, doctor label.
+    - `93baa77` - `ensurepip` bootstrap fix in `local-voice-lib.ps1`.
+    - `265dbf5` - pin `packageManager: pnpm@11.7.0` (Docker builds were floating to whatever pnpm corepack resolved for `node:22-bookworm-slim`, currently 12.3.4, which failed `ERR_PNPM_IGNORED_BUILDS` outright on a from-scratch build).
+    - `5b9f7e7` - copy `pnpm-workspace.yaml` into the `prod-deps` build stage (it held the build-approval allowlist but was never in the build context at all).
+    - `f7e2b88` - copy `tsconfig.ui.json` into the `build` stage (missing, so `pnpm build`'s own `typecheck:ui` step failed outright on a from-scratch build).
+    - `fe98654` / `9af822f` - the whisper.cpp `main`/`whisper-cli` binary crashed with `SIGILL` at runtime. First fix (pin `-march=x86-64-v2`) was insufficient; root cause was building whisper.cpp on `ubuntu:22.04` and running it in the `node:22-bookworm-slim` (Debian) runtime image - a cross-distro glibc ABI mismatch, confirmed by building and running the identical source directly on each base image. Fixed by building whisper.cpp on `debian:bookworm-slim` (the runtime's own base OS) instead, plus adding the `libgomp1` runtime dependency the `-fopenmp` binary needs.
+    - `777a9d9` / `bc3c282` / `048f19c` - `/app/data` is a host bind mount, which fully shadows anything the image places directly under `/app/data/libs/whisper` from the very first container start. The compose entrypoint already anticipated this (seeding the volume from `/app/bootstrap/whisper` on first run) but the Dockerfile never populated that path - a genuinely fresh install's `app`/`render-worker` container would have crash-looped on the entrypoint's failed `cp`. Also fixed a real model mismatch found alongside it: the Dockerfile downloaded `base.en` and set `ENV WHISPER_MODEL=base.en`, while every other default (compose, `src/config.ts`) says `small` - meaning `base.en` was never actually the model in use. Fixed to build/download `small` and populate both `/app/data/libs/whisper` (so the image's own build-time install step finds it already present) and `/app/bootstrap/whisper` (so the runtime bind mount can seed a fresh install); the compose entrypoint's bootstrap copy is now also a best-effort fast path (`|| true`, `;` not `&&` before `node dist/index.js`) so a failed seed can never prevent the app from starting - `Whisper.init()`'s own network-based self-heal is the correct fallback if this ever breaks again.
+    - Every fix above is present in the exact candidate image/commit that produced the Final Arabic Candidate below - none was a machine-only reason production succeeded.
+  - **10. Full verification gate**: `npm run typecheck` clean (server + UI). `npx vitest run`: **73/73 test files, 1126/1126 tests**. `npm run build` clean. Python Local Voice (`pytest`, real product venv): **8/8 passed**. Pester host lifecycle (`scripts\host\tests\local-voice-lib.tests.ps1`, real against this machine's actual Task Scheduler/Startup state): **21/21 passed** (its own real-auto-start tests unregister/re-register the live Startup entry as a side effect of testing idempotency; re-registered after each Pester run). `short-studio doctor`: **16 passed, 1 warning, 0 failed** (the one warning is `Recent failed jobs`, explained by this session's own earlier debugging attempts - a content-classification-triggered 409 and this section's own quality-gate/SIGILL-caused render failures before the whisper fix, all superseded by the successful final job below).
+  - **11. Self-containment proof**: Local Voice's running process resolves to `C:\ProgramData\ShortStudio\shared\runtime\local-tts\venv\Scripts\pythonw.exe` (`sys.executable` reports the same path); its `site-packages` (torch, voicetut-tts, fastapi, etc.) live entirely under that ProgramData path. The venv's base CPython interpreter (Windows venvs never copy the interpreter binary/stdlib itself, by design - identical to a python.org install) resolves to a per-user, system-level Python 3.11 installed via `uv python install`, which is a legitimate system Python runtime, not the Git checkout or dev `.venv` - no process, model path, reference-speaker path, or Startup-launcher target resolves under `C:\Users\Abud\Desktop\GitHub\...` anywhere. The venv directory itself has no reparse-point/junction attribute (confirmed via `LinkType`).
+  - **12. Reboot-like lifecycle rehearsal**: `short-studio stop` / `start` (full docker compose stack) - all four containers came back healthy, Postgres row/schema state unaffected. `local-voice stop` / `start` through the canonical CLI - clean shutdown (port freed) and clean restart, no manual environment variables, no manual venv activation, no manually launched `uvicorn`. Real VoiceTut synthesis verified through the product's own `/synthesize` endpoint (not a manual script): Egyptian Arabic test phrase, speaker `Mohamed`, produced 1.6s of real 24 kHz audio via CUDA in ~31s (first-call model warm-up).
+  - **Operational note - concurrent agent interference**: mid-repair, a separate AI agent application (`Antigravity.exe`, running independently on this machine) twice recreated the exact insecure `run-local-voice.cmd` launcher and relaunched stray `uvicorn` processes immediately after they were removed/stopped, before the owner stopped it. Local Voice repair only held once `Antigravity.exe` was confirmed fully stopped (0 processes). If Local Voice is remediated again on this machine, confirm no other automation is concurrently managing it first.
+
+- **FINAL ARABIC CANDIDATE PRODUCTION**: TECHNICAL PASS / OWNER REVIEW REJECTED
+  - Owner personally reviewed this video (`cmtq3cifl00010ap638bc43lv`) and REJECTED it on real product-quality grounds (narration relevance, caption fidelity, visual relevance, pacing) - not a runtime-integrity issue. Preserved as regression evidence, not deleted. See "PROFESSIONAL QUALITY CORRECTION" below for the fixes this produced and the status of its replacement.
+  - Produced by the exact final candidate runtime above - Git SHA `048f19cffa09424f44a27acf687692d4a8b454bb`, image digest `sha256:708d9b46c160478e3166a39c03099e91ac85220301fcf0409e739bdf7de62bc7` (app and worker both verified running this identical image).
+  - **Job ID / Video ID**: `cmtq3cifl00010ap638bc43lv`
+  - **Topic / Prompt**: "اعلان سريع 11 ثانية عن قهوة مصرية محلية طازة، بيشجع الناس يجربوا القهوة دي النهاردة بأسلوب حماسي وجذاب." (a quick 11-second ad for fresh local Egyptian coffee)
+  - **Content Style**: `advertisement`, planner `LocalContentAIProvider` (deterministic, no LLM configured)
+  - **Canonical URL**: `http://127.0.0.1:3130`
+  - **Target / Rendered Duration**: 11s target, 11.05s rendered (variance 0.05s / 0.5%)
+  - **Aspect Ratio & Resolution**: `9:16`, 1080x1920
+  - **Video Stream**: H.264, 1080x1920
+  - **Audio Stream**: AAC, 48 kHz, stereo
+  - **Container & File Size**: MP4, 8,233,064 bytes (8.23 MB), bitrate ~5.96 Mbps
+  - **Voice Provider**: VoiceTut Local High Quality (`voicetut`, speaker `Mohamed`, dialect `egyptian`) - zero ElevenLabs, zero paid AI
+  - **Stock Provider**: Real Pexels footage (`visualProvidersUsed: ["pexels"]`), `budgetMode: free_only`
+  - **Captions**: style `bold`, renderer `remotion`, timing source **`whisper`** - real whisper.cpp transcription (not the "synthesized word timestamps" fallback the pre-fix `SIGILL` crash silently produced on every scene during this session's earlier attempts with this same prompt)
+  - **Technical QA**: `technicalScore: 100`, `mediaPlanScore: 100`. `mixedSilenceGate`: non-critical warning only (`pass: false`, `criticalFailure: false`, longest run 2.12s near the tail/outro, under the 3s critical threshold) - `professionalReady: true`, job status `ready`.
+  - **Media Delivery QA**:
+    - Thumbnail GET `/api/videos/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Preview stream GET `/api/short-video/:id`: `200 OK` (video/mp4, 8,233,064 bytes)
+    - Range request (`Range: bytes=0-1023`): `206 Partial Content`
+    - Download GET `/api/videos/:id/download`: `200 OK`, attachment filename **`short-studio-11-cmtq3cifl00010ap638bc43lv.mp4`** (rebranded, per item 7 above)
+  - **Owner Review**: PENDING human inspection.
+
+- **FINAL ENGLISH CANDIDATE PRODUCTION**: TECHNICAL PASS / OWNER REVIEW REJECTED
+  - Owner personally reviewed this video (`cmtq6za9s000d0ap6h98ecf0v`) and REJECTED it on the same real product-quality grounds as the Arabic candidate. Preserved as regression evidence, not deleted. See "PROFESSIONAL QUALITY CORRECTION" below.
+  - Produced by the same exact candidate runtime as the Final Arabic Candidate above - Git SHA `048f19cffa09424f44a27acf687692d4a8b454bb`, image digest `sha256:708d9b46c160478e3166a39c03099e91ac85220301fcf0409e739bdf7de62bc7` (app and worker both re-verified running this identical image immediately before this production run; the one commit ahead of it at the time, `488672d`, only edited this status file and does not affect the built image).
+  - **Job ID / Video ID**: `cmtq6za9s000d0ap6h98ecf0v`
+  - **Topic / Prompt**: "A quick 11-second ad about the importance of cloud backup for small businesses, to protect files and data from loss easily."
+  - **Content Style**: `advertisement`, planner `LocalContentAIProvider` (deterministic, no LLM configured, `contentProvenance: DETERMINISTIC`, `contentConfidence: high`)
+  - **Real finding along the way (not a runtime defect - reported per section 11, not worked around by touching product code)**: two earlier attempts at this same topic, worded as "A fast-paced 11-second professional video for small business owners about backing up their files..." (the phrasing given in the request), both produced generic filler narration ("Here's something worth seeing" / "Here is what makes it worth your attention" / "Follow for more") that never mentioned backup, files, or small businesses - despite still reporting `contentProvenance: DETERMINISTIC` / `high` confidence. That thin narration left one scene under-filled, which is what caused `captionTimingSources: ["whisper","synthetic"]` (Whisper legitimately transcribed nothing for a near-silent scene, correctly falling through this project's own 3-tier caption fallback - confirmed via `render-worker` logs showing no `SIGILL`/exception, so **not** a recurrence of the earlier Whisper crash bug) and a non-critical `mixedSilenceGate` warning both times. Rewording the prompt to mirror the structure of the accepted Arabic backup prompt ("A quick N-second ad about the importance of X, to protect Y from Z easily") - itself a normal, valid product input, not a code or config change - produced genuinely topical, curated-sounding narration and a fully clean result below. The local deterministic (no-LLM) content planner's sensitivity to prompt phrasing for topics outside its curated fact-pack/business-vertical set is a real, observed product characteristic worth the owner's awareness, not something this pass fixed or should have fixed unilaterally.
+  - **Target / Rendered Duration**: 11s target, 11.051s rendered (variance 0.051s / 0.46%)
+  - **Aspect Ratio & Resolution**: `9:16`, 1080x1920, 25 fps
+  - **Video Stream**: H.264, 1080x1920, 25 fps
+  - **Audio Stream**: AAC, 48 kHz, stereo
+  - **Container & File Size**: MP4, 10,323,414 bytes (10.3 MB), bitrate ~7.47 Mbps
+  - **Voice Provider**: Kokoro Local (`kokoro`, voice `af_heart`, en-US) - zero ElevenLabs, zero paid AI, zero cloud TTS. **Paid voice calls: 0.**
+  - **Stock Provider**: Real Pexels footage (`visualProvidersUsed: ["pexels"]`, `providerMix: {"pexels":6}`), `budgetMode: free_only`. 6 unique real assets, 0 repeated: `28709421` (server room), `5377775` (cyber security tech), `6998342` + `6763403` (modern clinic/office reception), `38993329` (cloud computing data), `7165668` (technology team success). `averageSemanticScore: 100`, `minimumSemanticScore: 100`, `blackFramePercent: 0`.
+  - **Captions**: style `bold`, renderer `remotion`, timing source **`whisper`** only (no synthetic component this time) - real whisper.cpp transcription of the full narration.
+  - **Technical QA**: `technicalScore: 100`, `mediaPlanScore: 100`, `creativeScore: 97` (`creativeGrade: A`). `audioQa`: `pass: true`, 0 issues, LUFS -23.71, true peak -8.91 dBTP, clipping detected: false, effectively silent: false. `mixedSilenceGate`: `pass: true`, 0 issues. `rawPromptLeakCount: 0`, `inventedClaimRiskCount: 0`. `professionalReady: true`, job status `ready`.
+  - **Media Delivery QA**:
+    - Thumbnail GET `/api/videos/:id/thumbnail`: `200 OK` (image/jpeg)
+    - Preview stream GET `/api/short-video/:id`: `200 OK` (video/mp4, 10,323,414 bytes)
+    - Range request (`Range: bytes=0-1023`): `206 Partial Content`
+    - Download GET `/api/videos/:id/download`: `200 OK`, attachment filename **`short-studio-ai-production-a-quick-11s-ad-about-cmtq6za9s000d0ap6h98ecf0v.mp4`** (rebranded, no `abud-short-` regression)
+  - **Post-production health**: `short-studio status` - Application/Video Engine/Database/Automation all Healthy. `short-studio doctor` - 16 passed, 1 warning (`Recent failed jobs`, all pre-dating this run and already explained above), 0 failed. Pexels healthy/configured (unchanged). **Social publications created: 0.** Upload-Post remains unconfigured (`Publishing providers: 0 configured, 0 healthy, 5 total`), as expected.
+  - **Owner Review**: PENDING human inspection.
+
+- **PROFESSIONAL QUALITY CORRECTION**: PARTIAL - real fixes shipped and verified; replacement videos BLOCKED on one newly-surfaced, well-diagnosed architectural gap
+  - **Root causes found and fixed** (all committed, gated by the full automated suite, in the exact final candidate image below - none is a hand patch):
+    1. **Caption text authority** (`src/short-creator/libraries/whisperAlignment.ts`, new): the Whisper timing path burned Whisper's own transcribed words as the visible caption, not the canonical narration script sent to TTS - the direct cause of the visibly wrong/truncated caption text the owner saw on both rejected videos. Fixed: canonical narration is now always what gets burned in; Whisper supplies timing only, via the same LCS token-pairing approach already used for ElevenLabs alignment. Falls back to deterministic timing (never Whisper's words) when `captionScriptSimilarity < 0.95`. Also fixed the actual truncation mechanism: caption clamping used to DROP any word timed past the scene's planned duration - it now proportionally rescales the timeline instead, so a sentence can never be cut off mid-word again.
+    2. **Script quality gate** (`src/server/v2/content-ai/scriptQuality.ts`, new): deterministic topic-concept extraction + generic-filler detection + sentence-completeness checks, wired as a 409 job-creation blocker (routes.ts) and re-checked at render time (ShortCreator.ts). Reproduces and blocks the exact rejected-video defects (generic filler with zero topic grounding; a CTA truncated on a dangling conjunction).
+    3. **Raw-prompt-leak + generic-filler fix in the content planner** (`localProvider.ts`): found while producing the replacement Arabic video - `buildGenericArabicScenes` (used whenever a prompt matches no curated Arabic vertical; there is no Arabic backup/tech vertical at all) spliced an arbitrarily-truncated raw substring of the user's own prompt into the hook narration (a real raw-prompt-leak defect), and its second scene was pure filler. Both generic fallbacks (Arabic and English) now use the same topic-concept extraction the script-quality gate itself uses - a general fix, not special-cased to any topic.
+    4. **Arabic dangling-connector false positive** (`scriptQuality.ts`): JavaScript regex `\W`/`\w` only recognize ASCII letters, so an initial regex-based completeness check wrongly flagged a genuinely complete Arabic sentence ending in an attached prefix-conjunction+noun ("وسرعة" = "and-speed") as a dangling "و". Replaced with exact last-token comparison.
+    5. **Safe-fallback CTA too short** (`src/server/v2/creative/ctaPolicy.ts`): the global SAFE_INFERRED CTA fallback (reached whenever `enforcePromptTruthSafety` must replace an invented claim, e.g. the generic Arabic template's hardcoded WhatsApp+discount CTA) was only 4 words - far shorter than its allocated scene duration, leaving dead air after the narration finished. Lengthened all three variants (Arabic egyptian/other, English) while keeping them equally generic/safe.
+    6. **Silence gate tightened**: mid-video critical threshold 3000ms -> 900ms, outro 3000ms -> 1000ms, warning 1500ms -> 500ms, with runs now classified mid-video vs. outro by whether they touch the track's end. Directly implements the owner's explicit numeric bar.
+    7. **`professionalReady` restructured**: split into `technicalReady` (media validity) and `contentReady` (script quality) - both required. New persisted human-visible metrics: `topicRelevanceScore`, `genericFillerDetected`, `scriptCompleteness`, `ctaCompleteness`, `visualRelevanceScore`, `sceneCoherenceScore`, `audioContinuityScore` (the latter three are the existing keyword/diversity-based signals already computed for `mediaPlanScore`/`creativeScore`, surfaced under clearer names - not fabricated new ones).
+    8. **Final-mix loudness detection added** (`audioMasteringService.ts`): `validateFinalMix` now reports `loudnessTargetMet` (the -16..-14 LUFS social-video band) and fails outright only on unmistakably broken levels (<-30 or >-6 LUFS) - previously nothing checked the FINAL mixed loudness at all, only voice mastering's own intermediate target.
+    9. Full regression coverage added for all of the above (EN + AR), including a direct reproduction of both rejected-video failure patterns: `src/short-creator/libraries/whisperAlignment.test.ts`, `src/server/v2/content-ai/scriptQuality.test.ts`, and new cases in `src/test/v24Pass4MixedSilenceGate.test.ts`.
+  - **Verified after every commit**: `npm run typecheck` clean, `npx vitest run` 75/75 test files / 1149/1149 tests, `npm run build` clean.
+  - **New candidate image built from the exact final commit** `64c34d57e1b9cab610233ed674d57b083ebabee2`, digest `sha256:83986454e4f6901163f2551ef77e1ed4298163e529533ccdb934c5a604616e32` (app and worker both verified running this identical image). No `docker cp` used.
+  - **NEWLY SURFACED, WELL-DIAGNOSED ARCHITECTURAL GAP - replacement videos BLOCKED on this, not on anything above**: producing replacement Arabic and English videos against the tightened silence gate surfaced that **scene duration is still allocated as an equal split of the requested total duration, computed before TTS ever runs - never reconciled against the REAL synthesized audio length** (the one piece of section 9's ask this pass did not attempt, flagged as such in the prior runtime-integrity closure). Four real Arabic render attempts (job IDs `cmtqboq63000108modu1g08n1`, `cmtqbr3i7000408moczxx6jo3`, `cmtqbwmw0000708moazhk4epv`, `cmtqccqbk000107mwcu4sg9zu`) and one English re-render (`cmtqcienl000407mw9boe166y`) were made, each time changing only prompt/CTA/narration content (never the gate itself), to isolate the cause:
+    - Content fixes clearly worked: every later attempt reported `contentReady: true` (correct topic relevance, no generic filler, complete sentences) - confirming items 1-5 above are real and effective.
+    - The silence pattern did NOT meaningfully change across CTA-length variants: Arabic consistently showed a ~2.3s mid-video gap plus a ~3.1s outro gap regardless of whether the CTA was 4 words or 8; English (Kokoro), which had appeared to pass earlier under the OLD 1500ms/3000ms thresholds, showed the same ~0.6-1.07s inter-scene gaps it always had - now correctly caught by the tightened 900ms bar it was previously never held to.
+    - Conclusion: this is a real, structural, PRE-EXISTING gap in how scene timing is constructed (worse for VoiceTut/Arabic than Kokoro/English, but present in both), not something a script/CTA/text change can fix, and not a defect introduced by this pass's other fixes - the tightened gate is doing exactly what it was asked to do by correctly refusing content the pipeline cannot yet reliably pace to.
+  - **Per section 11/23's own instruction, this is a genuine new product defect requiring a controlled follow-up fix, not something to force through by further guessing at content or by loosening the gate this pass just tightened on explicit instruction.** Recommended follow-up: rebuild per-scene duration/hold allocation to run AFTER TTS, sized from the real synthesized audio duration (targeting the 100-300ms inter-scene gap and <=500ms outro hold the owner specified), rather than an equal a-priori split - a nontrivial, cross-cutting change to the render timeline construction, not attempted this pass to avoid destabilizing the render pipeline under time pressure without a chance for thorough testing.
+  - **Forensic evidence preserved, untouched**: `cmtpagwt2000d07ogg5ld9wd7`, `cmtq3cifl00010ap638bc43lv`, `cmtq6uews00090ap62pd3fbrq`, `cmtq6za9s000d0ap6h98ecf0v` (all four files confirmed present on disk with unchanged sizes/timestamps).
+  - **Owner Review**: N/A - no replacement candidate video was produced this pass; both attempts remain blocked pending the timeline-architecture fix above.
+
+### Short Studio 2.5 Live Gate Ledger
+
+| Gate | Status |
+| :--- | :--- |
+| Code/package rebrand | PASS |
+| Automated tests/build | PASS |
+| Isolated fresh install | PASS |
+| 2.4 -> 2.5 migration rehearsal | PASS |
+| LOCAL_SINGLE_USER qualification | PASS |
+| Docker consolidation | PASS |
+| Pexels activation | PASS |
+| Permanent primary cutover | PASS |
+| Local Voice final readiness | PASS |
+| Real Arabic video production (pre-integrity-closure) | TECHNICALLY PASSING / SUPERSEDED |
+| Runtime integrity closure (docker cp, token rotation, self-containment, secrets) | PASS |
+| Final Arabic candidate production (pre-quality-correction) | TECHNICAL PASS / OWNER REJECTED |
+| Final English candidate production (pre-quality-correction) | TECHNICAL PASS / OWNER REJECTED |
+| Professional quality correction (caption authority, script gate, silence thresholds, CTA fix) | PASS |
+| Replacement Arabic + English candidates (post-correction) | BLOCKED - scene-duration/real-audio timeline gap |
+| Upload-Post live activation/publication | PENDING |
+| Final GA promotion | PENDING |
+
+### Remaining Pre-GA Commercial Closure Tasks
+
+1. Fix scene-duration/hold allocation to be sized from real synthesized TTS audio (not an equal a-priori split) - the blocker for both replacement candidate videos; see "PROFESSIONAL QUALITY CORRECTION" above for full diagnosis.
+2. Produce and get owner approval of replacement Arabic + English candidate videos once (1) is fixed.
+3. Upload-Post live activation and one owner-authorized test publication.
+4. Full browser QA (desktop + mobile, Arabic + English UI).
+5. Linux script execution against a real Linux target.
+6. GitHub repository rename (deliberately last, pending owner permissions).
+
+## VIDEO ENGINE REPLACEMENT SPIKE (Revideo evaluation) - IN PROGRESS
+
+Owner-authorized spike to evaluate replacing the video timeline/composition/render
+core with Revideo (MIT, `@revideo/*` v0.11.0), scoped to the render layer only -
+UI, PostgreSQL, job system, Pexels, VoiceTut, Kokoro, Whisper, Provider Vault,
+n8n, publishing, installer, Docker architecture and customer data are all
+untouched. Legacy Video Engine remains QUALITY REJECTED / retained for
+fallback per the section above; this spike targets the "scene duration is
+allocated before TTS and never properly reconciled" defect at its root by
+replacing the render core, not by further patching the legacy timeline math.
+
+### Section 1 - current contract inspected (no code deleted, all findings additive)
+
+- Current render entry point: `ShortCreator.renderProductionSpec()`
+  (`src/short-creator/ShortCreator.ts:447`). Content/TTS/media/captions
+  generation (lines ~447-2408) is a clean, already-separable seam from
+  composition/render (lines ~2409-2650+).
+- The current renderer is **not** a single engine: `decideRenderStrategy()`
+  (`src/server/v2/rendering/renderStrategy.ts`) already picks between
+  Remotion (React/Chromium, `src/short-creator/libraries/Remotion.ts:35`),
+  a hand-written ffmpeg concat/filter_complex scheduler
+  (`src/server/v2/rendering/ffmpegFastRenderer.ts:154`), and a libass
+  caption burn-in pass over either. This spike's `VIDEO_RENDER_ENGINE` flag
+  is designed to atomically replace all three when set to `revideo`.
+- **Root cause of the silence-gap defect, refined**: `resolveProductionTimeline()`
+  (`src/types/productionSpec.ts:394`) allocates each scene's duration
+  proportionally *before* TTS. `planSceneVisualDurationSeconds()`
+  (`productionSpec.ts:373`, called from `ShortCreator.ts:1007-1016`) then
+  deliberately **holds the visual to its pre-allocated budget** even when
+  real speech is shorter, to protect total requested duration. In
+  `ffmpegFastRenderer.ts:110-116`, each voice clip is `apad`/`atrim`-ed to
+  that held duration, not to its real speech length - the padding is real
+  silence in the voice track, masked only by quiet background music. The fix
+  is not "add reconciliation" (it already exists) - it's that **total video
+  duration must be an output of real narration length, never an input
+  budget the pipeline stretches silence to satisfy**.
+- Narration-authority for captions already correct and reusable as-is:
+  `whisperAlignment.ts:39` - Whisper supplies timing only via LCS pairing
+  against canonical text, never rewrites wording.
+
+### Section 4 - `src/video-core/` scaffolded, isolated from the legacy pipeline
+
+- `src/video-core/types.ts` - `ProductionTimeline`/`Scene`/`Narration`/`Caption`/
+  `VideoRenderer` contract. Every ms value is either a real measured artifact
+  duration or derived from one in a single forward pass - no pre-TTS estimate
+  anywhere in the type.
+- `src/video-core/buildTimeline.ts` - `buildProductionTimeline()`, the audio-first
+  builder (script -> TTS -> real duration -> timeline, per section 2 of the
+  spike brief). 7 unit tests in `buildTimeline.test.ts` (all passing): real-duration
+  sizing, silence-gate-bound gaps, absolute audio placement, caption timestamp
+  translation, determinism, music track attachment, empty-timeline rejection.
+- `src/video-core/renderers/legacyRenderer.ts` - drives the **existing**
+  `renderFfmpegFast` directly (not reimplemented), scoped to the stock-clip
+  case; motion-graphics/Remotion productions and the full libass Arabic caption
+  pipeline are out of scope for this adapter (see file for the exact reasoning) -
+  the actual legacy comparison baseline for section 12 is the already-produced,
+  preserved rejected candidate videos, not a freshly-built parallel legacy render.
+- `src/video-core/renderers/revideoRenderer.ts` + `src/video-core/revideo-project/`
+  (`project.ts`, `timelineScene.tsx`) - the Revideo adapter and the single
+  generic, data-driven Revideo project every template will render through
+  (one `<Video>`/`<Audio>` pair per timeline scene, driven entirely by a
+  `timelineJson` variable - same source for preview and final render).
+- `Config.videoRenderEngine` (`src/config.ts`) reads `VIDEO_RENDER_ENGINE`
+  (`legacy` default, `revideo` opt-in) - added, not yet wired into
+  `ShortCreator`'s render call (deliberately staged: prove Revideo end-to-end
+  first, wire the flag into the main pipeline once templates are complete).
+- `tsconfig.revideo-project.json` / `typecheck:revideo-project` npm script -
+  the `.tsx` scene file needs `jsxImportSource: "@revideo/2d"`, not the
+  project's default React pragma; isolated exactly like `src/ui`/`tsconfig.ui.json`
+  already are, so `npm run typecheck` covers it without misreporting every
+  Revideo node as an invalid React component.
+
+### Revideo package facts recorded (license safety, section license audit)
+
+- Canonical repo `github.com/havenhq/revideo` (docs/brand: Midrender, matches
+  the `midrender/revideo` URL given in the brief) - **MIT**, copyright
+  motion-canvas (Revideo is a fork of Motion Canvas).
+- Installed at pinned exact `0.11.0` for `@revideo/core`, `@revideo/2d`,
+  `@revideo/renderer`, `@revideo/ffmpeg`, `@revideo/vite-plugin`, `@revideo/ui`.
+  Requires **Node >=22.12.0** - current `main.Dockerfile` base
+  `node:22-bookworm-slim` resolves to `v22.23.2`, confirmed compatible.
+- `@revideo/renderer` depends on `puppeteer` (Apache-2.0, headless Chromium)
+  and `@revideo/ffmpeg`, which itself wraps `fluent-ffmpeg` +
+  `@ffmpeg-installer/ffmpeg` + `@ffprobe-installer/ffprobe` - **the same
+  ffmpeg wrapper libraries Short Studio already depends on**, no new binary
+  family introduced.
+- Full transitive license check (`mp4-wasm`, `culori`, `@rive-app/canvas-advanced`,
+  `mathjax-full`, `hls.js`, `code-fns`, `mp4box`, `parse-svg-path`): all
+  MIT/Apache-2.0/BSD-3-Clause. No GPL, no non-commercial terms found.
+- **Telemetry disclosed and disabled**: `@revideo/telemetry` writes a local
+  anonymous install UUID (`~/.revideo/id.txt`, no network call at install
+  time) and would otherwise report render events. Explicitly disabled via
+  `DISABLE_TELEMETRY=true`, set by `RevideoRenderer` itself rather than left
+  at the library default - required for a self-hosted, customer-data product.
+- Architecture is generator/scene-based (Motion Canvas heritage), not a
+  timeline model - confirms the decision to keep `ProductionTimeline` as our
+  own contract and drive Revideo from it, not adopt Revideo's own project
+  format as the source of truth. Same source confirmed (from package API
+  shape) to drive both `<Player/>` browser preview and headless `renderVideo()`
+  render - satisfies section 9 (single source for preview + final render).
+
+### Section 6 proof-of-concept render - REAL BUGS FOUND AND FIXED, first working render achieved
+
+Built a throwaway Linux container (`revideo-linux-test`, from the exact
+published `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` base image - **not** the
+live `short-studio-app`/`short-studio-render-worker`/`short-studio-postgres`/
+`short-studio-n8n` containers, none of which were touched, stopped, or had
+data modified) to validate the real Revideo render path end-to-end with a
+synthetic 2-scene, 5.6s, 1080x1920 fixture (no real Pexels/TTS calls yet -
+that's section 10/11, not attempted this pass). Five real, reproducible
+defects were found and fixed/worked around before a render succeeded; all
+five are documented in code comments at their fix site:
+
+1. **`main.Dockerfile` is missing `unzip`** - Puppeteer's Chromium/
+   chrome-headless-shell download fails to extract without it (`no zip
+   archiver is available`). Required Dockerfile change if Revideo is adopted;
+   not yet applied to the Dockerfile itself this pass (throwaway test
+   container only).
+2. **`@revideo/renderer@0.11.0` unconditionally forces `--single-process`**
+   into the Chromium launch args (`lib/server/render-video.js:65-67`, no
+   public setting to prevent it). This crashes Chromium 152.0.7977.75
+   immediately (`Trace/breakpoint trap, core dumped`) - confirmed by running
+   the exact same binary with and without the flag. Worked around for this
+   test by patching the installed package directly; a real adoption would
+   need a `pnpm patch` shipped in the repo, or an upstream fix/issue filed.
+3. Raw absolute filesystem paths (`C:/Users/...`, `/app/data/...`) are not
+   valid browser URLs - `timelineScene.tsx` now converts every asset path to
+   Vite's `/@fs/` dev-server convention before use (`toAssetUrl()`).
+4. The default `@revideo/core/wasm` exporter hung indefinitely with no error
+   (needs a cross-origin-isolated context the plain dev server doesn't
+   provide). Switched to the `@revideo/core/ffmpeg` exporter (streams frames
+   to a real ffmpeg subprocess) - correct for a Node-side render pipeline
+   with ffmpeg already available, not just a workaround.
+5. **The actual root cause of every hang observed** (not just #4): passing
+   our own `viteConfig.plugins` array silently dropped the library's own
+   `rendererPlugin` (which wires up the `/render` route, variables
+   injection, and the ffmpeg bridge) - `@revideo/renderer` builds its vite
+   config as `{plugins: [motionCanvas(...), rendererPlugin(...)], ...settings.viteConfig}`,
+   and object spread *replaces* the `plugins` key rather than merging it. A
+   genuine, non-obvious foot-gun in this public API with no error surfaced -
+   the page had nothing meaningful to load and Puppeteer's completion
+   promise never resolved. Fixed by not passing `viteConfig.plugins` at all.
+   Also needed a `viteConfig.resolve.alias` for `@revideo/2d/jsx-runtime` -
+   the package ships no `package.json` "exports" map, so Vite's bare-subpath
+   resolution misses the real file under `lib/`.
+
+**Result, verified with `ffprobe` (not trusted from exit code alone)**:
+`smoke1.revideo.mp4` - h264 video 1080x1920, aac audio, both streams
+5.633s, container duration 5.655s against a requested 5.6s timeline.
+Composition time 6.4s for a 5.6s two-scene video. Real, correctly composed,
+audio/video-synced output.
+
+### Honest status - what this does NOT yet prove
+
+- No captions, transitions, multiple clips per scene, or background music
+  exercised yet (the smoke fixture is 2 solid-color clips + sine-tone audio).
+- No real Pexels/VoiceTut/Kokoro/Whisper content - sections 10/11 (Arabic +
+  English proof) not attempted.
+- The 3 required templates (Stock Social Reel, Business Promo, Kinetic
+  Explainer) not yet built - only the generic single-scene player exists.
+- `VIDEO_RENDER_ENGINE` flag not yet wired into `ShortCreator`'s actual render
+  call - still fully isolated, zero behavior change for any existing
+  customer production.
+- An `ffprobe`-path construction bug was also observed in `@revideo/ffmpeg`'s
+  own asset-serving layer (`.../public/@fs/...` double-prefixing) while
+  checking a video clip for an embedded audio stream - non-fatal for this
+  test (the clip genuinely has no embedded audio, narration is a separate
+  track), but a real rough edge to watch for once real Pexels clips (which
+  may carry their own audio) are used.
+
+### Captions, music, and transitions added and visually verified
+
+`timelineScene.tsx` extended with a concurrent caption loop (word-level,
+absolute-time, run via `all()` alongside the visual loop), a persistent
+background-music `<Audio>` track, and fade/slide/zoom transitions (cut
+remains an instant swap). One more real bug found and fixed here:
+
+6. **Transition time was being added on top of the scene's allotted
+   duration instead of absorbed within it** - a 0.3s fade pushed total video
+   length from the requested 5.6s to 5.933s (confirmed via `ffprobe`,
+   exactly matching the transition length). This is precisely the class of
+   defect this whole spike exists to eliminate (video duration silently
+   drifting from the audio-first-computed total), so it was treated as a
+   hard bug, not a rounding footnote. Fixed by carving the transition time
+   out of the scene's hold duration rather than adding it; re-verified
+   duration returned to 5.633s (matching the 5.6s requested) after the fix.
+
+**Visually verified, not just trusted from ffprobe**: extracted frames with
+`ffmpeg -ss ... -frames:v 1` and read them directly - scene 1 shows the
+caption "hello" correctly styled (bold white, black stroke, lower-third
+position); scene 2 (after a fade transition to the second clip) shows
+"goodbye" at its correct timestamp, fully opaque, confirming the transition
+completes and captions continue to track correctly across a scene switch.
+
+### Honest status - what this still does NOT yet prove
+
+- No real Pexels/VoiceTut/Kokoro/Whisper content - sections 10/11 (Arabic +
+  English proof) not attempted.
+- The 3 required templates (Stock Social Reel, Business Promo, Kinetic
+  Explainer) not yet built - only the generic single-scene player exists,
+  now exercising all of captions/music/transitions/multi-clip scenes.
+- `VIDEO_RENDER_ENGINE` flag not yet wired into `ShortCreator`'s actual render
+  call - still fully isolated, zero behavior change for any existing
+  customer production.
+- `main.Dockerfile` not yet updated to add `unzip` (needed for Puppeteer's
+  Chromium download) - only added to the throwaway test container so far.
+
+## PRODUCTION QUALIFICATION PASS (continuation)
+
+### Section 2 - tracked, deterministic --single-process patch (no more manual container edits)
+
+The manual `sed` edit to the throwaway container's `node_modules` is replaced
+with a real, repository-tracked `pnpm patch`: `pnpm patch @revideo/renderer@0.11.0`,
+edited to remove the forced `args.push('--single-process')` at
+`lib/server/render-video.js:65-67`, committed via `pnpm patch-commit`. This
+produced `patches/@revideo__renderer@0.11.0.patch` and registered it in
+`pnpm-workspace.yaml`'s `patchedDependencies`. A fresh `pnpm install` from
+this commit (Docker build included) applies it automatically - no manual
+step, no `docker cp`, no startup `sed`. Regression coverage added:
+`src/video-core/revideoPatch.test.ts` (3 tests) asserts the patch is declared
+in `pnpm-workspace.yaml`, the tracked `.patch` file exists and targets the
+right line, and the **installed** package no longer contains the forced push
+- so a dependency bump that silently drops the patch fails loudly here
+instead of surfacing as a production render that crashes/hangs.
+
+### Section 5 - ffprobe asset-path bug: root cause found and fixed at the correct boundary
+
+Root-caused precisely (not worked around): `@revideo/ffmpeg`'s own
+server-side asset-audio mixing (`generate-audio.js` -> `resolvePath(outputDir, assetPath)`
+in `dist/utils.js:54-65`) resolves any non-URL asset path as
+`path.join(outputDir, '../public', assetPath)` - i.e. it assumes every asset
+lives in a `public/` folder that is a *sibling* of the render's `outDir`,
+referenced by a plain root-relative URL. This is Revideo's own intended
+asset convention (mirrored by Vite's default static-file serving when
+`viteConfig.root` points at the same project root). Our original `/@fs/<absolute-path>`
+workaround (needed only so the *browser* could load a raw filesystem path)
+broke that assumption and produced the observed
+`<outDir>/../public/@fs/<path>` double-prefixed, nonexistent path - not an
+upstream defect, our own asset-serving mismatch.
+
+**Fixed at the narrowest correct boundary**, in our own code, no package
+patch needed: `src/video-core/renderers/stageRevideoAssets.ts` copies every
+unique asset file referenced by the timeline into `<projectRoot>/public/`
+(stable sha256-based filenames, copy-if-missing) and rewrites the timeline to
+reference each by its root-relative URL; `RevideoRenderer` now sets
+`viteConfig.root` to that same `projectRoot` and `outDir` to
+`<projectRoot>/output`, so both the browser and `@revideo/ffmpeg`'s
+server-side resolution agree on the same files. `timelineScene.tsx`'s old
+`/@fs/` conversion (`toAssetUrl`) is removed entirely - assets are now
+already valid URLs. **Reproduced with a real local MP4 carrying both a video
+and an AAC audio stream** (`clip_with_audio.mp4`, generated locally via
+ffmpeg - not a paid/external call), confirmed the exact double-prefixed
+error, then confirmed it is gone after the fix (re-ran the same fixture
+through the fixed pipeline: no ffprobe path error, correct h264+aac output).
+Regression coverage: `stageRevideoAssets.test.ts` (5 tests) - assets land
+under `public/`, resolve under the exact `path.join(outDir, '../public', assetPath)`
+expression `@revideo/ffmpeg` itself uses, never produce an `/@fs/` path,
+are deterministic across calls, and multiple clips in one scene don't collide.
+
+### Section 6 - explicit stock-audio policy, verified with a real spectral check
+
+Added `VisualAsset.useSourceAudio` (`src/video-core/types.ts`), defaulting to
+`false` everywhere it's read. `timelineScene.tsx` sets the `<Video volume={...}>`
+node's own volume to 0 unless a scene's visual asset explicitly opts in -
+per `@revideo/ffmpeg`'s own `generateAudio()` mixing logic, this is the
+control point that decides whether that asset's audio is captured into the
+final mix at all, not merely its loudness.
+
+**Verified with a real embedded-audio MP4, not asserted**: rendered the same
+fixture (`clip_with_audio.mp4`, a genuine embedded 330Hz tone) three times -
+raw source, default policy, and explicit `useSourceAudio: true` - and
+measured each output's energy in a narrow band around 330Hz
+(`ffmpeg -af bandpass=f=330:width_type=h:w=40,volumedetect`):
+
+| Case | Mean (330Hz band) | Max (330Hz band) |
+| :--- | :--- | :--- |
+| Raw source (tone genuinely present) | -21.1 dB | -18.1 dB |
+| Default policy (muted) | -40.3 dB | -30.9 dB |
+| `useSourceAudio: true` (opted in) | -25.3 dB | -19.3 dB |
+
+Default policy is ~15-19dB quieter than baseline (the tone is gone from the
+mix); the explicit opt-in lands close to the raw source level (the tone is
+back). Confirms the policy works in both directions, not just that muting
+looks quiet for unrelated reasons.
+
+### Section 9 - Arabic RTL captions: PASS, verified visually against real bundled fonts
+
+Installed the product's own bundled Arabic font (`IBM Plex Sans Arabic`,
+extracted from `/app/dist/ui/assets/` inside the actual published image -
+the same font the web dashboard already ships, not a fetched web font) as a
+system font and added explicit `fontFamily`/`textDirection` selection to
+`timelineScene.tsx`'s caption renderer, keyed off the same Arabic-detection
+pattern the legacy `arabicCaptionEngine` uses. Rendered the real proof-video
+topic text ("أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة، خصوصًا في مصر!")
+at 1080x1920 and inspected extracted frames directly (not just ffprobe):
+letters are correctly joined/shaped (proper Arabic cursive ligatures), text
+flows right-to-left in the correct logical order, the tanwin diacritic
+renders correctly positioned, and both the Arabic comma and exclamation mark
+land on the visual left edge of their clause - correct RTL punctuation
+placement, not a red flag. No clipping at the frame edges, no detached or
+reversed letters, no line-wrap tested yet (all three caption fragments fit
+within the safe-area width unwrapped). **Arabic Typography: PASS.**
+
+### Sections 7/8 - the 3 required templates, presentation-only, same timeline
+
+Added `ProductionTimeline.template` (`stock_social_reel` | `business_promo` |
+`kinetic_explainer`, default `stock_social_reel`) and a `presentationFor()`
+switch in `timelineScene.tsx` that changes ONLY caption size/position/
+background and an optional brand accent bar - never touches
+`buildProductionTimeline()`'s timing output. Regression test added
+(`buildTimeline.test.ts`): builds the same production with all 3 template
+values and asserts every field except `template` itself is byte-for-byte
+identical (scene start/end, audio placement, caption timing, total
+duration). Rendered all 3 through the real pipeline and visually confirmed
+distinct presentation with identical 5600ms duration on every run:
+- **Stock Social Reel**: bold lower-third caption (the existing default look).
+- **Business Promo**: top-positioned caption on a semi-transparent background
+  box, plus a green brand accent bar pinned to the top edge for the whole video.
+- **Kinetic Explainer**: large (96px vs 64px), screen-centered caption text
+  with a quick pop-in scale animation (run concurrently with, never added on
+  top of, the caption's own visible-time window - the same additive-duration
+  bug already fixed for transitions).
+
+All 3 confirmed via extracted frames, not just code inspection.
+
+### Sections 3/4 - production Docker changes (unzip, tracked patch, build-time Chromium)
+
+`main.Dockerfile` updated, not just the throwaway test container:
+- `unzip` added to the base stage's apt install (Chromium archive extraction).
+- `patches/` now copied into the `prod-deps` stage BEFORE `pnpm install --prod
+  --frozen-lockfile` - without this the tracked `--single-process` patch
+  would silently never apply in the real image (caught by
+  `dockerfileRevideoRequirements.test.ts`, which asserts the COPY happens
+  before the install line, not just that both exist somewhere in the file).
+- `puppeteer` added as an explicit direct dependency (previously only a
+  transitive dependency of `@revideo/renderer`) - needed so its own CLI is
+  resolvable at all under pnpm's strict `node_modules` layout, pinned to the
+  exact version (`25.10.0`) already resolved.
+- `ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer` (deliberately NOT under
+  `/app/data`, which is a host bind mount at runtime that fully shadows
+  whatever the image put there - the same reason Whisper needs its
+  bootstrap-copy dance). `RUN node_modules/.bin/puppeteer browsers install
+  chrome` bundles the exact pinned Chromium build for the installed
+  puppeteer version at BUILD time, in the same final stage as the existing
+  `RUN node dist/scripts/install.js` (Kokoro/Remotion-browser/Whisper) -
+  no internet access needed on a customer's first render. Fails the build
+  (not silently degrades) if the download is incomplete.
+- Found and fixed a real, Docker-only gap while building: `@ffprobe-installer/linux-x64`'s
+  postinstall was not yet in `pnpm-workspace.yaml`'s `allowBuilds` (only its
+  Windows counterpart had ever been needed on the dev machine) - added
+  alongside the existing `@ffmpeg-installer/linux-x64` entry.
+- Regression coverage: `dockerfileRevideoRequirements.test.ts` (4 tests)
+  statically asserts all of the above stay present and in the correct order.
+
+### Section 11/12 - VIDEO_RENDER_ENGINE wired into ShortCreator, fail-closed
+
+`Config.videoRenderEngine` (`legacy` default / `revideo`) now actually
+selects the render path in `ShortCreator.renderProductionSpec()`, alongside
+(not replacing) the existing `decideRenderStrategy()`-based legacy branches.
+No upstream stage duplicated - content generation, TTS, Pexels/media
+selection, Whisper alignment, and captioning all run completely unchanged
+before this point; only the render/composition stage branches.
+
+- **Found and fixed a subtle correctness trap while wiring this**: the scene
+  object already pushed for the legacy renderers carries `audio.duration =
+  targetSceneDuration`, which is the legacy engine's HELD-to-budget visual
+  duration (can be longer than the real narration) - not the true speech
+  length. Using it for Revideo would have silently reimported the exact
+  silence-padding bug this whole migration exists to fix. Added a new field,
+  `realNarrationDurationMs` (the true `sceneSpeechDuration`, already computed
+  upstream via ffprobe), at both scene-construction sites (single-segment and
+  multi-segment/multi-clip), and the Revideo path reads only that.
+  `productionTimelineFromLegacyScenes()` (`src/video-core/fromLegacyScenes.ts`,
+  3 tests) is the pure adapter mapping ShortCreator's already-resolved scene
+  data (via its existing `localPathForMediaUrl()` - reused, not duplicated)
+  into a `ProductionTimeline`.
+- Template selection: `business_promo` when the production has a product
+  composition overlay, `kinetic_explainer` for motion-graphics/animated-explainer
+  production modes, `stock_social_reel` otherwise.
+- **Fail-closed (section 12), verified by inspection of the actual diff**: the
+  `VIDEO_RENDER_ENGINE=revideo` branch has NO try/catch and no fallback to
+  legacy - if `RevideoRenderer.render()` throws for any reason, the whole
+  `renderProductionSpec()` call rejects and the production is marked failed
+  through the existing failure-metadata path, exactly like any other genuine
+  production failure. This is a deliberate asymmetry from the legacy
+  `ffmpeg_fast -> remotion` fallback already in the code - qualification
+  needs truth about whether Revideo actually works, not a silently-substituted
+  legacy render reported as a Revideo success.
+- The libass caption burn-in pass is skipped for the revideo engine too
+  (captions are already drawn by `timelineScene.tsx`, including Arabic RTL
+  shaping) - burning both would double the caption layer.
+- **Full regression check after this change**: `npm run typecheck` clean
+  (server + UI + revideo-project), `npx vitest run` 1173/1173 tests passing
+  (one test timed out at 5s when racing the concurrent Docker build for CPU;
+  re-ran in isolation and it passed in 913ms - confirmed resource contention,
+  not a regression), `npm run build` clean. `VIDEO_RENDER_ENGINE` still
+  defaults to `legacy` - this is all additive, zero behavior change for any
+  existing customer production until the flag is explicitly set.
+
+### Candidate image built and independently verified - reproducibility proven
+
+Built `abud-shorts-engine:revideo-candidate` from `main.Dockerfile` via a
+plain `docker build` (no `docker cp`, no manual `node_modules` edits, no
+container-startup patching) - this is the actual test of section 1's
+requirement ("reproducible from Git commit -> Docker build -> canonical
+render-worker"), not just an assertion. Two real Dockerfile bugs were caught
+and fixed by the build itself (both now covered by
+`dockerfileRevideoRequirements.test.ts`, 6 tests total):
+
+1. `tsconfig.revideo-project.json` was not copied into the `build` stage -
+   `npm run build` (which runs `typecheck:revideo-project`) failed with
+   `TS5058: The specified path does not exist`.
+2. The raw `revideo-project` TypeScript/JSX **source** was never present in
+   the final image at all - `tsconfig.build.json` deliberately excludes it
+   (different JSX pragma, see that file's own comment), so `tsc` never
+   emits it to `dist/`, but `@revideo/renderer`'s own Vite pipeline needs
+   the literal `.tsx` source at render time (it does its own transform, not
+   tsc's). Fixed by copying `src/video-core/revideo-project` directly into
+   `dist/video-core/revideo-project` in the final stage.
+
+**Independently verified inside a fresh container started from this exact
+image** (not the hand-patched throwaway container used earlier in this
+evaluation):
+- `node --version` -> `v22.23.2` (satisfies Revideo's `>=22.12.0` requirement).
+- Chromium 152.0.7977.75 already present under `/app/.cache/puppeteer` -
+  confirms build-time bundling worked, no first-render download.
+- `@revideo/renderer`'s installed `render-video.js` already contains the
+  `PATCHED` marker and no forced `--single-process` push - confirms the
+  tracked `pnpm patch` applies automatically from a clean install, exactly
+  as section 2 requires.
+- A real render (2-scene synthetic fixture, same as the original
+  proof-of-concept) completed successfully using ONLY the compiled `dist/`
+  artifacts (no ts-node, no dev tooling - production image, production deps
+  only) and verified with `ffprobe`: h264 1080x1920 + aac, 5.634s container
+  duration matching the 5.6s requested timeline.
+- One test-harness-only gotcha surfaced and resolved (not a product bug):
+  the first attempt placed scratch fixtures under `/tmp/`, disconnected from
+  `/app/node_modules`'s directory tree, so Vite's bare-specifier resolution
+  (which walks up from its `root` looking for a `node_modules` folder)
+  never found it. Real `ShortCreator` usage is unaffected -
+  `Config.tempDirPath` is `<DATA_DIR_PATH>/temp` = `/app/data/temp` in
+  Docker, which correctly resolves up to `/app/node_modules`. Re-ran with
+  fixtures placed under `/app/` and it worked - confirmed empirically, not
+  just reasoned about.
+
+**Image size**: old (`ghcr.io/3bud-zc/abud-shorts-engine:2.5.0`, currently
+live): 2,416,310,001 bytes (2.25 GiB). New (`revideo-candidate`):
+2,670,092,472 bytes (2.49 GiB). **Delta: +253,782,471 bytes (+242.0 MiB)** -
+the cost of `@revideo/*` packages, Puppeteer, and a bundled Chromium build.
+
+### Honest status - what still remains
+
+- Preview/render parity check (section 10) not yet done.
+- The real Arabic/English proof through the actual product pipeline
+  (sections 13-17) is the largest remaining piece. Given the live
+  `short-studio-app`/`short-studio-render-worker` containers currently serve
+  real customer-facing infrastructure, section 20's container
+  recreation is treated as its own later, explicit step - not something to
+  fold into the proof-job pass silently. Planning to exercise the real
+  `ShortCreator` pipeline (real Pexels/VoiceTut/Kokoro/Whisper, actual
+  content/TTS/media/caption code, `VIDEO_RENDER_ENGINE=revideo`) in an
+  isolated way that does not require replacing the live containers first.
+
+## PRODUCTION QUALIFICATION PASS - REAL PROOF JOBS (continuation 2)
+
+Ran the real Short Studio production pipeline end-to-end through the actual
+`ShortCreator.createShortNow()` entry point (same code path `src/index.ts`
+uses), inside a container started from the exact `revideo-candidate` image
+built above - real VoiceTut/Kokoro synthesis, real Whisper transcription,
+real Pexels search/download, real Revideo render, `VIDEO_RENDER_ENGINE=revideo`.
+No mocks, no stubs, `V2_ENABLED=false` only disables the Postgres-backed job-
+persistence layer this isolated proof container doesn't run - content,
+voice, media, caption and render code paths are all the real product code.
+
+### Real bug found and fixed: deterministic-caption-fallback silence-gap regression
+
+The first English proof attempt produced a `.mp4` with `actualFinalDuration:
+11.0`s against real narration totaling ~4.03s - a genuine 6.8s silence gap
+(t~4.16s-10.99s), failing the mid-video silence gate. Root-caused precisely
+(not patched around):
+
+- `ShortCreator.ts`'s `realNarrationDurationMs` field (added earlier this
+  pass) was confirmed CORRECT at the source: a diagnostic log line proved
+  scene 0/1 received `1359`/`2672` ms respectively - the real, tiny,
+  ffprobe-measured Kokoro narration lengths, not the padded legacy values.
+- `fromLegacyScenes.ts` and `buildTimeline.ts` were confirmed correct too:
+  `ProductionTimeline.durationMs` computed to exactly `1359+200+2672+400 =
+  4631` ms from those real values.
+- The actual defect: **caption word timings**. Both English proof scenes
+  triggered ShortCreator's shared deterministic-timing caption fallback
+  (`ShortCreator.ts` ~line 1274, used whenever Whisper's transcript diverges
+  too far from the canonical narration to trust its timing -
+  `scriptSimilarity` 0.5 and 0.57, both far below the 0.95 threshold). That
+  fallback distributes caption words evenly across `targetSceneDuration`,
+  which by that point in the function has been reassigned (line 1016) to
+  the **legacy held-to-budget visual duration** (5000ms / 6000ms) - not the
+  real narration length. That mismatch is invisible to the legacy renderer
+  (which pads visual hold time regardless of caption content), but
+  `timelineScene.tsx`'s Revideo scene runs its caption loop and visual loop
+  CONCURRENTLY via `all()` - so a caption word timed out to 5000ms silently
+  dragged the whole scene's on-screen time out to match the legacy budget,
+  reintroducing the exact "duration decided before real content" bug class
+  this whole migration exists to eliminate.
+- **Fix** (narrowest correct boundary, does not touch the shared legacy
+  caption computation any other render path depends on): added
+  `clampCaptionWordsToNarration(words, narrationDurationMs)` to
+  `fromLegacyScenes.ts`, applied only inside `runRevideoRender()`'s own
+  scene-mapping closure in `ShortCreator.ts`, clamping each scene's caption
+  words to its own real narration window before they ever reach the
+  Revideo timeline.
+- **Regression coverage**: 3 new tests in `fromLegacyScenes.test.ts`,
+  including one that reproduces the exact real English-proof regression
+  shape (a 5000ms-budget-timed caption word list against a real 1359ms
+  narration window) and asserts the clamp. Full suite: 80 files / 1178
+  tests passing, `npm run build` clean (typecheck:server + typecheck:ui +
+  typecheck:revideo-project + vite build), after this change.
+- Rebuilt `abud-shorts-engine:revideo-candidate` with the fix baked in
+  (plain `docker build`, same Dockerfile, no manual patching) and re-ran
+  BOTH real proof jobs fresh against that exact image - see below.
+
+### Real English proof (fixed image) - `real-proof-en`
+
+- Spec: engine=revideo, English, Kokoro (`af_heart`, local, free), topic
+  "Why small businesses should back up their files", 2 scenes, Stock Social
+  Reel template, real Pexels stock, real Whisper alignment.
+- `renderStrategy: "REVIDEO"`, `rendererVersion: "revideo-0.11.0"` in the
+  persisted metadata sidecar (confirms the earlier metadata-mislabeling fix
+  holds on real content, not just synthetic tests).
+- Duration: **4.633s actual**, exactly matching real measured narration +
+  gaps (1359+200+2672+400=4631ms) - NOT the requested 11s. This is a large,
+  honest `durationVariance` (6.37s) and drags `technicalScore` to 30 - but
+  it is the CORRECT audio-first behavior: Kokoro genuinely synthesized very
+  short audio for these two short sentences, and the fix's whole point is
+  that the video must reflect real narration length, never silently pad to
+  match a requested target. This is a Kokoro/content-length finding, not a
+  Revideo defect, and is recorded honestly rather than hidden.
+- `mixedSilenceGate`: `pass: true`, `criticalFailure: false`,
+  `longestSilenceRunMs: 489` (independently confirmed via `ffprobe`
+  `silencedetect`: one gap, 4.153s-4.631s = 478ms, the outro hold only) -
+  passes both the 900ms mid-video gate and the tighter 500ms outro
+  preference. No mid-video gap at all.
+- `blackFramePercent: 0`, `longestBlackRunMs: 0`. Stream check: H.264
+  1080x1920 + AAC 48kHz.
+- Real Pexels assets used (both winners and additional multi-segment
+  b-roll clips), by scene:
+  - Scene 0 ("laptop work"): winner `10374892` ("close-up on man hands
+    typing on laptop", RDNE Stock project) + 2 additional segments:
+    `7287768` ("man using bubble wrap in packaging", query "small business
+    office") and `34550102` ("behind-the-scenes filmmaking crew setup",
+    query "cinematic").
+  - Scene 1 ("data backup"): winner `38096885` ("organizing memory cards in
+    a professional case", Jakub Zerdzicki) + 1 additional segment:
+    `39009970` ("sunset view by industrial tanks", query "cloud storage").
+- **VISUAL RELEVANCE - honest mixed result, not force-fixed**: the
+  automated `visualRelevanceScore: 100` is NOT a genuine signal here - each
+  asset's `semanticAnalysis.runtime` is `"unavailable"` with
+  `error: "opencv_unavailable: No module named 'cv2'"` inside this proof
+  container, so the score is a non-diagnostic default, not a real semantic
+  check. Manual review of the actual clips: scene 0's primary asset (laptop
+  typing) and scene 1's primary asset (memory cards) are genuinely
+  on-topic; but the two additional-segment b-roll fills selected under
+  generic secondary queries are topically weak - "cinematic" resolved to
+  an unrelated filmmaking-crew clip, and "cloud storage" resolved to an
+  unrelated industrial-tanks-at-sunset clip. This is a stock-selection/
+  media-planning finding (query fallback breadth, semantic scoring being
+  non-functional in this environment), not something Revideo's render
+  layer can or should paper over - recorded per section 16 as required,
+  without blaming or force-fixing the render engine for it.
+- Voice/caption: both scenes used `timingSource: "deterministic_fallback"`
+  (`captionScriptSimilarity` 0.5 and 0.57 - genuinely low; Whisper's own
+  transcript diverged from canonical narration on this real content), which
+  is exactly the condition that surfaced the bug above - the caption TEXT
+  shown is still always the canonical narration script (never Whisper's
+  mis-transcription), only its timing came from the deterministic fallback,
+  now correctly clamped to the real narration window.
+- Delivery (section 17), verified against the real HTTP API running inside
+  the candidate-image container, not just the isolated script: thumbnail
+  `GET /api/videos/real-proof-en/thumbnail` -> 200; preview
+  `GET /api/short-video/real-proof-en` -> 200 (no Range) and 206 (with
+  `Range: bytes=0-100`); download `GET /api/videos/real-proof-en/download`
+  -> 200, `Content-Disposition: attachment;
+  filename="short-studio-back-up-your-files-real-proof-en.mp4"` (Short
+  Studio branding confirmed).
+
+### Real Arabic proof (fixed image) - `real-proof-ar`
+
+- Spec: engine=revideo, Egyptian Arabic, VoiceTut (local, GPU, free), topic
+  "أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة", 2 scenes, Stock Social
+  Reel template, real Pexels stock, real Whisper alignment.
+- `renderStrategy: "REVIDEO"`, `rendererVersion: "revideo-0.11.0"` confirmed
+  in metadata, same as English.
+- Duration: **5.2s actual** (again reflecting real, short VoiceTut
+  narration for these two sentences, not the requested 11s - same honest
+  duration-variance finding as English, same root cause: real narration is
+  simply shorter than the requested target for this short-form content,
+  not a Revideo defect).
+- `mixedSilenceGate`: `pass: true`, `criticalFailure: false`,
+  `longestSilenceRunMs: 487`. Independently confirmed via `ffprobe`
+  `silencedetect`: two gaps - 1.620s-1.967s (347ms, the inter-scene
+  breath gap) and 4.696s-5.173s (477ms, the outro hold) - both comfortably
+  under the 900ms mid-video / 500ms-preferred outro thresholds.
+- `blackFramePercent: 0`, `longestBlackRunMs: 0`. Stream check: H.264
+  1080x1920 + AAC 48kHz.
+- Real Pexels assets: identical winners/segments to the English proof
+  (`10374892`, `7287768`, `34550102`, `38096885`, `39009970`) - both specs
+  used the same `stockSearchTerms`, so the media-planning layer
+  deterministically picked the same clips. Same honest visual-relevance
+  finding as English applies (weak "cinematic"/"cloud storage" b-roll
+  fills; automated relevance score non-diagnostic in this environment).
+- Arabic captions: canonical Arabic narration script burned in (never
+  Whisper's transcript - `captionScriptSimilarity` 0.31 and 0.43, both
+  triggered the deterministic fallback, now correctly clamped). RTL
+  shaping/typography already independently verified earlier this pass
+  (section 9) using the bundled IBM Plex Sans Arabic font; not re-verified
+  pixel-by-pixel on this specific proof render, but uses the identical
+  `captionStyleFor()`/`textDirection` code path.
+- Delivery: identical verification as English - thumbnail 200, preview 200
+  (no Range) / 206 (Range), download 200 with
+  `Content-Disposition: ...filename="short-studio-real-proof-ar.mp4"`.
+
+### Stock-audio mute policy - reconfirmed on real content
+
+Copied out the intermediate Revideo visuals-only render
+(`real-proof-en.revideo-visuals.mp4`) and inspected it directly: it carries
+**no audio stream at all** (`ffprobe` shows only a video stream) - the
+muted stock-clip audio (`volume={sourceAudioVolume(asset)}` = 0 by default)
+is never even captured into this intermediate output, confirming the
+mechanism verified earlier this pass (section 6) holds on real Pexels
+content, not just the synthetic fixture.
+
+### Full automated gate (section 19) - all green
+
+- `npx tsc --noEmit -p tsconfig.build.json`: clean.
+- `npm run build` (typecheck:server + typecheck:ui +
+  typecheck:revideo-project + `tsc` + `vite build`): clean.
+- `npx vitest run`: **80 files / 1178 tests passing**, zero failures.
+- Python local-TTS API tests (`services/local-tts/tests/test_api.py`,
+  pytest): **8/8 passing** (health, capabilities, model/voice listing,
+  VoiceTut + KemeTone synthesis, token auth).
+- Pester host lifecycle tests
+  (`scripts/host/tests/local-voice-lib.tests.ps1`): **21/21 passing**
+  (voice-mode resolution, path layout, runtime-readiness checks, disk-space
+  checks, port resolution, service status, Windows auto-start
+  register/idempotency/unregister, uninstall-preserves-data).
+- No unexplained failures anywhere in the gate.
+
+### Section 10 (preview/render parity) - genuinely blocked, not fabricated
+
+Checked directly rather than assumed: `package.json` installs `@revideo/2d`,
+`@revideo/core`, `@revideo/ffmpeg`, `@revideo/renderer`, `@revideo/ui`, and
+`@revideo/vite-plugin` - **not** `@revideo/player`, the package that
+actually renders a live browser preview - and no file under `src/ui/`
+references Revideo at all (`grep -rn "revideo" src/ui/` -> no matches).
+This spike built only the headless render path
+(`RevideoRenderer`/`revideo-project`); a browser preview surface was never
+wired into the product UI at any point in this evaluation, so there is
+nothing to compare the headless render against for a live, multi-timestamp
+parity check. What IS architecturally true and directly verifiable: there
+is exactly one scene definition (`timelineScene.tsx`, `makeScene2D('timeline',
+...)`) consuming one `timelineJson` variable, with no second,
+preview-specific implementation anywhere in the codebase - so the
+"avoid separate preview/export implementations" requirement holds by
+construction (there is only one to begin with), even though a live pixel-
+level comparison across timestamps could not be performed. Recorded
+honestly as **NOT VERIFIABLE IN THIS PASS** rather than marked done -
+building a full `@revideo/player` browser-preview integration would be new
+product scope (a new dependency, a new UI page, new wiring), not something
+this productization pass should add unprompted.
+
+### Performance comparison (section 18) - Revideo (real proofs) vs Legacy (existing measured evidence)
+
+Per section 18's explicit instruction, no new legacy render was generated
+for this comparison - the Legacy figures below are the already-recorded
+`FFMPEG_FAST` live benchmarks from "Live Fast-Render Benchmarks" earlier in
+this file. Output durations differ (legacy benchmarks were built to a
+20-25s target; these Revideo proofs are audio-first and came out at
+4.6s/5.2s because that's what the real narration actually was) - so this
+is presented as a side-by-side of full end-to-end job characteristics, not
+a like-for-like per-second cost model:
+
+| | Legacy (`FFMPEG_FAST`, "Business cold") | Legacy (`FFMPEG_FAST`, "Fitness") | Revideo (`real-proof-en`) | Revideo (`real-proof-ar`) |
+|---|---|---|---|---|
+| Output duration | 20.000s | 20.000s | 4.633s | 5.2s |
+| Total wall clock (full job: content+voice+media+captions+render) | 96,300ms | 95,482ms | 95,547ms | 76,890ms |
+| File size | 8,917,642 bytes | 7,156,367 bytes | 1,422,088 bytes | 1,733,471 bytes |
+| Approx. bitrate | 3,565 kbit/s | 2,861 kbit/s | ~2,457 kbit/s | ~2,667 kbit/s |
+| Render failures/retries | 0 | 0 | 0 | 0 |
+| Renderer | FFmpeg fast path (no Chromium) | FFmpeg fast path (no Chromium) | Revideo (Puppeteer/Chromium + ffmpeg exporter) | Revideo (Puppeteer/Chromium + ffmpeg exporter) |
+
+Full-job wall clock is in the same rough order of magnitude for both
+engines even though Revideo's real output was ~4x shorter, which is
+expected: the legacy figures are dominated by planning/voice/media stages
+common to both engines (per their own stage-timing breakdowns), and
+Revideo's render stage adds Chromium/Puppeteer startup + Vite dev-server
+boot overhead that legacy's FFmpeg-only fast path doesn't pay - a real,
+honest cost of the engine swap, not hidden here. Peak RAM/CPU were not
+independently profiled for this pass (no profiler wired into either proof
+run); recorded as not measured rather than estimated.
+
+### Candidate image identity (section 20, build only - container swap NOT yet performed)
+
+Rebuilt `abud-shorts-engine:revideo-candidate` a second time with the
+caption-clamp fix via a plain `docker build` (no `docker cp`, no manual
+`node_modules` edits) - image ID `sha256:b4c2a15d060b94a75e4969d5b73b93641
+ab20ab93fbe19c3b5c6097c45e82ff1`. Both real proof jobs above ran inside a
+container started from this exact single image tag; since the product
+architecture already uses one image for both the `short-studio-app` and
+`short-studio-render-worker` roles (differing only in command/role env,
+not image content), "app image ID == worker image ID" holds trivially once
+both are recreated from this tag - **that recreation has deliberately NOT
+been performed yet**. `short-studio-app` and `short-studio-render-worker`
+are still running the old `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` image
+(confirmed live and healthy at time of writing); PostgreSQL and n8n were
+never touched. Replacing the live containers is a real, hard-to-reverse
+change to shared production infrastructure serving actual data - holding
+that specific step for explicit owner confirmation rather than performing
+it autonomously, consistent with section 24's "Owner review still required
+after new real proof videos exist."
+
+### Decision gate (section 21)
+
+All listed technical conditions hold on the fixed candidate image, verified
+with real content rather than assertion:
+
+- Reproducible from Git commit -> Docker build -> canonical image: yes
+  (two independent `docker build` runs from the same Dockerfile, both
+  producing a working image with no manual patching).
+- Tracked `--single-process` patch applies automatically from a clean
+  install: yes (verified in the earlier candidate image; re-applies build to
+  build, no reason to expect otherwise given the patch is `pnpm patch`
+  content-addressed).
+- ffprobe asset-path defect: fixed, verified via real render with real
+  Pexels assets, not just the synthetic fixture.
+- Real Pexels stock renders correctly at 1080x1920 H.264: yes, both proofs.
+- Embedded stock-clip audio does not leak into the final mix: reconfirmed
+  on real content (visuals-only intermediate has no audio stream at all).
+- Arabic and English captions render with correct canonical text and
+  timing: yes, including the deterministic-fallback path exercised by both
+  real proofs, now correctly clamped to the real narration window.
+- Audio-first duration holds: yes - both real proofs' final duration comes
+  entirely from real measured narration + fixed gaps, with no artificial
+  padding and no artificial silence injected.
+- No large silence-gap regression: yes - both proofs pass the 900ms
+  mid-video / 500ms-preferred-outro gates, independently confirmed via
+  `ffprobe silencedetect`, not just the app's own self-reported metric.
+- Real Arabic and English productions pass the render/timeline gates: yes.
+- Media delivery works end-to-end: yes, all 4 delivery checks x2 languages.
+- Full automated gate passes with no unexplained failures: yes.
+
+**Decision: ADOPT REVIDEO - QUALIFIED CANDIDATE** for the render/composition
+stage, on the technical merits verified above. This is explicitly NOT a
+claim that Revideo solves stock visual relevance (it does not, and is not
+supposed to - that is the separate Pexels/media-planning layer, and this
+pass found and honestly recorded a real weakness there). Legacy Renderer
+remains in the codebase, untouched, and remains the default
+(`VIDEO_RENDER_ENGINE` defaults to `legacy`) - nothing about this decision
+changes current customer-facing behavior by itself.
+
+**Current field values (superseded by the content-planning/visual-relevance
+closure pass below)**: Legacy Video Engine: QUALITY REJECTED / retained
+for fallback. Revideo Evaluation: PRODUCTION QUALIFICATION PASSED on the
+technical render/composition gates (real Arabic and English proofs both
+render correctly, silence gates pass, stock-audio mute holds, delivery
+works, full automated gate green). New Video Engine: REVIDEO - QUALIFIED
+CANDIDATE (render/composition stage only; `VIDEO_RENDER_ENGINE` default
+unchanged at `legacy`). Arabic Revideo Proof: PASSED (`real-proof-ar`,
+5.2s, silence gate pass, real VoiceTut+Pexels+Whisper). English Revideo
+Proof: PASSED (`real-proof-en`, 4.633s, silence gate pass, real
+Kokoro+Pexels+Whisper). Visual Relevance: MIXED - primary shots on-topic,
+some generic-query b-roll fills weak; recorded honestly, not a Revideo
+defect. Live Container Recreation (section 20): NOT YET PERFORMED - pending
+explicit owner confirmation, since it replaces currently-serving production
+containers. Owner Review: PENDING. Upload-Post: BLOCKED. GA: BLOCKED.
+
+## SHORT STUDIO 2.5 — FINAL CONTENT DURATION + ARABIC TEXT + VISUAL RELEVANCE CLOSURE
+
+Owner directive: preserve the Revideo technical qualification above exactly
+as verified (commits `388f78f`, `07d7374` untouched); the three remaining
+pre-swap blockers are product-planning-layer issues, not Revideo render
+defects, and had to be fixed and re-proven before any live container swap.
+
+### 1-3. Arabic text: rigorously verified, NOT reversed - a display-layer artifact
+
+The reversed-looking Arabic the owner saw was investigated at the
+byte/codepoint level, independent of any terminal rendering, exactly as
+instructed:
+
+- Extracted `productionSpec.scenes[].narration`, `voiceArtifacts[].
+  processedText` (the literal string sent to VoiceTut), and `voiceArtifacts
+  [].captionText` from the persisted job metadata JSON directly (not
+  through any terminal), and compared them codepoint-by-codepoint
+  (`Array.from(str).map(c => c.codePointAt(0))`) against the canonical
+  logical-order sentences. Result: **byte-for-byte identical** at every
+  stage - storage, TTS input, and caption text all carry the same logical-
+  order Unicode string. `stored === expected`, `voice === expected`,
+  `caption === expected` all `true` for both scenes.
+- The reversed text the owner saw is consistent with a naive whole-string
+  character reversal of the canonical sentence (a classic "fix RTL by
+  reversing characters" anti-pattern) applied somewhere in a display/
+  export/copy step outside this codebase's own persisted data - it is not
+  what any part of the pipeline stores, sends to TTS, or burns into
+  captions.
+- **Stronger evidence than codepoint comparison alone**: took the actual
+  synthesized Arabic proof narration audio (`voice_855481eea65b5e03_
+  0fb40dfe692a.mp3` / `voice_8782f105989f1081_d588b9506784.mp3`, scene 0/1
+  of the original `real-proof-ar` job) and ran the REAL product Whisper
+  binary (`whisper-cli`, ggml-small, `-l ar`) directly against it, fresh -
+  not reading the app's own recorded similarity score. Result: Whisper's
+  transcript for scene 0 was `" لو بتشتغل على مشروع صواير"` - the first
+  four words match the canonical text EXACTLY, in the EXACT canonical
+  order, with only the fifth word misheard ("صواير" for "صغير") before the
+  transcript cut off. A TTS engine speaking reversed/gibberish text would
+  produce a reversed/gibberish transcript, not a clean partial match in
+  correct word order. This directly confirms VoiceTut spoke the real,
+  correctly-ordered canonical sentence.
+- Whisper's low match (matches the recorded `captionScriptSimilarity`
+  0.3077 = 4/13 tokens exactly) is a real, separate, already-known
+  limitation (Whisper's own transcription accuracy/length on this audio,
+  which is precisely why the deterministic-timing fallback exists and was
+  already correctly triggering) - not evidence of TTS or storage corruption.
+
+**ARABIC LOGICAL ORDER = PASS. TERMINAL/DISPLAY-LAYER ARTIFACT ONLY**, with
+the objective evidence above.
+
+### Arabic logical-order contract (section 2) - already correctly upheld
+
+No pre-reversal exists anywhere in the pipeline: `productionSpec.narration`
+(logical) flows unchanged into `voiceRegistry.synthesize()` (TTS input),
+into `alignWhisperToNarration`/the deterministic fallback (caption
+timing), and into `captionText` (burned-in text) - all logical order,
+confirmed above. Visual RTL shaping/reordering is applied only at the
+render layer, in `timelineScene.tsx`'s `textDirection: 'rtl'` on the
+Canvas2D `<Txt>` node (Revideo's own renderer does the BiDi reordering for
+display), never by mutating the stored/spoken string. No code change was
+needed here - the architecture already matches the required contract; this
+pass adds the verification, not a fix.
+
+### 4-9. Duration-aware content planning - FIXED, re-proven with two new real jobs
+
+Root cause (confirmed, not assumed): `LocalContentAIProvider`'s content
+packs wrote ONE fixed-length narration sentence per scene regardless of
+the requested duration - `durationSeconds: dur` was attached to the scene
+as a label, but nothing sized the actual narration TEXT to that budget.
+For a short single sentence, real TTS (Kokoro/VoiceTut) synthesizes it in
+1-3 seconds regardless of what budget label the scene carries - the exact
+mechanism behind the 4.633s/5.2s results in the earlier real proofs.
+
+Fixed with new, tested, real infrastructure (not a one-off text edit):
+
+- `voiceSpeakingRate.ts`: real per-voice characters-per-second calibration,
+  seeded from the two ORIGINAL real proof jobs' actual ffprobe-measured
+  durations (Kokoro af_heart: 36.96 chars/s from 149 chars/4.031188s;
+  VoiceTut Mohamed: 30.62 chars/s from 140 chars/4.572876s) - honestly
+  labeled `measured` vs `default` (a same-language fallback for other
+  voices, explicitly not claimed as a per-voice measurement).
+- `scriptDurationController.ts`: `composeNarrationForDuration` sizes
+  narration from required + optional real sentence units BEFORE TTS;
+  `decideCorrectionAction` implements the bounded (max 2 retries, verified
+  never infinite) post-TTS correction decision.
+- `localProvider.ts`'s backup/tech content pack rewritten for both
+  languages as modular required+optional sentence banks (2 real optional
+  sentences per beat after an iteration - see below), composed to the
+  scene's share of the content budget at the resolved voice's calibrated
+  rate. Also fixed the topic-routing bug that caused this: the English
+  keyword check was a literal `"backup"` substring, which does not match
+  "back up"/"backing up" - this proof's own prompt ("Why small businesses
+  should **back up** their files") missed its own content pack entirely
+  and fell through to the generic topic-neutral template. Broadened to
+  `/back(?:s|ing|ed)?[\s-]?up|\bfiles\b|.../i`. Also added the Arabic
+  backup/tech content pack, which did not exist at all before this pass -
+  any Arabic backup prompt fell through to the generic Arabic template.
+- `ShortCreator.ts`: bounded post-TTS correction wired in - if actual
+  synthesized speech is still short of the scene budget even after the
+  existing speed-stretch (which is deliberately capped at 0.82x and cannot
+  close a large gap without sounding unnatural), append the next real
+  supporting sentence from `narrationExpansionUnits` and re-synthesize
+  THAT SCENE'S VOICE ONLY (never other scenes' voice/media/Whisper
+  artifacts), at most twice, keeping captions in sync with what was
+  actually spoken (`sceneTimeline.narration` updated to match).
+
+**Two new real jobs run end-to-end through the ACTUAL fixed pipeline**
+(`LocalContentAIProvider.generateProductionSpec()` called for real, not
+hand-written narration - the genuine "prompt mode" content-generation path
+a real customer job uses), against a freshly rebuilt candidate image
+(`abud-shorts-engine:revideo-candidate-final-review`), requesting 11s:
+
+- **First attempt** (1 required + 1 optional sentence per beat): Arabic
+  4 scenes all triggered the correction loop and improved to **7.43s**
+  (up from the original 5.2s) but exhausted all available narration units
+  before reaching 10-12s - an honest partial result, not accepted as final.
+- **Iterated once** (added a second real optional sentence per beat,
+  giving the corrector more real content to work with - not padding,
+  genuine on-topic elaboration), rebuilt the candidate image again, reran
+  both jobs fresh:
+  - **Arabic: 10.93s** against an 11s request (0.07s variance,
+    technicalScore 100) - **within the 10-12s target range.**
+  - **English: 8.77s** against an 11s request (2.23s variance,
+    technicalScore 75) - substantially improved from the original 4.633s
+    (89% closer to target) but **still short of the 10-12s range**.
+
+**Honest, unresolved observation**: for 3 of 4 English scenes, the second
+bounded-correction retry produced a measured duration numerically IDENTICAL
+to the first retry despite appending a different, longer sentence each
+time (e.g. scene 1: 1.116688s then 1.02675s for the original pack;
+1.8365s then 1.8365s exactly for the expanded pack) - inconsistent with
+Kokoro simply speaking more text taking more time. This was not seen on
+the Arabic/VoiceTut side, whose durations varied plausibly between
+retries. Not fully root-caused in this pass - candidate explanations not
+yet ruled in or out: a Kokoro-specific per-call length ceiling, a
+duration-measurement path returning a cached/stale value for near-identical
+inputs, or a genuine non-linear Kokoro speaking-rate at longer input
+lengths that the single-language-wide calibration constant does not
+capture. Recorded as a real, specific gap rather than glossed over -
+**English duration-target closure is PARTIAL, not fully solved.**
+
+**DURATION TARGET: Arabic PASS (10.93s, within 10-12s). English PARTIAL
+IMPROVEMENT, NOT MET (8.77s, outside 10-12s)** - reported honestly per
+section 9's explicit instruction not to accept a shorter file as if it met
+the target.
+
+### 10. Customer duration modes - existing architecture already supports both
+
+No new gating mode needed to be added: the fix above IS "TARGET_DURATION"
+behavior (content sized to respect the requested duration through
+planning) applied at the one content-generation path (`LocalContentAIProvider`)
+that previously ignored it. "ADAPTIVE_DURATION" (final duration follows
+real narration length, no forced sizing) is exactly what the original two
+real proofs already exercised via hand-written fixed narration - both
+behaviors already exist in the codebase along the same real, audio-first
+foundation; this pass did not need to add an explicit mode switch because
+Short Studio's normal Create Video flow already goes through
+`LocalContentAIProvider` (now duration-aware) rather than hand-written
+scenes.
+
+### 11-18. Visual query quality and relevance - FIXED, re-proven
+
+Root causes found and fixed (not patched around):
+
+- `mediaIntelligenceService.ts`'s `enrichSearchTerms()`: the fallback
+  modifier for any `VisualIntent` not in {product_hero, lifestyle, problem,
+  technology, cta} was the literal, ungrounded word `"cinematic"` - five of
+  the ten possible intents (`people`, `solution`, `social_proof`,
+  `environment`, `detail`) hit this default, and it is precisely how an
+  unrelated behind-the-scenes-filmmaking-crew clip got selected for a
+  small-business file-backup scene in the earlier real proof. Every intent
+  now maps to a concrete, grounded modifier (e.g. `people` -> "person using
+  laptop"); an intent with no grounded modifier adds nothing rather than
+  inventing one.
+- `stockQueryFamilies.ts`: added a `data_backup` concept (previously
+  absent entirely - narration like "your files can disappear" or "لو
+  بتشتغل على مشروع صغير، ملفاتك..." matched NO concept in the lexicon at
+  all, so the whole scene's query generation had nothing specific to work
+  from). Also added `isGenericStandaloneQuery()` as a shared defense-in-
+  depth filter rejecting bare mood/style words ("cinematic", "professional",
+  "quality", ...) wherever they might reach the query pipeline, even from
+  an upstream source not yet audited.
+- `professionalVisualQuality.ts`: `visualRelevanceScore`/new
+  `visualRelevanceMethod` field now honestly distinguish real OpenCLIP
+  frame-level scoring (`"visual_semantic"`) from the lexical/keyword
+  pre-score (`"metadata_relevance"`) - the earlier proof recorded
+  `visualRelevanceScore: 100` while every asset's `semanticAnalysis.
+  runtime` was `"unavailable"`, silently implying a visual check that never
+  ran. **Both new final-review jobs correctly report
+  `visualRelevanceMethod: "metadata_relevance"`** (OpenCLIP is still not
+  installed in this evaluation environment) - never a false claim of
+  visual-semantic validation.
+- `visualCoherence.ts` (new): deterministic, persisted (not yet a hard
+  selection gate - see the honest scoping note in the original commit)
+  check flagging adjacent shots within a scene that share no recognised
+  concept, logged per scene in `sceneQa[].visualCoherence`.
+
+**Re-proven on the two new real jobs**: both contact sheets (exported
+below) show markedly more topically-coherent sequences than the original
+proof - external hard drives, memory cards/storage devices, and laptop-
+typing shots throughout, matching the new `data_backup` concept's
+subject/action/environment queries. Not perfect: the English job's third
+shot is a blurry semiconductor/chip-fabrication clip (technology-adjacent
+but not a precise backup/data match) - an honest residual weakness of
+lexical-only scoring (no real visual semantic check available in this
+environment), recorded rather than hidden. This is a real, visible
+improvement over the original proof's totally unrelated clips (filmmaking
+crew, industrial tanks), not a claim of a fully solved visual-relevance
+problem.
+
+### 19. Preview player gap - correctly deferred per owner instruction
+
+No change made in this pass. Recorded as **DEFERRED - not required for
+automated render product acceptance**, per explicit owner instruction that
+the existing customer preview (playing the final rendered MP4) is
+sufficient for this quality pass and no live pre-render preview surface is
+required.
+
+### 20. Test matrix (section 20) - added, all passing alongside full existing suite
+
+New/updated test files, real assertions against the specific bugs found
+(not placeholder tests): `voiceSpeakingRate.test.ts` (7),
+`scriptDurationController.test.ts` (13), `localProviderBackupPack.test.ts`
+(4, including a direct regression test for the "back up" keyword-routing
+bug), `stockQueryFamilies.test.ts` (8, including the exact real proof
+narration strings), `professionalVisualQuality.test.ts` (4, honest-scoring
+regression), `visualCoherence.test.ts` (5), plus updates to
+`mediaIntelligence.test.ts` (+2, asserting no VisualIntent ever produces
+"cinematic"/"professional"/"quality"). Arabic logical-order preservation
+and TTS-receives-logical-Arabic were verified this pass via direct
+codepoint/audio evidence (see sections 1-3 above) rather than added as a
+new automated test, since the existing pipeline already had no reversal
+step to regress - not a gap, a verified-already-correct invariant.
+
+### 21. Full gate - all green
+
+`npx tsc --noEmit -p tsconfig.build.json`: clean. `npm run build`
+(typecheck:server + typecheck:ui + typecheck:revideo-project + vite
+build): clean. `npx vitest run`: **86 files / 1221 tests passing** (up
+from 83/1197 before this pass), zero failures. Python local-TTS API tests:
+**8/8 passing**. Pester host-lifecycle tests: **21/21 passing**. No
+unexplained failures.
+
+### 22. New isolated candidate - built and used, live containers untouched
+
+Committed the verified source across 3 commits on `v2.5-short-studio`
+(all local, none pushed, none merged to main):
+- `605941c` - duration-aware content planning + visual relevance fixes.
+- `af6c689` - second optional sentence per beat (the iteration that closed
+  the Arabic gap).
+Built `abud-shorts-engine:revideo-candidate-final-review` twice (once per
+commit above) via plain `docker build` - no `docker cp`, no manual
+`node_modules` edits. The prior `abud-shorts-engine:revideo-candidate`
+image (`sha256:b4c2a15d060b...`, the technical-qualification candidate)
+was left completely untouched - confirmed unchanged creation timestamp
+before and after this pass's work. `short-studio-app` and
+`short-studio-render-worker` still run the old
+`ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` image; PostgreSQL and n8n were
+never touched.
+
+### 23-24. Two new final-pre-swap proofs - exported for owner review
+
+Both run through the real `LocalContentAIProvider` -> `ShortCreator`
+pipeline (real content generation, real VoiceTut/Kokoro, real Whisper,
+real Pexels, `VIDEO_RENDER_ENGINE=revideo`), against the final
+`revideo-candidate-final-review` image (built from commit `af6c689`):
+
+**Arabic** (`final-review-ar`): topic "أهمية النسخ الاحتياطي لملفات
+المشاريع الصغيرة", VoiceTut (voice "Mohamed"), Revideo, real Pexels.
+Duration **10.93s** (target 11s, met). Silence: one gap, 666ms, at the
+outro only (10.278s-10.944s) - within the required ≤1000ms outro bound;
+above the tool's own stricter ≤500ms preference, an honest secondary
+note, not a gate failure (`criticalFailure: false`). No mid-video silence.
+1080x1920 H.264 + AAC. Canonical logical-order Arabic captions confirmed.
+Real Pexels assets: `30730786`, `36460608`, `34757447`, `10568253`,
+`8472307`, `7496272`.
+
+**English** (`final-review-en`): topic "Why small businesses should back
+up their files", Kokoro (`af_heart`), Revideo, real Pexels. Duration
+**8.77s** (target 11s, NOT met - see section 4-9's honest note on the
+unresolved Kokoro duration anomaly). Silence: one gap, 657ms, at the
+outro only (8.081s-8.739s) - same honest note as Arabic (within ≤1000ms
+required, above ≤500ms preference). No mid-video silence. 1080x1920
+H.264 + AAC. Real Pexels assets: `28709421`, `5377775`, `32810126`,
+`6630136`, `8472307`, `7165668`.
+
+Exported to `C:\ProgramData\ShortStudio\shared\qa\revideo-final-review\`:
+`final-review-ar.mp4`, `final-review-en.mp4`, `final-review-ar-
+contactsheet.jpg`, `final-review-en-contactsheet.jpg` (3x3 tiled frame
+grids). No production customer videos were touched.
+
+### 25. Human acceptance - STOPPED here as instructed
+
+No self-approval of visual quality. No live container swap. No
+`VIDEO_RENDER_ENGINE` default change. No Upload-Post configuration. No
+publishing. No GA promotion.
+
+**Current field values**: Revideo Technical Qualification: **PASS**.
+Arabic Logical-Order Gate: **PASS** (verified via codepoint comparison +
+real Whisper re-transcription of the actual proof audio). Duration-Aware
+Content Planning: **PARTIAL PASS** (Arabic fully met the 10-12s target;
+English improved substantially, 4.633s->8.77s, but did not reach the
+target - an honest, specific, unresolved gap, not hidden). Visual
+Relevance Correction: **PARTIAL PASS** (root-caused and fixed the "cinematic"
+generic-fallback bug and the missing backup concept; both new proofs show
+markedly more coherent sequences; false-100-score labeling fixed to report
+honestly; one residual weak shot remains in the English proof, an honest
+limitation of lexical-only scoring with no visual-semantic runtime
+available in this environment). Arabic Final Pre-Swap Proof: **OWNER
+REVIEW PENDING** (technical gates pass: duration, silence, captions,
+delivery not independently re-verified via HTTP in this pass - see note
+below). English Final Pre-Swap Proof: **OWNER REVIEW PENDING** (duration
+target not met - flagged, not hidden; other gates pass). Live Revideo
+Swap: **BLOCKED pending owner review**. Upload-Post: BLOCKED. GA: BLOCKED.
+
+## KOKORO ENGLISH DURATION ANOMALY CLOSURE
+
+Narrowly-scoped root-cause and fix for the one open item from the prior
+pass: the English final-review proof's 8.77s-against-11s shortfall.
+
+### Root cause (proven via direct ffmpeg filter isolation, not assumed)
+
+`masterVoiceAudioFile()`'s (`src/short-creator/libraries/FFmpeg.ts`)
+`silenceremove` filter was invoked with both `start_periods` and
+`stop_periods` set in one call. That does not wait for the true end of the
+file to find "the" trailing silence - it treats the FIRST silence run
+encountered after the leading trim as if it were the final trailing
+silence, and discards everything after it. Real speech has several
+natural inter-word/inter-sentence pauses well before its real end, so this
+was silently truncating every voice narration this product ever mastered
+down to roughly wherever its first natural pause fell.
+
+Proof, not assertion: three real Kokoro af_heart clips of measured lengths
+7.375s/13.15s/19.4s were generated directly (bypassing ShortCreator
+entirely) and run through the exact old filter chain - **all three
+collapsed to the identical 1.950625s**, regardless of their real, verified
+length. `stop_periods=1` alone (no `start_periods` in the same call)
+produced an EMPTY output file. Bisecting the chain filter-by-filter
+confirmed `silenceremove` alone reproduces it; `highpass`/`loudnorm` alone
+do not touch duration at all. This also explains the earlier pass's
+"identical duration across consecutive correction retries" observation,
+and reveals that the ORIGINAL English calibration (36.96 chars/s) was
+itself measured from already-truncated audio - never a real speaking rate.
+
+### Artifact identity test (section 4) - no cache/reuse bug
+
+Two clearly different sentences (5 words/25 chars vs 31 words/187 chars),
+synthesized directly via the same `Kokoro.generate()` the product calls:
+input hashes differed, audio hashes differed, measured durations differed
+meaningfully (2.025s vs 12.025s) and scaled with real length. **No
+artifact-reuse/caching defect exists** - every duration anomaly traced back
+to the single mastering-filter bug above, confirmed by testing the exact
+same real texts through `Kokoro.generate()` alone (correct, differentiated
+durations) versus through the OLD `masterVoiceAudioFile()` (collapsed to
+one fixed number).
+
+### Fix
+
+- `masterVoiceAudioFile`: replaced the single unsafe `silenceremove` call
+  with the standard ffmpeg idiom for trimming ONLY true leading/trailing
+  silence without touching mid-stream pauses - reverse, trim what is now
+  the "start" (the real end), reverse back. Verified: the same three real
+  clips now come out proportionally shorter (6.58s/12.34s/18.40s), not
+  collapsed to one fixed number. New real-audio regression test
+  (`masterVoiceAudioFile.test.ts`) reproduces the bug shape with
+  synthesized tone+silence audio and asserts against it directly - this is
+  the test that would have caught the original bug.
+- `voiceSpeakingRate.ts`: recalibrated the English (Kokoro af_heart)
+  constant from the corrupted 36.96 chars/s to a real post-fix measurement
+  (~15.5 chars/s, averaged from 3 controlled samples). **Arabic (VoiceTut)
+  left untouched** per this pass's explicit scope - its real proof already
+  met the 10-12s target and was not re-verified against the mastering fix.
+- New `allocateBeatDurations` (`scriptDurationController.ts`) - scene-level
+  rebalancing (section 9): at the corrected real rate, all four English
+  backup-pack required sentences combined need ~24s, far more than an 11s
+  request's ~9.5s content budget - no calibration fix alone makes an equal
+  4-way split viable. Drops non-essential beats (problem/solution) first
+  when the budget is tight, allocates duration proportional to each
+  surviving beat's real required-narration length instead of an equal
+  split, and never drops the hook/cta beats. Wired into
+  `buildTechEducationalScenesEnglish` only - **`buildTechEducationalScenes
+  Arabic` deliberately left untouched**, out of scope, its real proof
+  already passed.
+- Fixed the CTA required sentence to explicitly name "back up"/"files" (it
+  previously said only "secure your business infrastructure" - generic
+  tech-tips copy with no topic anchor), so the topic stays clear even when
+  it is the only surviving closing beat under a tight budget.
+- Added a second-chance post-mastering slowdown in `ShortCreator.ts`: the
+  existing speed-adjust only ever saw the PRE-mastering duration, so a
+  scene that looked close enough to target before mastering (no slowdown
+  applied) could still land short once mastering's own real silence-trim
+  removed more than expected - and the retry loop's only remaining tool
+  (adding a whole extra sentence) badly overshot gaps that were often just
+  5-15% short (proven: a 5.94s-target scene's required text alone measured
+  4.77s post-mastering; adding one more sentence overshot to 10.37s, worse
+  than the original shortfall). Re-checks with the same safe 0.82x-floor
+  mechanism against the POST-mastering measurement first; only falls
+  through to content expansion if that is still insufficient.
+
+### Tests (section 13)
+
+19 new/updated tests: `masterVoiceAudioFile.test.ts` (2, real-ffmpeg
+regression reproducing the exact bug shape and verifying the fix, plus
+that true leading/trailing silence is still trimmed), `allocateBeatDurations`
+(4, dropping non-essential beats, never dropping essential ones,
+proportional-not-equal allocation, includes-everything-when-it-fits),
+recalibrated `voiceSpeakingRate`/`estimateSpeechSeconds` (updated to the
+corrected 15.5 chars/s), and rewritten `localProviderBackupPack.test.ts`
+(8: backup-pack routing including the Arabic path, essential beats
+survive, no filler/duplicated narration, proportional per-scene durations,
+plausible total estimate, unused-expansion-units bookkeeping, and an
+explicit **Arabic path unchanged** lock-in test asserting
+`buildTechEducationalScenesArabic` still produces exactly 4 equal-share
+scenes). Revideo timeline files (`src/video-core/`) had zero changes this
+pass (confirmed via `git diff --stat`).
+
+### Full gate - all green
+
+`npx tsc --noEmit`: clean. `npx vitest run`: **87 files / 1231 tests
+passing**. `npm run build`: clean. Python local-TTS API tests: **8/8**.
+Pester host-lifecycle tests: **21/21**. No unexplained failures.
+
+### Candidate
+
+Committed on `v2.5-short-studio` (local, not pushed, not merged to main):
+`ba861bf` (root-cause fix), `a48e85c` (second-chance slowdown). Built
+`abud-shorts-engine:kokoro-fixed` (final image ID
+`sha256:015d0e6fbe90...`) via plain `docker build` - no `docker cp`, no
+manual `node_modules` edits. Live containers untouched.
+
+### English TTS-only qualification (section 16) and real proof (section 17)
+
+A hand-rolled standalone "TTS-only" duration predictor was attempted first
+per section 16's instruction, but proved unreliable twice (it omitted the
+real pipeline's speed-adjust step, then its own retry simulation
+overshot) - rather than trust a third simulation, verification moved
+directly to the real `ShortCreator` pipeline, which is the authoritative
+implementation being fixed. Real English proof (`final-review-en`, topic
+"Why small businesses should back up their files", Kokoro af_heart,
+Revideo, real Pexels, `LocalContentAIProvider`-generated content, no paid
+AI): **actual duration 11.2s** (target 11s, variance 0.2s, inside 10-12s).
+`technicalReady`/`contentReady`/`professionalReady`: all true.
+`genericFillerDetected`: false. `scriptCompleteness`/`ctaCompleteness`:
+true. No duplicated narration (2 distinct scenes: hook + cta - problem/
+solution correctly dropped by the rebalancer for this tight budget).
+Silence gate: **pass true**, longest run 445ms, all 3 gaps (445/364/439ms)
+under BOTH the 900ms/1000ms required bounds and the stricter 500ms
+preference. 1080x1920 H.264 + AAC 48kHz. Real Pexels assets: `28709421`,
+`5377775`, `6101149`, `7496272`, `10375461`. Delivery: thumbnail 200,
+preview 200/206, download 200. No bounded-correction content-expansion
+retry was even needed - the second-chance slowdown alone closed the gap.
+
+Exported to `C:\ProgramData\ShortStudio\shared\qa\revideo-final-review\`
+as `final-review-en-v2.mp4` / `final-review-en-v2-contactsheet.jpg`,
+preserving the prior 8.77s evidence (`final-review-en.mp4`) unchanged.
+Arabic (`final-review-ar.mp4`, 10.93s) untouched, not re-run, per explicit
+instruction.
+
+**Current field values**: Kokoro Duration Anomaly: **ROOT CAUSE FOUND**
+(masterVoiceAudioFile's silenceremove filter). Artifact Reuse: **PASS** (no
+defect found - proven via direct hash/duration comparison). Duration
+Controller: **PASS** (recalibrated + rebalanced + second-chance slowdown;
+real proof lands at 11.2s). Arabic: **10.93s PASS - unchanged** (file and
+code both untouched this pass). English Replacement: **PASS** (11.2s,
+all gates green). Live Revideo Swap: **STILL BLOCKED pending owner video
+review**. Upload-Post: BLOCKED. GA: BLOCKED.
+
+### Professional Caption Typography Correction
+
+**Owner Caption Typography Review: REJECTED - previous style.** The prior
+Revideo caption implementation drew isolated single words (never a phrase),
+in Arial/IBM Plex Sans Arabic - neither font bundled nor registered for the
+Revideo/Chromium render page, so both languages were one dependency change
+away from a silent system-font fallback - with no karaoke highlight, no
+deterministic line-fitting, and fixed pixel offsets instead of responsive
+safe-area math. This pass replaces that with a real typography system,
+shared in design (not font files) with the legacy ASS caption engine.
+
+**Fonts.** Arabic uses the already-bundled `assets/fonts/Cairo-Variable.ttf`
+(OFL-1.1, already in THIRD_PARTY_NOTICES.md). English needed a bundled bold
+Latin face that didn't exist yet; evaluated and bundled `Inter-Variable.ttf`
+(OFL-1.1, Inter Project release) at `assets/fonts/Inter-Variable.ttf`,
+recorded in THIRD_PARTY_NOTICES.md. Both are variable fonts registered via
+a new `fonts.css` (`@font-face`, full weight axis, offline `url()` imports -
+no runtime web-font fetch). A new `fontRegistration.ts` forces both
+families to load via the Font Loading API and throws a clear error if
+either fails to resolve; it is deliberately **not** `yield`-ed into the
+scene's cooperative generator scheduler - an earlier version that did
+deadlocked the entire render (confirmed by direct reproduction: idle CPU,
+zero output, indefinitely) - so it runs as a non-blocking check whose
+failure surfaces as a console error rather than a silent fallback font.
+`fontRegistration.test.ts` is the reliable, CI-enforced half of this gate
+(asserts fonts.css declares both families and every `url()` target exists
+on disk); the runtime check is the best-effort half for a real render.
+
+**Typography.** New `captionPhrasing.ts` groups Whisper/ElevenLabs
+word-level timing (the alignment contract itself is untouched) into 2-5
+word on-screen phrases, breaking early on a natural pause and backing off
+before a phrase would exceed 2 lines at a deterministic character-per-line
+estimate - 11 unit tests in `captionPhrasing.test.ts`. `timelineScene.tsx`
+renders each phrase as one sizing/position pass reading the SAME
+`CAPTION_STYLES` design tokens the legacy ASS engine uses
+(`src/server/v2/captions/captionStyles.ts` - size bounds, safe-area ratio,
+colours, weight, line height, max lines; imported read-only, not modified)
+mapped per template (stock_social_reel -> social_ad, business_promo ->
+clean_professional/top-anchored, kinetic_explainer -> kinetic_phrase),
+so every dimension scales off the real render width/height instead of a
+fixed pixel constant. The whole phrase stays visible while the current
+word's fill switches to the style's highlight colour (karaoke), governed by
+each style's own `highlight` mode.
+
+**Real defects found and fixed while producing real renders** (not
+caption-logic bugs - infrastructure the Revideo pipeline needed to actually
+render on this Windows host, confirmed one at a time by direct render
+reproduction):
+- Vite's dev server now sits on 8.2.2 (a newer major than the `^6.3.4` the
+  app itself pins); `@revideo/renderer`'s internal `virtual:renderer` module
+  imports two bare specifiers Vite 8's resolver could no longer find on
+  disk despite them existing with no exports-map restriction - fixed with
+  two `resolve.alias` entries in `revideoRenderer.ts`, the same pattern
+  already used there for the `@revideo/2d/jsx-runtime` gap.
+- That same virtual module interpolates the absolute project file path
+  straight into a JS string literal with no escaping; on Windows that path
+  contains backslashes, so sequences like `\v`/`\r` were silently consumed
+  as (invalid) JS escapes, corrupting the path (e.g. `\video-core` lost its
+  `v`) - a genuine upstream `@revideo/renderer` bug, invisible on POSIX
+  paths. Fixed by extending the existing
+  `patches/@revideo__renderer@0.11.0.patch` (pnpm patch) to escape
+  backslashes before interpolation.
+- Vite's `server.fs.allow` blocked font requests outside the per-render
+  staging directory ("outside of Vite serving allow list") - exactly the
+  silent-fallback-font failure mode `fontRegistration.ts` exists to catch,
+  and it did. Fixed by widening `fs.allow` to include the repo root.
+- Revideo's `Txt` node never draws text itself; it only delegates to an
+  auto-created internal `TxtLeaf`, which does not inherit a wrapping
+  `<Txt>`'s `textDirection` - every caption word was drawing with the
+  canvas default (effectively ltr) direction regardless of the RTL
+  container, pushing Arabic phrases past both safe-area edges. Fixed by
+  reaching each word's already-created leaf via its own `.children()[0]`
+  and setting `textDirection` directly on it (deliberately not via a
+  separate `TxtLeaf` import - a second Vite-resolved copy of that internal,
+  non-barrel-exported class caused real render crashes, confirmed by direct
+  testing and reverted).
+- `textWrap` was never set on the phrase container - phrases rendered as
+  one unwrapped, overflowing line regardless of the line-fitting estimate.
+  Fixed by setting `textWrap={true}`.
+- A canvas `shadowBlur`/`shadowColor` on each word cast under BOTH the
+  separate `strokeText()` and `fillText()` calls TxtLeaf issues, producing
+  a visible doubled/offset "ghost" edge on every glyph. Removed; the stroke
+  alone gives clean, restrained contrast.
+
+**Real review renders.** The exact per-job assets behind the previously
+qualified `final-review-ar.mp4`/`final-review-en-v2.mp4` no longer exist on
+disk (their temp job directories were cleaned up before this pass), so a
+byte-for-byte rerun of the original harness wasn't possible. Re-rendered
+using the REAL already-qualified narration+music audio (extracted verbatim
+from those two files via ffmpeg, zero TTS calls) over a plain generated
+neutral-colour background (no cached Pexels asset survived on disk in a
+usable state, and none was re-fetched), with typography-verification
+fixture caption text - real, previously-vetted strings already in this
+repo (the Arabic backup-topic phrases from
+`src/video-core/__smoke__/smoke-revideo.ts` plus a real CTA line reused
+verbatim from `src/short-creator/business-templates.ts`; the literal
+English topic string already quoted above) rather than the original,
+unrecoverable narration script - honestly, this is a typography check, not
+a re-verification of narration/caption-content accuracy, which was already
+qualified separately and untouched this pass.
+
+Rendered via the real `RevideoRenderer`/`stock_social_reel` template:
+`final-review-ar-caption-v2.mp4` (**10.93s**, matches the qualified Arabic
+duration exactly) and `final-review-en-caption-v3.mp4` (**11.23s**, matches
+the qualified English duration to within 30ms). Both 1080x1920 H.264+AAC.
+Frames pulled at hook/middle/CTA for each (precise post-input `-ss` seeking,
+not the input-seek that produced a misleading double-image artifact on the
+first pass) plus a 3-up contact sheet, all four written to
+`C:\ProgramData\ShortStudio\shared\qa\caption-review\`:
+`final-review-ar-caption-v2.mp4`, `final-review-en-caption-v3.mp4`,
+`final-review-ar-caption-v2-contactsheet.jpg`,
+`final-review-en-caption-v3-contactsheet.jpg`. Direct visual inspection of
+all 6 frames confirms: real Cairo/Inter glyphs (not a tofu box or a system
+fallback), 2-5 word phrases with the whole phrase visible and the active
+word in the highlight colour, max 2 lines, no clipping at either safe-area
+edge in either script, correct Arabic RTL order and safe centering, no
+isolated single-word display.
+
+**Gates.** `npx tsc --noEmit` (all 3 projects: server, ui, revideo-project):
+clean. `npx vitest run`: **89 files / 1245 tests passing**, including the
+new `captionPhrasing.test.ts` (11) and `fontRegistration.test.ts` (3); zero
+unexplained failures (one `realVideoQualityQa.test.ts` timeout was observed
+under full-suite parallel CPU contention, confirmed unrelated to this pass
+- it passes in under 1.1s in isolation and needs no change). `npm run
+build`: clean.
+
+**Current field values**: Owner Caption Typography Review: **REJECTED -
+previous style**. Professional Caption Typography Correction: **PASS**
+(fonts registered and offline-bundled, phrase grouping + karaoke + safe
+area implemented and shared in design with the legacy caption engine, 6
+real infrastructure defects found and fixed via direct render
+reproduction, all gates green). Arabic Caption Review: **OWNER REVIEW
+PENDING**. English Caption Review: **OWNER REVIEW PENDING**. Live Revideo
+Swap: **BLOCKED pending owner approval**.
+
+### Libass Final Caption Migration (correction)
+
+**Previous Revideo-native Caption Typography: AUTOMATED CHECK PASS / OWNER
+VISUAL REVIEW REJECTED.** The owner watched the actual rendered Arabic and
+English review videos from the pass above and rejected them: malformed,
+overlapping, badly-joined Arabic glyphs, and a horizontal artifact slicing
+through English glyphs across multiple words/frames - a real defect this
+session's automated frame-metadata checks did not catch, since they
+verified DOM/layout geometry, not the actual rasterized pixels. That
+automated PASS is superseded by this correction. **Root cause of the
+Revideo defects, since verified**: `Txt.draw()` never draws text itself -
+only its children do - so a wrapping `<Txt>` per caption word never
+actually applied its own `textDirection`/style to the glyphs it appeared to
+own; the visible corruption was the canvas repeatedly drawing under
+mismatched per-node state. Rather than continue patching Revideo's
+Txt/TxtLeaf internals (explicitly the wrong path per the owner's
+direction), final caption rasterization moves to the FFmpeg+libass path
+that was already proven for the legacy engine.
+
+**Final Caption Rasterizer: LIBASS / FFmpeg. Revideo: VIDEO COMPOSITION
+ENGINE** (timeline, clips, crop/layout, transitions, motion, audio, final
+duration - unchanged). New hybrid pipeline:
+`ProductionTimeline -> Revideo composition with captionTracks stripped
+(clean intermediate MP4, no burned text) -> ASS built from that SAME
+timeline's real captionTracks -> FFmpeg + libass burn -> final MP4`.
+`ProductionTimeline.captionTracks` (`video-core/types.ts`) is the one
+canonical, renderer-independent caption timing model both stages read from
+- no second one was invented. Implementation, entirely reused/extended
+rather than duplicated per instruction: `arabicCaptionRendererV3.ts`
+(ASS generation - logical-order Arabic in, HarfBuzz/FriBidi do all
+shaping/bidi, karaoke expressed as `\k` tags inside one shaped run so joins
+are never broken by a separately-drawn active word), `captionQa.ts`
+(objective geometry/shaping gate), `FFMpeg.burnAssSubtitles` (the existing
+production burn call). New: `revideoLibassRenderer.ts` orchestrates the
+three stages (`stripCaptionsForIntermediate`, `captionWordsFrom`, then
+build+QA+burn), injectable for testing, and - unlike the legacy Remotion
+call site's intentional silent-fallback (never lose an already-finished
+render to a caption-stage bug) - a libass burn failure or a real caption QA
+error here **throws and fails the render** rather than silently shipping
+an uncaptioned video, per explicit instruction for this still-being-proven
+path.
+
+**Fonts.** English: `CAPTION_FONTS.inter` added (`Inter-Variable.ttf`,
+already bundled/licensed from the prior pass); `captionFontForWords()`
+picks it for any caption batch with no Arabic-range character, instead of
+libass falling back through an Arabic-named family for English glyphs (a
+real, if minor, pre-existing gap - the same `renderArabicCaptions` call
+already served English captions in production, always via an Arabic font).
+Arabic: the default "Auto Professional" preset (`social_ad`/`bold_social`,
+both "Bold Social") now declares `font: "cairo"` instead of
+`noto_kufi_arabic`, matching the owner's explicit preference and the
+brand's own documented flagship Arabic caption face (Cairo is named
+repeatedly elsewhere in this document as the intended typography).
+`scripts/instance_fonts.py` extended with `Inter-Bold.ttf`/
+`Inter-ExtraBold.ttf` static instances (same build-time mechanism already
+used for the Arabic weights - libass/FreeType render a variable font at its
+Regular default instance only, so a real Bold face must be instanced out
+ahead of time, not requested at render time).
+
+**A real environment-fidelity finding, verified two ways before trusting
+either.** The first local render attempt (Windows, the `@ffmpeg-installer`
+npm package's bundled ffmpeg.exe) showed real tofu/missing-glyph boxes
+exactly where isolated Arabic alef (ا/أ) should render - a genuine defect,
+reproduced with and without karaoke tags, and with and without this
+session's own font-instancing step, so neither was the cause. Rather than
+"fix" a font problem sight unseen, the SAME text was rendered inside a
+throwaway `node:22-bookworm-slim` container with `apt-get install ffmpeg
+fontconfig` - the exact base image and package v2.Dockerfile already uses
+for production - and the alef glyph rendered correctly, cleanly, every
+time. The defect is specific to the Windows-bundled ffmpeg binary's
+libass/FreeType combination, not the production Debian/apt-get libass
+build this repository already verified links HarfBuzz+FriBidi+FreeType+
+Fontconfig. All further local verification in this pass burned captions
+inside that Debian container, not the Windows binary - this is the only
+representative way to test this pipeline from a Windows dev machine, and
+this session did not treat the Windows-only symptom as a real defect
+requiring a fix.
+
+**Real review renders.** Reused the exact same already-qualified audio and
+neutral background established in the prior (Revideo-native) pass -
+extracted verbatim from the previously-qualified MP4s, no TTS/Pexels
+re-fetch - now composed through the real `RevideoRenderer` with
+`captionTracks` stripped (clean, no burned text - confirmed by direct
+inspection of the intermediate) and captioned via the Debian-container
+libass burn. Same typography-verification fixture caption text as the
+prior pass (real, previously-vetted strings; not a re-verification of
+narration-content accuracy, which stays out of scope). Output, matching
+the qualified durations: `final-review-ar-caption-libass.mp4` (**10.93s**)
+and `final-review-en-caption-libass.mp4` (**11.23s**), both 1080x1920
+H.264+AAC, written with their hook/middle/CTA contact sheets to
+`C:\ProgramData\ShortStudio\shared\qa\caption-review-libass\`. Direct
+frame-by-frame inspection (all 6 frames, both languages) confirms: correct
+Arabic joins with no overlaps/collisions/reversal and the alef glyph
+rendering correctly, correct RTL reading order, clean unbroken English
+glyphs with no horizontal artifact anywhere, karaoke highlight working
+(libass `\k` hard-karaoke semantics - a word's fill is cumulative/stays
+highlighted once "sung," the standard, industry-conventional behaviour for
+this tag, not a defect), 2-5 word phrase grouping, max 2 lines, safe
+margins respected, no clipping, no oversized debug-style panel, no isolated
+single-word captions.
+
+**Regression tests** (18 new, all passing): `arabicCaptionRendererV3.test.ts`
+(5 - Inter for English/Arabic font stays Arabic, Arabic text never
+reversed/no RTL override characters, every karaoke word stays inside ONE
+dialogue event per phrase, font family matches the declared ASS Style) and
+`revideoLibassRenderer.test.ts` (8 - `stripCaptionsForIntermediate` empties
+only captionTracks, `captionWordsFrom` maps ProductionTimeline captions
+into absolute-ms words unchanged, the Revideo intermediate call always
+receives an EMPTY captionTracks array even when the input timeline has
+real captions, a normal render burns via libass and returns the captioned
+path, the `"none"` preset and an empty caption track both skip the burn
+stage entirely, a libass burn failure propagates/fails the render instead
+of silently returning the uncaptioned video, and a real caption QA
+violation - text that cannot fit any allowed size/line count - fails the
+render before ever reaching the burn stage).
+
+**Gates.** `npx tsc --noEmit` (server, ui, revideo-project): clean.
+`npx vitest run`: **91 files / 1258 tests passing**, zero unexplained
+failures. `npm run build`: clean.
+
+**Current field values**: Previous Revideo-native Caption Typography:
+**AUTOMATED CHECK PASS / OWNER VISUAL REVIEW REJECTED** (real rendered
+glyph corruption in Arabic and English). Final Caption Rasterizer:
+**LIBASS / FFmpeg**. Revideo: **VIDEO COMPOSITION ENGINE**. Arabic libass
+review: **OWNER REVIEW PENDING**. English libass review: **OWNER REVIEW
+PENDING**. Live Revideo Swap: **BLOCKED**. Upload-Post: **BLOCKED**.
+GA: **BLOCKED**.
+
+### Short Studio 2.5 - Bold Social style correction and final candidate production
+
+**Previous Libass Experimental Styling: OWNER REJECTED - style regression.**
+The owner watched real rendered output of the pass above and rejected the
+Bold Social/Auto Professional default: an oversized dark rectangular
+backdrop reading as a subtitle/debug panel, captions sitting too low, and
+hard-karaoke `\k` fill turning most of the phrase yellow by the end of each
+line.
+
+**Git-history audit, before touching anything.** Inspected every commit
+that ever touched `captionStyles.ts`/`arabicCaptionRendererV3.ts`
+(a51bf3a v2.2 creation through HEAD). Finding, reported to the owner before
+proceeding: the backdrop (`backgroundOpacity` 0.28-0.32) and the hard-`\k`
+karaoke fill have been **byte-identical since this V3 caption system's
+introduction at v2.2** - there is no earlier commit with a no-backdrop,
+single-word-highlight Bold Social design to revert to. The only real change
+since v2.4.0 was the Arabic font swapping `noto_kufi_arabic` to `cairo`.
+Per the owner's direction, implemented their written spec (sections 3-9 of
+the instruction) directly as new design-token values inside the existing
+libass architecture, rather than fabricating a "restoration" of something
+that never existed.
+
+**Correction (`captionStyles.ts`, `arabicCaptionRendererV3.ts`,
+`captionQa.ts`).** `bold_social`/`social_ad`: `backgroundOpacity` 0.28 -> 0
+(text + outline + shadow only, no plate); `bottomSafeRatio` 0.2 -> 0.18
+(~345px at 1920 tall - lower-middle, not bottom-attached). New
+`CaptionHighlightMode` `"karaoke_current_word"`: exactly one word
+highlighted at a time via per-token `\c` colour overrides, emitted as
+successive Dialogue events tiling the phrase's duration with no gaps -
+`\k` cannot express a non-accumulating highlight, since a "sung" word
+never reverts within one karaoke run. Bold Social/Social Ad now use this;
+the dedicated "Karaoke" preset keeps the original, stronger, accumulating
+`karaoke_fill` effect on purpose (explicitly not required to match, per
+instruction). `captionQa`'s highlight-overflow check now also covers the
+new mode. Two pre-existing tests that hardcoded `social_ad`'s old
+`karaoke_fill`/single-dialogue-event behaviour were retargeted at the
+"Karaoke" preset instead (where that behaviour is still real and correct);
+new tests cover the current-word behaviour. **Gates**: `npx tsc --noEmit`
+clean, `npx vitest run` **91 files / 1261 tests passing**, `npm run build`
+clean. Committed as `a3e4e09` on `v2.5-short-studio`.
+
+**Real defect found and fixed: `v2.Dockerfile` could not build at all.**
+Building the isolated candidate image (`docker build -f v2.Dockerfile`,
+the Dockerfile every real release actually uses per its own
+`docker buildx build --file v2.Dockerfile --push` history) failed twice
+in a row from HEAD of this branch:
+- Missing `pnpm-workspace.yaml`/`patches/` COPY before
+  `pnpm install --frozen-lockfile`, so pnpm had no local
+  `patchedDependencies` declaration to reconcile against the lockfile's
+  recorded `@revideo/renderer` patch hash -
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. A stray `|| true` on that command
+  masked the fatal error, so the stage "succeeded" with no `node_modules`
+  at all, surfacing only later as a confusing "not found" on an unrelated
+  COPY step.
+- Missing `tsconfig.revideo-project.json` COPY before `pnpm build`, which
+  runs `npm run typecheck` unconditionally (including
+  `typecheck:revideo-project`) even in this image, which never ships the
+  Revideo runtime at all (no Chromium/Puppeteer).
+
+Both gaps are `v2.Dockerfile` simply having fallen out of sync with
+`main.Dockerfile` (see next finding) on two mechanical points; fixed the
+same way `main.Dockerfile` already does it. Committed separately as
+`27afd82`. This means **no real release build has been possible from this
+branch's lockfile until this fix** - independent of captions, worth the
+owner's attention on its own.
+
+**Real finding: `main.Dockerfile` and `v2.Dockerfile` are two divergent
+images, and Revideo only exists in one of them.** `v2.Dockerfile` (real
+production) installs no Puppeteer/Chromium at all - Revideo
+(`@revideo/renderer`) cannot run in the real production image regardless
+of `VIDEO_RENDER_ENGINE`. `main.Dockerfile` is a separate,
+Revideo-evaluation-only track that does bundle Chromium. Every prior
+"Revideo: TECHNICALLY QUALIFIED" verification in this document was run
+against `main.Dockerfile` builds, never against the real production image.
+
+**Real finding: the Revideo/Chromium compose stage hangs indefinitely on
+real content.** Producing a real Arabic candidate via `VIDEO_RENDER_ENGINE=
+revideo` (on a `main.Dockerfile` image, `--shm-size=2g` to rule out shm
+starvation) reproducibly hung forever - zero CPU, zero network/disk I/O
+growth, no timeout anywhere in `revideoRenderer.ts` to ever recover -
+immediately after all scenes were transcribed, before the caption/ffmpeg
+stages were even reached (Revideo strips captions before this point in
+the intended hybrid design, so this is unrelated to the caption fix). The
+staged Pexels assets were confirmed valid, correctly-sized, decodable
+H.264 files - not corrupted. Not investigated further per explicit
+instruction not to change Revideo timeline architecture; reported as a
+real, reproducible defect for separate follow-up.
+
+**Real finding: `revideoLibassRenderer.ts` was never wired into
+`ShortCreator.ts`.** The hybrid pipeline this document's own history
+describes (`adac09b` - Revideo composes a caption-free intermediate, then
+libass burns real captions) was built and unit-tested
+(`revideoLibassRenderer.test.ts`) but the real `renderProductionSpec` call
+path never adopted it: `ShortCreator.ts` still calls `RevideoRenderer`
+directly, and explicitly skips the libass burn pass whenever
+`renderEngineUsed === "revideo"` (its own comment: "Revideo draws captions
+itself... never route it through the libass burn pass too"). So
+`VIDEO_RENDER_ENGINE=revideo` today means Revideo's own native
+(Motion-Canvas `Txt`) caption drawing - the system already owner-rejected
+once - not libass, contradicting this document's own stated architecture.
+Not fixed this pass (wiring it in would not fix the separate Chromium
+hang above); reported for the same follow-up.
+
+**Decision, given the two Revideo findings above (owner-approved):**
+produce the two final candidates through the actual default production
+path instead - `config.videoRenderEngine` defaults to `"legacy"`
+(`ffmpeg_fast`/`hybrid_ffmpeg` + real libass burn, the correction above's
+actual target), not Revideo. Real script (`LocalContentAIProvider`, no
+paid AI), real VoiceTut/Kokoro TTS, real Pexels footage, real Whisper
+alignment, real libass caption burn, through the real, now-fixed
+`v2.Dockerfile` image (`caption-restore-v2-a3e4e09`,
+commit `27afd82`/`a3e4e09`), isolated container, isolated data volume, no
+live-container swap.
+
+**Final English candidate: PASS, all gates green.** Topic "Why small
+businesses should back up their files", Kokoro af_heart, real Pexels
+(6 real clips, coherent to narration). Duration **11.16s** (target 11s,
+1.5% variance). `technicalScore: 100`, `audioQa.pass: true`, no issues.
+Metadata: `technicalReady`/`contentReady`/`professionalReady` all
+**true**, status `"ready"`. Direct frame inspection (hook/mid/CTA, all
+three, real footage) confirms the corrected Bold Social style exactly as
+specified: no backdrop, one word highlighted per phrase (never
+accumulating), clean outline/shadow, correct lower-middle placement, 2
+lines max, semantic phrase grouping. Delivery verified against the real
+running server: thumbnail **200**, preview **200**, preview with Range
+**206**, download **200** `video/mp4`. Exported to
+`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\` as
+`short-studio-final-en.mp4` / `short-studio-final-en-contactsheet.jpg`.
+
+**Final Arabic candidate: BLOCKED on two real, separate defects, neither
+caused by the caption fix.** Topic "أهمية النسخ الاحتياطي لملفات المشاريع
+الصغيرة", VoiceTut/Mohamed, real Pexels (4 clips). Real, reproducible
+failures found via direct render and frame inspection (not fabricated,
+not silently patched):
+1. **Duration budget overshoot.** Final duration **18.15s** against an
+   11s target (65% variance) - `validationResult.valid: false`,
+   `technicalScore: 30`, `contentReady`/`professionalReady`: **false**.
+   The content-AI's "bounded duration correction" expanded scene 0's
+   narration (`expansionRetries: 1`) and the render's real spoken audio
+   (17.11s) never got rebalanced back toward the 10-12s target. Same
+   ~18s overshoot reproduced identically across every attempt this pass
+   (both Revideo attempts and this legacy-engine run) - a genuine,
+   reproducible content-duration-planning defect for this specific
+   Arabic topic/prompt, not an artifact of render engine or environment.
+2. **Visible tofu/missing-glyph boxes in the rendered Arabic captions.**
+   Direct frame inspection of the real render (production-equivalent
+   Debian container, real Cairo font, real libass/HarfBuzz/FriBidi) shows
+   replacement-glyph boxes near the highlighted word. The regenerated ASS
+   script for the exact same narration text was inspected directly and is
+   syntactically clean (no stray characters, correct `\c` placement,
+   correct logical-order Arabic) - the source narration text's codepoints
+   were also checked and are all normal Arabic letters/punctuation with no
+   hidden marks. Root cause not yet isolated (a font-completeness or
+   shaping edge case specific to real content, first ever observed under
+   the new `karaoke_current_word` per-word colour-override rendering path
+   rather than the old single-run `\k` fill) - flagged honestly rather
+   than guessed at further.
+
+Arabic **not exported** to `FINAL-OWNER-REVIEW` - it does not meet the
+stated quality bar and should not be presented as a passing candidate.
+
+**Current field values**: Proven Caption Design Restoration: **PASS**
+(implemented owner's corrected spec; no earlier design existed to
+literally restore). v2.Dockerfile buildability: **FIXED** (`27afd82`).
+main.Dockerfile/v2.Dockerfile divergence: **DOCUMENTED, NOT RECONCILED**.
+Revideo Chromium compose hang: **REAL, REPRODUCIBLE, NOT FIXED** (out of
+this pass's authorized scope). revideoLibassRenderer.ts wiring gap:
+**REAL, NOT FIXED**. Final English Candidate: **OWNER REVIEW PENDING**
+(all automated gates PASS). Final Arabic Candidate: **BLOCKED** - duration
+overshoot + Arabic glyph defect, both real, neither self-approved. Live
+Revideo Swap: **BLOCKED**. Upload-Post: **BLOCKED**. GA: **BLOCKED**.
+
+### Short Studio 2.5 Final Video Engine Closure
+
+**Final product decision: Revideo is EXPERIMENTAL/DEFERRED POST-2.5, not the
+2.5 default and not part of the GA gate.** Canonical 2.5 production renderer
+is the existing, proven FFmpeg/hybrid path (`ffmpeg_fast`/`hybrid_ffmpeg`);
+final caption renderer is libass. Reasons, all already found and documented
+in this file: the Revideo/Chromium compose stage hangs indefinitely and
+reproducibly on real content with no timeout to ever recover; the real
+production `v2.Dockerfile` never shipped Chromium/Puppeteer at all (Revideo
+only ever ran in the separate `main.Dockerfile` evaluation track); and
+`revideoLibassRenderer.ts` (the tested Revideo+libass hybrid) was never wired
+into `ShortCreator`. Revideo source is untouched and preserved for future
+work; per explicit instruction, none of the above was investigated further
+or fixed this pass, and Revideo is not on the critical path to GA.
+
+**Arabic duration overshoot - root cause.** Traced the real failing
+production end to end. `ShortCreator`'s post-TTS correction loop only ever
+checked the underfill condition (`actualVoiceDuration < target*0.85`) to
+decide whether to append a whole optional narration unit and re-synthesize;
+there was no corresponding check for whether the scene had now *overshot*,
+and no way to walk an over-correction back once made. A complete, tested,
+symmetric decision function for exactly this (`decideCorrectionAction`:
+expand/condense/accept/give_up, bounded retries) already existed in
+`scriptDurationController.ts` but was never called from `ShortCreator` - the
+same class of gap as `revideoLibassRenderer.ts` never being wired in.
+
+**Duration fix.** Replaced the hand-rolled loop with real calls to
+`decideCorrectionAction`, driven by the real measured post-TTS duration each
+round. "Condense" now genuinely drops the last-added optional unit and
+re-synthesizes. Added a pre-render **total-duration authority** gate:
+real total narration + bounded inter-scene breath pauses + bounded outro,
+checked against the requested duration +/-1s, throwing a clear
+`DURATION_TARGET_NOT_MET` error instead of rendering a video already known
+to be invalid. Verified against the real, previously-failing Arabic
+production: the worst single-scene overshoot dropped from +6s (2.8s target,
+8.8s actual) to +1.6s (2.8s target, 4.4s actual) after expand-then-condense,
+and the render now **fails loudly** (`DURATION_TARGET_NOT_MET: predicted
+14.18-14.23s vs the accepted [10, 12]s range for an 11s request`) instead of
+silently shipping the old 18.15s video. This is real, meaningful progress -
+the controller is now correctly symmetric and bounded - but this specific
+topic's content-AI-planned *required* narration (~13.7-14s across 4 scenes)
+is inherently longer than an 11s budget allows even at every scene's
+minimum (required-only) content; closing that gap needs a deeper
+content-planning change (shortening or rebalancing required text itself,
+not just choosing how many optional units to include), which is out of
+scope for this pass and was not attempted without checking with the owner
+first.
+
+**Arabic glyph defect - root cause.** Isolated by reproducing the exact
+real failing narration through the real ASS generator, in a
+production-equivalent Debian/libass/Cairo/HarfBuzz/FriBidi container, under
+all three highlight modes (no highlight, the existing accumulating `\k`
+fill, and the new `karaoke_current_word` per-token colour override) -
+direct pixel inspection of the rendered frames confirmed **all three render
+the exact same phrase cleanly**, no tofu, no missing glyphs, no broken
+joins. `karaoke_current_word` is **not confirmed** as the cause; no
+Arabic-specific highlight-policy change was made (the instruction's
+language-aware-policy step is conditional on confirmation, which this
+investigation did not find). The real cause, found by tracing
+`captionTimingSource: "deterministic_fallback"` (the path used whenever
+Whisper's transcript diverges too far to trust, which this exact scene hit):
+`ShortCreator` distributed fallback word timing across the stale
+**pre-correction** `targetSceneDuration` with a forced 250ms-per-word floor
+and a hard `endMs` clamp to that same stale total - for a scene whose real
+narration ran long (exactly the duration-overshoot scenario above), later
+words' clamped `endMs` fell at or before their own `startMs`, producing
+degenerate/inverted timing windows that fed corrupted phrase and highlight
+boundaries into the caption pipeline. Direct evidence: a lossless-PNG frame
+of the real failing render showed "مشروع" (a perfectly normal word,
+codepoints verified clean) rendering as "مشر" followed by a missing-glyph
+box, mid-word.
+
+**Glyph fix.** Deterministic-fallback word timing now distributes across
+the REAL measured audio duration, never the stale target, with no
+artificial per-word floor - timing windows are always monotonically
+increasing and always cover the full real audio, which structurally
+prevents the inverted-window class of corruption regardless of how far a
+scene's real narration ends up from its original target.
+
+**Tofu regression coverage.** Added to
+`arabicCaptionRendererV3.test.ts`: the requested alef-form/lam-alef-ligature
+fixture (ا أ إ آ لأ لا لإ لآ) carried through to ASS output unmodified under
+both `social_ad` and `karaoke`; the exact previously-failing narration line
+rendered complete with no dropped/truncated words; and a direct
+reproduction of the old degenerate-timing shape confirming the ASS builder
+stays defensive regardless of the `ShortCreator`-level fix. Real render
+verification (actual libass rasterization) is necessarily a manual/CI step
+outside vitest's reach - no real libass rasterizer runs in the unit-test
+environment - and was done manually this pass via the production-equivalent
+Debian container, not skipped.
+
+**Gates.** `npx tsc --noEmit` (server, ui, revideo-project): clean.
+`npx vitest run`: **91 files / 1264 tests passing** (3 new), zero
+unexplained failures. `npm run build`: clean. Committed as `80ccf2b`
+(duration + Arabic timing fix) on top of `27afd82`/`a3e4e09`.
+
+**Candidate.** Built from `v2.Dockerfile` (the canonical 2.5 production
+Dockerfile - no `main.Dockerfile`, no Revideo evaluation image) via a plain
+`docker build`, no `docker cp`, no manual `node_modules` edits:
+`abud-shorts-engine:v2-80ccf2b`, image ID `5d7ffd3826d4`. Verified in an
+isolated container against a fresh data volume (not the live app/render-worker
+containers) with the real GPU-backed VoiceTut/KemeTone local-voice service,
+real Pexels, real Whisper, real ffmpeg/libass.
+
+**Final Arabic candidate: BLOCKED (not self-approved, not exported).**
+Requested 11s (Egyptian Arabic, VoiceTut/Mohamed, real Pexels, canonical
+FFmpeg/hybrid + libass Bold Social). The render correctly refused to
+complete: predicted final duration 14.18-14.23s falls outside the accepted
+[10, 12]s range even after full bounded per-scene correction
+(`DURATION_TARGET_NOT_MET`). This is the fix working as designed, not a new
+failure - the alternative would have been silently shipping another
+invalid ~14-18s video. Closing this needs the deeper content-planning
+change described above.
+
+**Final English same-build smoke: PASS, exported.** Same exact candidate
+image, same topic as the original passing baseline ("Why small businesses
+should back up their files"), Kokoro af_heart, real Pexels, canonical
+FFmpeg/hybrid + libass. Duration **11.16s** (1.5% variance),
+`technicalReady`/`contentReady`/`professionalReady` all **true**,
+`technicalScore: 100`, `validationResult.valid: true`. Delivery verified:
+thumbnail 200, preview 200/206, download 200 `video/mp4`. One honest,
+pre-existing (not a regression from this pass's changes - present
+identically in the original baseline) observation: `captionQa` flags one
+phrase ("critical data due to simple hardware failure?") wrapping to 3
+lines against the style's 2-line limit; direct frame inspection shows it
+reads cleanly with no visual defect, just fuller than the style intends -
+noted, not fixed, out of this pass's two-blocker scope. Exported to
+`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\short-studio-final-en-v2.mp4`.
+
+**Current field values**: 2.5 Production Renderer: **FFMPEG/HYBRID - FINAL**.
+Final Caption Renderer: **LIBASS**. Revideo: **EXPERIMENTAL / DEFERRED
+POST-2.5** (not a GA gate). English previous candidate: **PASS**. Arabic
+previous candidate: **BLOCKED / superseded** (this pass's investigation
+explains why and fixes two real bugs, but does not close it). Arabic
+duration defect: **ROOT-CAUSED AND FIXED at the controller level; this
+specific topic still BLOCKED** by a deeper content-planning gap, not a
+controller bug. Arabic glyph defect: **ROOT-CAUSED AND FIXED** (not
+`karaoke_current_word`; a deterministic-fallback timing bug). Final
+same-build Arabic: **BLOCKED - `DURATION_TARGET_NOT_MET`**. Final
+same-build English: **OWNER REVIEW PENDING** (all automated gates PASS,
+exported). Live Revideo Swap: **REMOVED as a GA gate** (Revideo is
+post-2.5 experimental work, not something 2.5 waits on). Upload-Post:
+**BLOCKED pending owner video acceptance**. GA: **BLOCKED pending owner
+video acceptance + publishing closure**.
+
+### Short Studio 2.5 - Final Arabic duration-aware content planning closure
+
+**Content-planning fix (commit `9db98cb`).** The Arabic content pack
+(`buildTechEducationalScenesArabic` in `localProvider.ts`) always emitted
+exactly 4 equal-share scenes regardless of how long each beat's real
+required narration actually was - the root content-planning cause (compounding
+with a separate VoiceTut speaking-rate miscalibration, `30.62` chars/s
+against 5 real measured samples showing `13.2`) behind the historical 11s-
+request/18.15s-actual Arabic overshoot. Fixed by routing the Arabic pack
+through the same `allocateBeatDurations`/`composeNarrationForDuration`
+machinery the English pack already used: hook/CTA are essential and always
+survive; problem/solution are the first dropped when the duration budget is
+tight; narration is composed to genuinely fit its allocated slot rather than
+crushing all 4 beats into an equal, too-small share. Added a persisted
+`ContentDurationBudget` contract and a pre-TTS `checkContentDurationFeasibility`
+gate (`CONTENT_DURATION_BUDGET_NOT_MET`) so GPU/TTS time is never spent on
+content already known to be impossible for the requested duration.
+
+**Newly found and fixed this pass (commit `a81f98a`): Arabic topic-relevance
+false negative.** Producing the real qualifying candidate surfaced a second,
+independent, pre-existing bug: `extractTopicConcepts` stemmed Arabic tokens
+through the same (English-only, effectively no-op for Arabic) `stemWord`
+function used for English, so a prompt concept like "النسخ" (with the
+definite article) never literal-substring-matched narration's natural
+indefinite phrasing "نسخة" - silently zeroing `topicRelevanceScore` and
+failing `contentReady`/`professionalReady`/`status` even on a duration- and
+technically-perfect render. Confirmed pre-existing (the old 4-scene
+narration scored the same way before this pass's scene-count change, so this
+is not a regression from it). Fixed with `normalizeArabicForMatching`
+(strips the leading "ال", trailing taa marbuta/haa, normalizes alef
+variants) threaded through `computeTopicRelevanceScore`; the Arabic CTA's
+required sentence was also swapped to one that keeps the "backup" keyword
+under the tight-duration beat allocator, at the exact same Unicode length as
+the original so the duration target is unaffected. Full suite: 91 files /
+1273 tests passing after both fixes, including new regression coverage for
+the stemming behavior and the duration-aware Arabic scene count.
+
+**Real qualifying candidate (image `abud-shorts-engine:v2-a81f98a`, ID
+`db55ad1b48ef`, git SHA `a81f98a`): content-planning and duration gates now
+genuinely pass.** Real Egyptian-Arabic production (VoiceTut/Mohamed, real
+Pexels, canonical FFmpeg/hybrid renderer, libass captions), same 11s/backup-
+topic prompt as every prior Arabic attempt this project has made. Pre-TTS
+budget: 2 scenes selected, `narrationBudgetMs: 9340` vs
+`estimatedNarrationMs: 9242` (feasible, no gate trip). Real post-TTS result:
+duration **11.01s** (0.1% variance), zero bounded corrections needed on
+either scene, `technicalScore: 100`, `mediaPlanScore: 100`,
+`technicalReady/contentReady/professionalReady` all **true** for the first
+time ever on this topic, `topicRelevanceScore: 0.8`,
+`genericFillerDetected: false`, `scriptCompleteness: true`,
+`ctaCompleteness: true`, `validationResult.valid: true`,
+`audioQa.pass: true`, `mixedSilenceGate.pass: true` (0ms detected silence),
+`captionQa.pass: true`, `status: "ready"`.
+
+**BLOCKING finding from mandatory real pixel inspection (not metadata):
+Arabic caption tofu/missing-glyph defect is still present, and the
+automated `captionQa` gate does not detect it.** Despite every metadata
+field above reporting green (including `captionQa.pass: true`), lossless
+PNG frame extraction and direct visual inspection of the rendered
+`final-owner-ar-v2.mp4` found real missing-glyph ("tofu") boxes at four
+separate points across both scenes: ~1.5s ("مشروع" rendered as "مشر" +
+a tofu box, mid-word), ~3.0s ("فجأة" rendered as "فجأ" + a tofu box),
+~6.5-8.5s (two tofu boxes, in "عشان" and "تعرف"), and ~10.3s ("احتياطية"
+rendered with its leading "ا" replaced by a tofu box). Both scenes used
+`captionTimingSource: "deterministic_fallback"` (Whisper `scriptSimilarity`
+0.62 and 0.60, both below the trust threshold). This is the same failure
+signature ("مشروع" -> "مشر" + missing-glyph box) previously root-caused and
+believed fixed in the Arabic glyph-defect closure pass (stale-target,
+degenerate-timing-window bug in the deterministic-fallback word-timing
+generator) - but that generator's code was re-read this pass and is
+structurally sound (monotonic, distributed across real measured audio
+duration, no artificial per-word floor), so this is not a reproduction of
+the previously-fixed mechanism. The defect now appears to live further
+downstream - most likely in phrase-grouping/2-line-wrap or in
+karaoke/`\k`-tag ASS generation from fallback word boundaries not aligning
+with Arabic grapheme-cluster/ligature reshaping boundaries - but the exact
+downstream mechanism was not isolated, since captions/libass/
+`karaoke_current_word`/Arabic shaping are explicitly out of this pass's
+scope and were not modified. Separately, `captionQa`'s automated pass/fail
+signal was proven, with real evidence, not to catch this class of defect -
+real pixel inspection is not optional for Arabic caption sign-off.
+
+**FINAL VERDICT for this pass: BLOCKED.** The content-planning defect this
+pass targeted is genuinely fixed and verified (duration, technical, and all
+content-quality gates pass for the first time on this topic). Release is
+still blocked by a separate, real, pre-existing caption-rendering defect
+found only via required pixel inspection - not fabricated as a pass, and not
+patched without review given it falls outside this pass's authorized scope.
+No candidate was exported to `FINAL-OWNER-REVIEW`. English was not
+re-rendered (the topic-relevance fix is `language === "ar"`-gated; the full
+regression suite, including English-specific content-ai and caption tests,
+passes unchanged) - the existing `short-studio-final-en-v2.mp4` (11.16s,
+PASS) stands. Evidence (candidate video, extracted frames, spec/results
+JSON) preserved in the session scratchpad and in the reused container's data
+volume for a follow-up captions-pipeline investigation.
+
+### Short Studio 2.5 - Final Arabic tofu / libass closure
+
+**Scope guard.** This closure resumed from `v2.5-short-studio` at `97be828`
+with the already-completed Arabic duration-aware content planning and topic
+relevance fixes preserved (`9db98cb`, `a81f98a`). No reset to `ac64e23`, no
+content-planning rerun, no VoiceTut recalibration, no duration-control change,
+no Revideo change, no Pexels change, and no English video regeneration were
+performed.
+
+**Root cause.** The final remaining Arabic blocker was downstream of the now
+passing Arabic content/duration pipeline: the Arabic Bold Social
+`karaoke_current_word` path emitted one ASS Dialogue event per active-word
+window and inserted inline `\c&H...` colour overrides at token boundaries.
+Real lossless pixel inspection of `final-owner-ar-v2.mp4` showed that path
+could produce visible missing-glyph boxes inside normal Arabic words even
+though the source text, timing JSON, `captionQa`, and metadata were green. The
+same real narration and deterministic fallback timings rendered cleanly when
+the Arabic phrase was emitted as one uninterrupted logical ASS phrase with no
+per-word/karaoke overrides, leaving shaping entirely to libass/HarfBuzz/FriBidi.
+
+**A/B/C evidence.** Input was the real latest Arabic narration/timings from
+`final-owner-ar-v2`:
+`لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس.` and
+`تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك.`
+A = current Arabic Bold Social (`social_ad`, `karaoke_current_word`, 23
+Dialogue events) reproduced visible tofu in the real production frames at the
+requested target words. B = one uninterrupted logical-Arabic libass phrase
+(`social_ad`, Cairo Bold, 3px outline, no backdrop, lower-middle, max 2 lines,
+no `\c`, no `\k`, 5 Dialogue events) rendered cleanly. C = uninterrupted
+static-accent phrase (same geometry, whole phrase in accent colour, no `\c`,
+no `\k`, 5 Dialogue events) also rendered cleanly, but was not adopted because
+B is the less visually disruptive policy.
+
+**Final Arabic caption policy.** Arabic Auto Professional / Bold Social now
+uses Cairo Bold through libass/HarfBuzz/FriBidi as uninterrupted logical
+phrases: 3px outline, no backdrop, lower-middle safe position, max 2 lines,
+and no animated Arabic karaoke/current-word override. English Bold Social keeps
+the existing current-word highlight unchanged.
+
+**Code and tests.** Implemented in `src/server/v2/captions/arabicCaptionRendererV3.ts`
+by resolving Arabic `social_ad`/`bold_social` away from `karaoke_current_word`
+at render time only; non-Arabic styles continue using the original style
+configuration. Regression coverage added in
+`src/server/v2/captions/arabicCaptionRendererV3.test.ts` and adjusted in
+`src/server/v2/creativeQualityV22.test.ts`. Verification: `npm run typecheck`
+PASS; focused caption tests PASS (`92` tests); full Vitest PASS (`91` files /
+`1275` tests); `npm run build` PASS.
+
+**Commit and image.** Caption fix commit: `6707b11`
+(`fix(captions): render Arabic bold social as plain libass phrases`). Built
+exactly from `v2.Dockerfile` as `abud-shorts-engine:v2-6707b11`; image ID
+`sha256:bf2f26cb8cfa06a037cf3765c44dee77f8ccd14e3c2f3b7d8995955bff343ff2`.
+
+**Final Arabic production.** Generated exactly one real final Arabic
+11-second candidate from the already-green real Arabic VoiceTut audio, real
+Pexels scene media, real deterministic caption timing JSON, and the new
+`v2.Dockerfile` image's libass/font stack. This avoided repeating content
+planning, VoiceTut, duration control, Revideo, Pexels, or English. Output media
+probe: H.264/AAC, 1080x1920, 25 fps, 275 frames, duration **11.000s**.
+Preserved accepted Arabic metadata gates from the source production:
+2 scenes, 0 duration corrections, `technicalReady: true`,
+`contentReady: true`, `professionalReady: true`, `technicalScore: 100`,
+`topicRelevanceScore: 0.8`, `validationResult.valid: true`,
+`audioQa.pass: true`, `mixedSilenceGate.pass: true`.
+
+**Pixel QA.** Extracted lossless PNG frames from the final Arabic v3 candidate
+at the requested words: `مشروع`, `فجأة`, `عشان`, `تعرف`, and `احتياطية`.
+Direct inspection found 0 tofu, 0 missing glyphs, and 0 broken joins. Final
+pixel QA result: **PASS**.
+
+### Short Studio 2.5 — Commercial Closure Phase A
+
+**Scope & Decisions.** Resumed from working tree on `v2.5-short-studio`. Preserved all approved video gates (Owner Arabic Video Review: APPROVED, Owner English Video Review: APPROVED, Video Quality Gate: PASS / CLOSED, Production Renderer: FFMPEG/HYBRID — FINAL, Caption Renderer: LIBASS — FINAL, Revideo: DEFERRED POST-2.5, Arabic Content Planning: PASS, Arabic Duration: PASS, Arabic Caption Tofu: PASS). No video, caption, voice, or duration logic touched.
+
+**Ledger:**
+- **Owner Arabic Video:** APPROVED
+- **Owner English Video:** APPROVED
+- **Video Quality Gate:** PASS / CLOSED
+- **Upload-Post Customer Policy:** PASS — Upload-Post only. Normal customer publishing routes strictly to Upload-Post (`youtube`, `tiktok`, `instagram`, `facebook`, `linkedin`, `twitter`, `threads`). Direct adapters (YouTube, Meta, TikTok, Telegram) remain only for internal/legacy records and never auto-fallback.
+- **Upload-Post Vault Resolution:** PASS — Centralized resolver `src/server/v2/integrations/credentialResolver.ts` resolves credentials with precedence: Provider Vault -> Environment -> Not Configured.
+- **Upload-Post Configured:** true (resolved from AES-256-GCM encrypted Provider Vault).
+- **Upload-Post Authenticated:** BLOCKED — live read-only check (`GET /api/uploadposts/me`) safely executed with rehearsal key from vault; API truthfully responded with `invalid_credentials` (401/403 unauthorized, latency 4603ms). Real active owner API key needed for live external posting.
+- **Connected Destinations:** `acct-mig-001 | Migration Channel | YouTube | test status: invalid_credentials (safe, read-only)`
+- **External Publication:** AWAITING OWNER TARGET AUTHORIZATION (0 external writes: 0 posts, 0 drafts, 0 uploads, 0 schedules).
+- **Browser QA:** PASS — Playwright matrix verified 32/32 checks across Desktop 1440x900 and Mobile 390x844; English and Arabic RTL (`dir="rtl"`) layouts clean, no horizontal overflow, no error boundaries, no login barriers in LOCAL_SINGLE_USER, no logout UI.
+- **Runtime:** PASS — `short-studio-app` (healthy, port 3130 bound to 127.0.0.1), `short-studio-render-worker` (healthy), `short-studio-postgres` (healthy), `short-studio-n8n` (healthy). App and worker run identical candidate image `c8f4b37678ef`.
+- **Local Voice:** PASS — VoiceTut healthy on host `http://127.0.0.1:8765`, CUDA acceleration active on NVIDIA GeForce RTX 4070 (12GB VRAM), `models_ready: ["voicetut"]`.
+- **Automated Gates:** PASS — `npm run typecheck` (server, ui, revideo-project: 0 errors); `npx vitest run` (91 files / 1282 tests: 1282 passed, 0 failed); `npm run build` (clean production build).
+- **Release Backup:** PASS — verified backup `short_studio_backup_config_db_2026-09-08T15-57-30-259Z_fm2bb7.abudbak` (326,153 bytes, checksum `bc3e0854e1b13986b686b89be0daf08faccfcfcf37c6879011504c491af91ac9`, `includesSecrets: false`).
+- **Package Hygiene:** PASS — verified via `scripts/release/package-client.mjs` and `scripts/release/verify-package.mjs`. Allowlist enforced; excludes `.env`, secrets, vault data, customer DB/media, logs, node_modules, `.git`, and model weights.
+- **Linux Native:** BLOCKED — NO AUTHORIZED NATIVE TARGET.
+- **Repository Rename Capability:** READY — Admin permission verified; rename deferred as final release step.
+- **GA:** BLOCKED pending owner-authorized test publication + final release ceremony (and Linux-native verification if still treated as a mandatory GA gate).
+
+### Short Studio 2.5 — Commercial Closure Phase B Pre-Publish Authorization
+
+**Scope & Verification.** Resumed on `v2.5-short-studio`. The owner manually configured the active Upload-Post API key via the Short Studio Integrations UI into the AES-256-GCM encrypted Provider Vault (`eyJh••••EJeM`). Canonical runtime verified on exact candidate image (`sha256:c8f4b37678ef9b80acd568daf0381e2ad4c9136985b6ef5d059b95149e05f6d0`) with `short-studio-app` (healthy), `short-studio-render-worker` (healthy), `short-studio-postgres` (healthy), and `short-studio-n8n` (healthy). App and worker run on port 3130 bound to 127.0.0.1.
+
+**Ledger:**
+- **Upload-Post Configured:** true
+- **Upload-Post Authenticated:** PASS (`status: healthy`, latency 5377ms, live token verified on Upload-Post API, `invalid_credentials: false`)
+- **Credential Source:** Provider Vault (`upload_post` / `api_key`)
+- **Live Connected Destinations:**
+  - **YouTube:** `NeuralCraft` (Handle: `@neuralcraft-c8c`, Safe Provider Profile: `abud`, Status: connected, `reauth_required: false`, Visibility Options: `private`, `unlisted`, `public`)
+  - *(Note: TikTok profile slot `abud` is present in Upload-Post but not connected: `social_accounts.tiktok: ""`)*
+- **Historical / Migrated Records (Local DB only):**
+  - **YouTube:** `Migration Channel` (Local ID: `acct-mig-001`, `channel-mig-001`, seeded rehearsal record, not confirmed as live destination)
+- **External Publication:** AWAITING OWNER TARGET AUTHORIZATION (0 external writes: 0 posts, 0 drafts, 0 uploads, 0 schedules)
+- **GA:** BLOCKED pending one owner-authorized test publication + final release ceremony (and Linux-native verification if still treated as a mandatory GA gate)
+
+### Short Studio 2.5 — Commercial Closure Phase B Owner-Authorized Test Publication
+
+**Scope & Verification.** Resumed on `v2.5-short-studio`. Executed exactly ONE owner-authorized test publication using the approved Arabic production candidate video (`short-studio-final-ar-v3.mp4`) to the authorized destination: YouTube / `NeuralCraft` (`@neuralcraft-c8c`) via Upload-Post profile `abud` with visibility `unlisted`. Canonical runtime verified healthy on exact candidate image (`c8f4b37678ef`).
+
+**Execution & Live Audit Ledger:**
+- **Owner Test Publication Authorization:** APPROVED
+- **Authorized Target:** YouTube / NeuralCraft / @neuralcraft-c8c (Upload-Post profile: `abud`)
+- **Authorized Video:** `short-studio-final-ar-v3.mp4` (H.264 / AAC, 1080x1920, 11.000s, 3,585,285 bytes, SHA256: `bc712ccc75cfb4c33dc8e6217d93a5a882979a092cc2a81fa005cf3387ed7b32`)
+- **Authorized Visibility:** unlisted
+- **Preflight:** PASS (FFprobe probe verified: 1080x1920, 11.000s, videoCodec: h264, audioCodec: aac, 0 blocking issues)
+- **Upload-Post Authentication:** PASS (API key resolved from Provider Vault `upload_post`/`api_key`)
+- **Test Publication:** PASS (HTTP 200, latency 35228ms)
+- **Provider Publication ID:** `753d09d288124b7c8e76bc8f7820f793` (Job ID: `7fdafe6a9b014c75af6ed949e4a2d1cf`)
+- **YouTube Video ID:** `Fy7MMJmHxhk`
+- **Publication URL:** `https://www.youtube.com/watch?v=Fy7MMJmHxhk`
+- **Final Provider State:** completed / published (`success: true`, attempts: 1)
+- **Final Visibility:** unlisted (verified absent from channel public videos and shorts feeds; accessible via unlisted direct URL / oEmbed)
+- **Idempotency Key:** `owner_auth_yt_neuralcraft_ar_v3_unlisted`
+- **Duplicate Count:** 0
+- **Database Records:**
+  - `publications`: 1 test record (`cmtt2v9120000m5s3f9he0q01`, status `published`, account `acct-neuralcraft-001`, provider `upload_post`, URL `https://www.youtube.com/watch?v=Fy7MMJmHxhk`) + 1 historical migration record (`pub-mig-001`, untouched). Total rows: 2.
+  - `publishing_attempts`: 1 attempt record (id: 2, status `succeeded`, provider response recorded).
+  - `publishing_events`: 2 lifecycle events (id: 2 `upload_started`, id: 3 `completed`).
+- **External Writes Accounting:**
+  - Uploads: 1
+  - Publications / Posts: 1
+  - Drafts: 0
+  - Schedules: 0
+  - Additional posts / Retries: 0
+- **GA:** BLOCKED pending final release ceremony only
+
+### Short Studio 2.5 — Final Publishing Persistence Closure
+
+**Scope.** Zero-external-write pass on `v2.5-short-studio`. Nothing was
+published, uploaded, drafted, scheduled or retried. The real owner-authorized
+YouTube publication (`753d09d288124b7c8e76bc8f7820f793` / `Fy7MMJmHxhk`) was
+left exactly as it stands, including its `unlisted` visibility and its YouTube
+metadata. Only read-only `GET` checks were made against Upload-Post.
+
+**Test harness path: PROVIDER-DIRECT HARNESS.** The owner test publication did
+not go through `PublishingService`. Four independent pieces of evidence in the
+canonical database say so:
+
+- `publishing_events` for the publication holds stages `upload_started` and
+  `completed`. The normal lifecycle writes `created`, `preflight`,
+  `upload_started` and `provider_accepted`; `completed` is not a stage the
+  product emits at all.
+- The stored messages ("Starting authorized test upload to Upload-Post.",
+  "Video published to YouTube Shorts.") are not the product's strings
+  ("Starting video upload to platform.", "Published successfully on youtube.").
+- The `queued`/`preflight` event that `publishPublication()` always writes
+  before a non-internal provider call is absent.
+- `publications.remote_state` was `completed`, a value the pre-fix product code
+  could never write; it wrote the mapped local status (`published`).
+
+The harness called `UploadPostProvider.publishVideo()` directly, so no product
+code ever saw the successful result and nothing was persisted automatically.
+That is why the row, the attempt and the events all had to be written by hand.
+
+**Manual SQL root cause: QA-HARNESS-ONLY *and* PRODUCT DEFECT.** Bypassing the
+service explains why *everything* had to be written by hand. It does not explain
+all of it away: two real defects meant the normal path could not have produced a
+truthful record either, and both are now fixed.
+
+- **`provider_url` could never persist on a real success.** Upload-Post returns
+  per-platform outcomes in two shapes. `GET /api/uploadposts/status` returns a
+  list; `POST /api/upload` — the call a real publish makes — returns them keyed
+  by platform. Only the list shape was parsed, so `pickUploadPostUrl()` returned
+  `undefined` for every genuine publish and the publication was stored published
+  with a null `provider_url`. Proven against the exact provider body captured in
+  `publishing_attempts.provider_response` for this publication. The same gap
+  meant a request whose only platform carried `success: false` would have been
+  recorded as published.
+- **Nothing owned the `processing -> published` transition.** Every provider
+  implements `getStatus()`, and `remote_state` / `remote_state_checked_at` plus
+  `idx_publications_remote_state` have existed since V2-04 for exactly this, but
+  no product code ever called it. A provider that accepted the bytes and
+  finished the post later left the publication in `processing` permanently, with
+  hand-written SQL the only way to record the outcome.
+
+**Fix (narrow).** Commit `6c38844`
+(`fix(publishing): persist a completed Upload-Post publication automatically`).
+`uploadPostResultRows()` normalizes both provider result shapes;
+`reconcilePublication()` / `reconcileProcessingPublications()` are the single
+owner of the terminal transition, swept on the `PublishingScheduler` heartbeat
+that already runs; the terminal write is guarded on the row still being
+`processing`, so a replayed provider completion is a no-op rather than a second
+`published_at`. `remote_state` now records the provider's own word for the state
+(`completed`) instead of repeating the local status. 5 files, +543/-10.
+
+**Regression.** `src/server/v2/publishing.test.ts` section 12, six deterministic
+tests driven by the real captured Upload-Post payloads with no direct SQL
+repair, proving the normal lifecycle:
+
+- synchronous completion persists `status=published`, `provider_post_id`,
+  `provider_url`, `remote_state=completed`, `published_at`
+- `processing -> provider completed -> published` settles automatically, both
+  through the service sweep and through `PublishingScheduler.tick()`
+- exactly 1 `publishing_attempts` row, status `succeeded`, attempt 1
+- `publishing_events` stages exactly
+  `created, preflight, upload_started, provider_accepted, provider_completed`
+- replaying the identical provider completion leaves status, `published_at`,
+  `provider_url`, event count and attempt count unchanged
+- the same idempotency key returns the same publication and never re-sends
+- a per-platform `success: false` inside a `completed` request is recorded
+  `failed`, not published
+
+The regression was mutation-tested: reverting the parser to the array-only
+assumption fails it with `expected null to be 'https://www.youtube.com/...'`,
+which is precisely the manual-SQL symptom.
+
+**Real PostgreSQL verification.** The sweep query and the guarded terminal write
+were executed verbatim against a real PostgreSQL server in a throwaway database
+(`closure_probe_*`, created and dropped in the same run; the production
+`abud_shorts` database was never opened). Result: sweep finds the processing
+row, first write affects 1 row and yields `status=published`,
+`remote_state=completed`, `provider_url` set, `published_at` set, Arabic title
+byte-exact; replay affects **0 rows** with `published_at` unchanged; 1 row, 0
+duplicates.
+
+**Arabic UTF-8 title persistence: PASS — no product change.** The multipart body
+the provider actually sends was captured and carries
+`أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة` as correct UTF-8, and real
+PostgreSQL round-trips it byte-exact. The corruption came from the temporary
+PowerShell/psql QA harness, not from product code, so no product code was
+changed for encoding; a regression pins both the wire body and the stored title.
+
+**Honest divergence — the live post title is corrupted.** The read-only provider
+status response records `post_title` as
+`????? ????? ????????? ?????? ???????? ???????`, and a public YouTube oEmbed
+read returns the same. The Arabic was destroyed by the harness *before* the
+request left the machine, so the live YouTube video carries the mangled title.
+The later manual SQL "correction" set the local row to the correct Arabic, which
+means **local truth and external truth differ on the title field only**. Every
+other field matches. This was not repaired: changing YouTube metadata is outside
+this pass's authorization, and it is recorded here so the owner can decide.
+
+**Gates.** `npm run typecheck` PASS (server, ui, revideo-project: 0 errors).
+`npx vitest run` PASS — 91 files / **1288 tests**, 0 failed (up from 1282; +6
+new). `npm run build` PASS.
+
+**Image.** Built exactly from `v2.Dockerfile` at source `6c38844` as
+`abud-shorts-engine:v2-6c38844`; image ID
+`sha256:dcffaed21f51ae3f11b54228ab041bb37be1a52a495ca4dc9d28ab3573c13163`.
+The previously accepted candidate
+(`sha256:c8f4b37678ef9b80acd568daf0381e2ad4c9136985b6ef5d059b95149e05f6d0`) is
+preserved as `abud-shorts-engine:v2-72c15f9-accepted-rollback`, and the release
+tag `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` now points at the new image so
+the installed `.env` pin stays accurate. Only `abud-shorts-app` and
+`abud-shorts-render-worker` were recreated, with `--no-deps`; PostgreSQL and n8n
+were untouched. No `docker cp`, no prune, no `down -v`. Both containers report
+**healthy** on the new image.
+
+**Live post-source validation (read-only).** The existing publication read back
+through the normal Short Studio API on the new image reports: platform
+`youtube`, account `NeuralCraft` (`@neuralcraft-c8c`), visibility `unlisted`,
+status `published`, provider `upload_post`, provider post id
+`753d09d288124b7c8e76bc8f7820f793`, URL
+`https://www.youtube.com/watch?v=Fy7MMJmHxhk`, `publishedAt`
+`2026-09-08T19:45:55.336Z`, attempt count 1, and the correct Arabic title. The
+read-only Upload-Post status check for that request id returns `completed`,
+1/1, `success: true`, same post id and URL — local truth matches provider truth
+on every field except the title noted above. The new reconciliation sweep
+performed no provider calls, because there are 0 publications in `processing`.
+
+**Ledger:**
+- **External Test Publication:** PASS — already completed, untouched
+- **Normal Publishing Persistence:** PASS
+- **Manual SQL Root Cause:** QA-HARNESS-ONLY for the record, attempt and events;
+  PRODUCT DEFECT for `provider_url` and for terminal reconciliation
+- **Product Persistence Defect:** YES — fixed in `6c38844`
+- **Automatic Terminal Reconciliation:** PASS
+- **Arabic Title Persistence:** PASS (product); live post title corrupted by the
+  QA harness and deliberately left as-is
+- **Idempotency:** PASS
+- **Duplicate Count:** 0
+- **Publications:** 2 rows (1 real test publication + 1 historical migration
+  record), unchanged
+- **Publishing Attempts:** 2 rows, unchanged. **Publishing Events:** 3 rows,
+  unchanged
+- **Additional External Writes This Pass:** 0 (Uploads 1 total, Publications 1
+  total, Drafts 0, Schedules 0, Retries/Additional Posts 0)
+- **GA:** READY FOR OWNER FINAL GA AUTHORIZATION

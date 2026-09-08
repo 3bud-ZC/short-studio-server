@@ -294,17 +294,6 @@ const SettingsPage: React.FC = () => {
                 })}
               </Typography>
 
-              <Divider />
-
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography>{tr("settings.integrations.telegram")}</Typography>
-                <StatusBadge status={integrationStatus(settings?.telegram?.configured)} />
-              </Stack>
-              <Typography variant="body2" color="text.secondary">
-                {tr("settings.integrations.token", {
-                  value: settings?.telegram?.redactedKey || tr("settings.integrations.notConfigured"),
-                })}
-              </Typography>
             </Stack>
           </SectionCard>
         </Grid>
@@ -325,7 +314,6 @@ const SettingsPage: React.FC = () => {
                     onChange={(e) => setDraft({ ...draft, defaultPublishingMode: e.target.value })}
                   >
                     <MenuItem value="draft">{tr("settings.field.publishingModeDraft")}</MenuItem>
-                    <MenuItem value="direct">{tr("settings.field.publishingModeDirect")}</MenuItem>
                     <MenuItem value="scheduled">{tr("settings.field.publishingModeScheduled")}</MenuItem>
                   </Select>
                 </FormControl>
@@ -422,7 +410,7 @@ const SettingsPage: React.FC = () => {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `abud_config_export_${Date.now()}.json`;
+                    a.download = `short_studio_config_export_${Date.now()}.json`;
                     a.click();
                   } catch {
                     setError(tr("settings.backup.exportFailed"));
@@ -727,7 +715,7 @@ const BackupManager: React.FC = () => {
 
 const AccountSecurityManager: React.FC = () => {
   const { t: tr } = useI18n();
-  const [me, setMe] = useState<{ username: string } | null>(null);
+  const [me, setMe] = useState<{ username: string; accessMode?: "local"; remoteAccess?: "disabled" } | null>(null);
   const [sessionCount, setSessionCount] = useState(0);
   const [newUsername, setNewUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -742,11 +730,14 @@ const AccountSecurityManager: React.FC = () => {
 
   const load = async () => {
     try {
-      const [meRes, sessionsRes] = await Promise.all([
-        axios.get("/api/v2/auth/me"),
-        axios.get("/api/v2/auth/sessions"),
-      ]);
-      setMe(meRes.data.user);
+      const meRes = await axios.get("/api/v2/auth/me");
+      const user = meRes.data.user;
+      setMe(user);
+      if (user?.accessMode === "local") {
+        setSessionCount(0);
+        return;
+      }
+      const sessionsRes = await axios.get("/api/v2/auth/sessions");
       setSessionCount((sessionsRes.data.sessions || []).length);
     } catch {
       // The page's own auth redirect handles a missing/expired session.
@@ -828,6 +819,19 @@ const AccountSecurityManager: React.FC = () => {
 
   return (
     <Stack spacing={3}>
+      {me?.accessMode === "local" && (
+        <Stack spacing={1}>
+          <Typography variant="body2" color="text.secondary">
+            {tr("settings.account.localAccessMode")}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {tr("settings.account.localRemoteAccess")}
+          </Typography>
+        </Stack>
+      )}
+
+      {me?.accessMode === "local" ? null : (
+        <>
       {me && (
         <Typography variant="body2" color="text.secondary">
           {tr("settings.account.currentUsername", { username: me.username })}
@@ -916,6 +920,8 @@ const AccountSecurityManager: React.FC = () => {
           </Button>
         </Stack>
       </Stack>
+        </>
+      )}
     </Stack>
   );
 };

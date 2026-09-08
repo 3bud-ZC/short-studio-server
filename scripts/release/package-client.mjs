@@ -1,5 +1,5 @@
 /**
- * Builds the ABUD Shorts CLIENT package.
+ * Builds the Short Studio Server CLIENT package.
  *
  * A client package is deliberately small: an installer, an updater, the
  * production compose file, the n8n workflows and the customer documentation.
@@ -8,8 +8,8 @@
  * compiles anything and never downloads a dependency tree.
  *
  *   node scripts/release/package-client.mjs \
- *     --version 2.2.0 \
- *     --image ghcr.io/3bud-zc/abud-shorts-engine:2.2.0 \
+ *     --version 2.5.0 \
+ *     --image ghcr.io/3bud-zc/abud-shorts-engine:2.5.0 \
  *     --digest sha256:<64 hex> \
  *     --out ../dist-release
  *
@@ -20,8 +20,8 @@
  *   --manifest-only                regenerate the manifest for an existing package
  *
  * Two artifacts come out:
- *   ABUD-Shorts-Engine-<version>.tar.gz   the package the updater downloads
- *   update-manifest.json                  what an installation checks for updates
+ *   Short-Studio-Server-<version>.tar.gz   the package the updater downloads
+ *   update-manifest.json                   what an installation checks for updates
  */
 
 import { execFileSync } from "node:child_process";
@@ -39,12 +39,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
  */
 export const PACKAGE_INCLUDE = [
   "START-HERE.txt",
-  "INSTALL-ABUD-SHORTS.bat",
-  "START-ABUD-SHORTS.bat",
-  "STOP-ABUD-SHORTS.bat",
-  "UPDATE-ABUD-SHORTS.bat",
-  "BACKUP-ABUD-SHORTS.bat",
-  "DIAGNOSTICS-ABUD-SHORTS.bat",
+  "INSTALL-SHORT-STUDIO.bat",
+  "START-SHORT-STUDIO.bat",
+  "STOP-SHORT-STUDIO.bat",
+  "UPDATE-SHORT-STUDIO.bat",
+  "BACKUP-SHORT-STUDIO.bat",
+  "DIAGNOSTICS-SHORT-STUDIO.bat",
   "install.sh",
   "install.ps1",
   "uninstall.sh",
@@ -60,8 +60,10 @@ export const PACKAGE_INCLUDE = [
   "THIRD_PARTY_NOTICES.md",
   "RELEASE_NOTES.md",
   "scripts/host/abud-lib.sh",
+  "scripts/host/short-studio.sh",
   "scripts/host/abud-shorts.sh",
   "scripts/host/abud-update.sh",
+  "scripts/host/short-studio.ps1",
   "scripts/host/abud-shorts.ps1",
   "scripts/host/local-voice-lib.ps1",
   "scripts/install-local-voice.ps1",
@@ -70,7 +72,7 @@ export const PACKAGE_INCLUDE = [
   "docs/SERVER_INSTALL.md",
   "integrations/n8n",
   // The Local Voice (VoiceTut/KemeTone) FastAPI service source. install.ps1
-  // and abud-shorts.ps1's `local-voice` command run this host-native via the
+  // and short-studio.ps1's `local-voice` command run this host-native via the
   // Python runtime local-voice-lib.ps1 installs - it is code only (no model
   // weights, no venv: both are forbidden below and live outside the package).
   "services/local-tts",
@@ -192,7 +194,7 @@ export function buildClientPackage(options) {
     throw new Error(`--digest must be sha256:<64 hex>, received: ${digest}`);
   }
 
-  const packageName = `ABUD-Shorts-Engine-${version}`;
+  const packageName = `Short-Studio-Server-${version}`;
   const stagingRoot = path.join(outDir, "staging");
   const stageDir = path.join(stagingRoot, packageName);
 
@@ -217,7 +219,7 @@ export function buildClientPackage(options) {
     path.join(stageDir, "release.json"),
     `${JSON.stringify(
       {
-        product: "ABUD Shorts Engine",
+        product: "Short Studio Server",
         version,
         channel,
         image,
@@ -236,7 +238,7 @@ export function buildClientPackage(options) {
     // registry access can still install. It is several gigabytes.
     const imagesDir = path.join(stageDir, "images");
     fs.mkdirSync(imagesDir, { recursive: true });
-    const archive = path.join(imagesDir, `abud-shorts-engine-${version}.tar`);
+    const archive = path.join(imagesDir, `short-studio-server-${version}.tar`);
     execFileSync("docker", ["save", "-o", archive, image], { stdio: "inherit" });
   }
 
@@ -286,7 +288,7 @@ export function buildManifest(options) {
   } = options;
 
   return {
-    product: "ABUD Shorts Engine",
+    product: "Short Studio Server",
     channel,
     version,
     schemaVersion,
@@ -335,7 +337,7 @@ async function main() {
   );
   fs.mkdirSync(outDir, { recursive: true });
 
-  console.log(`Packaging ABUD Shorts Engine ${version} (${channel})`);
+  console.log(`Packaging Short Studio Server ${version} (${channel})`);
   console.log(`  image:  ${image}`);
   console.log(`  digest: ${digest || "(not pinned - F5 supplies the published digest)"}`);
   console.log(`  schema: ${schemaVersion}`);

@@ -32,8 +32,9 @@ const AVAILABLE_PLATFORMS: { id: PublishingPlatform; label: string }[] = [
   { id: "tiktok", label: "TikTok" },
   { id: "instagram", label: "Instagram Reels" },
   { id: "facebook", label: "Facebook Reels" },
-  { id: "telegram", label: "Telegram" },
+  { id: "linkedin", label: "LinkedIn" },
   { id: "twitter", label: "X / Twitter" },
+  { id: "threads", label: "Threads" },
 ];
 
 interface BatchPublishModalProps {

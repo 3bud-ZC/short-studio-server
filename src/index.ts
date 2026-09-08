@@ -83,6 +83,7 @@ async function main() {
       vault.readPlaintext(providerId, credentialType),
     );
     await providerSecrets.refreshElevenLabsApiKey().catch(() => undefined);
+    await providerSecrets.refresh("upload_post", "api_key").catch(() => undefined);
   }
 
   if (!config.runningInDocker) {

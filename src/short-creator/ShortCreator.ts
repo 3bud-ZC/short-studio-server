@@ -13,6 +13,12 @@ import {
   isAlignmentConfident,
   mapAlignmentToCaptionTokens,
 } from "../server/v2/voice-providers/elevenLabsAlignment";
+import {
+  alignWhisperToNarration,
+  WHISPER_SCRIPT_SIMILARITY_THRESHOLD,
+} from "./libraries/whisperAlignment";
+import { validateScriptQuality, validateSentenceCompleteness } from "../server/v2/content-ai/scriptQuality";
+import { decideCorrectionAction } from "../server/v2/content-ai/scriptDurationController";
 import { renderArabicCaptions } from "../server/v2/captions/arabicCaptionRendererV3";
 import { runCaptionQa } from "../server/v2/captions/captionQa";
 import { resolveCaptionStyle } from "../server/v2/captions/captionStyles";
@@ -102,6 +108,7 @@ import { AudioMasteringService } from "./audioMasteringService";
 import { postProductionPipeline } from "../server/v2/post-production/postProductionPipeline";
 import { qualityEngine } from "../server/v2/quality/qualityEngine";
 import { calculateProfessionalVisualQualityReport } from "../server/v2/quality/professionalVisualQuality";
+import { evaluateVisualCoherence } from "../server/v2/quality/visualCoherence";
 import { motionEngine, type MotionTemplateType } from "../server/v2/motion/motionEngine";
 import { mediaUploadService } from "../server/v2/media/mediaUploadService";
 import { capabilityManager } from "../server/v2/capabilities/capabilityManager";
@@ -118,6 +125,13 @@ import {
 import { assertStorageReady } from "../server/v2/storage/storagePolicy";
 import { decideRenderStrategy, type RenderStrategyDecision } from "../server/v2/rendering/renderStrategy";
 import { renderFfmpegFast, type FastRenderClip, type FastRenderVoice } from "../server/v2/rendering/ffmpegFastRenderer";
+import {
+  productionTimelineFromLegacyScenes,
+  clampCaptionWordsToNarration,
+  type LegacySceneInput,
+} from "../video-core/fromLegacyScenes";
+import { RevideoRenderer } from "../video-core/renderers/revideoRenderer";
+import type { ProductionTemplate } from "../video-core/types";
 
 type RenderProgressEvent = {
   status:
@@ -991,6 +1005,142 @@ export class ShortCreator {
         await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
         actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
         captionAudioPath = tempMasteredWavPath;
+
+        // Second-chance slowdown using the POST-mastering measurement (Kokoro
+        // duration closure pass). The speed-adjust above only ever saw the
+        // PRE-mastering duration, so a scene that looked close enough to
+        // target before mastering (no slowdown applied) can still land short
+        // once mastering's own real leading/trailing-silence trim removes
+        // more than expected. Re-checking here catches that class of small
+        // shortfall with the SAME safe, already-natural-sounding 0.82x-floor
+        // mechanism, before ever falling through to content expansion below -
+        // adding a whole extra sentence to close what is often just a 5-15%
+        // gap was overshooting badly (proven: a 5.94s-target scene's required
+        // text measured 4.77s post-mastering; one added sentence overshot to
+        // 10.37s, worse than the original shortfall in the other direction).
+        if (actualVoiceDuration > 0 && actualVoiceDuration < targetSceneDuration * 0.85) {
+          const strongerSpeedFactor = Math.max(0.82, actualVoiceDuration / (targetSceneDuration * 0.96));
+          if (strongerSpeedFactor < 1 && strongerSpeedFactor < speedFactor) {
+            const reSlowed = await this.ffmpeg.saveNormalizedAudioWithSpeed(
+              voiceAudio.audio,
+              tempWavPath,
+              strongerSpeedFactor,
+            );
+            speedFactor = strongerSpeedFactor;
+            voiceMastering = await this.audioMastering.masterVoice(tempWavPath, tempMasteredWavPath);
+            await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
+            actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
+            captionAudioPath = tempMasteredWavPath;
+          }
+        }
+
+        // Bounded, SYMMETRIC post-TTS duration correction (ABUD_SHORTS_ENGINE_
+        // STATUS.md sections 7 and the Short Studio 2.5 Arabic duration-defect
+        // closure pass). The speed-stretch above is deliberately capped at
+        // 0.82x to avoid unnatural-sounding audio, so it cannot close a large
+        // gap on its own. When this scene came from a duration-aware content
+        // generator that offered real, grounded expansion sentences
+        // (narrationExpansionUnits), decideCorrectionAction (already written
+        // and tested in scriptDurationController.ts, but never called from
+        // here until this pass - the actual root cause of the 18s Arabic
+        // overshoot) drives a bounded expand/condense loop off the REAL
+        // measured audio duration each round: too_short -> append the next
+        // unit and re-synthesize; too_long -> DROP the last-added unit and
+        // re-synthesize (walk back the exact over-correction that previously
+        // had no way to reverse); accept or give_up otherwise. Never by
+        // padding/truncating audio, inventing silence, or cutting a sentence
+        // mid-thought - only by choosing how many of the already-written,
+        // real narration units to speak. Bounded to `maxRetries` correction
+        // attempts total (never an unbounded loop). Other scenes' voice/
+        // media/Whisper artifacts are untouched.
+        const expansionUnits: string[] = Array.isArray((originalSceneSpec as any).narrationExpansionUnits)
+          ? [...((originalSceneSpec as any).narrationExpansionUnits as string[])]
+          : [];
+        const durationUnits = [requestedSpokenNarration, ...expansionUnits];
+        let unitsUsed = 1;
+        let correctionRetries = 0;
+        let expandedSpokenNarration = requestedSpokenNarration;
+        let gaveUpReason: string | undefined;
+        for (;;) {
+          const decision = decideCorrectionAction({
+            actualSeconds: actualVoiceDuration,
+            targetSeconds: targetSceneDuration,
+            unitsUsed,
+            unitsAvailable: durationUnits.length,
+            retriesSoFar: correctionRetries,
+            maxRetries: 2,
+          });
+          if (decision.action === "accept") break;
+          if (decision.action === "give_up") {
+            gaveUpReason = decision.reason;
+            break;
+          }
+          unitsUsed = decision.action === "expand" ? unitsUsed + 1 : unitsUsed - 1;
+          expandedSpokenNarration = durationUnits.slice(0, unitsUsed).join(" ").trim();
+          voiceAudio = await this.voiceRegistry.synthesize({
+            text: expandedSpokenNarration,
+            language: spec.language,
+            dialect: (brandVoiceProfile?.dialect || spec.dialect) as any,
+            qualityProfile: requestedVoiceQuality,
+            requestedProvider: requestedVoiceProvider,
+            // Retries must never change the speaker or the delivery settings.
+            voiceId: pinnedVoiceId || requestedVoiceId,
+            voicePreset: requestedVoicePreset,
+            modelId: requestedVoiceModelId,
+            requestAlignment: spec.language === "ar" ? false : true,
+            voiceStrategy: spec.language === "ar" ? "plain_tts" : "timestamps",
+            fallbackPolicy: "local",
+            brandPronunciations: brandVoiceProfile?.pronunciationDictionary,
+            pronunciationOverrides: jobPronunciationOverrides,
+          });
+          const correctionProvider = voiceAudio.provider || voiceAudio.decision.providerId;
+          if (correctionProvider in artifactReuse.providerInvocations) {
+            artifactReuse.providerInvocations[correctionProvider as keyof typeof artifactReuse.providerInvocations]++;
+          }
+          let correctedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, 1);
+          let correctedDuration = correctedNormalized.duration || voiceAudio.audioLength || actualVoiceDuration;
+          if (correctedDuration > targetSceneDuration * 1.08) {
+            speedFactor = Math.min(1.08, correctedDuration / targetSceneDuration);
+            correctedNormalized = await this.ffmpeg.saveNormalizedAudioWithSpeed(voiceAudio.audio, tempWavPath, speedFactor);
+            correctedDuration = correctedNormalized.duration || correctedDuration;
+          } else {
+            speedFactor = 1.0;
+          }
+          voiceMastering = await this.audioMastering.masterVoice(tempWavPath, tempMasteredWavPath);
+          await this.ffmpeg.saveWavToMp3(tempMasteredWavPath, tempMp3Path);
+          actualVoiceDuration = await this.ffmpeg.getMediaDuration(tempMasteredWavPath);
+          captionAudioPath = tempMasteredWavPath;
+          correctionRetries++;
+          logger.info(
+            {
+              sceneIndex: index,
+              action: decision.action,
+              correctionRetries,
+              actualVoiceDuration,
+              targetSceneDuration,
+              unitsUsed,
+              unitsAvailable: durationUnits.length,
+              expandedSpokenNarration,
+              expandedSpokenNarrationChars: expandedSpokenNarration.length,
+              preSpeedAdjustDuration: correctedNormalized.duration || voiceAudio.audioLength,
+              speedFactor,
+            },
+            "Bounded duration correction: adjusted scene narration and re-synthesized",
+          );
+        }
+        if (gaveUpReason) {
+          logger.warn(
+            { sceneIndex: index, targetSceneDuration, actualVoiceDuration, gaveUpReason },
+            "Bounded duration correction gave up; scene duration may fall outside the accepted range",
+          );
+        }
+        if (correctionRetries > 0) {
+          // Keep captions and the displayed/canonical narration in sync with
+          // what was actually spoken - otherwise captions would silently
+          // truncate before the audio finishes, reintroducing a caption/audio
+          // mismatch of the same class this migration exists to eliminate.
+          sceneTimeline.narration = expandedSpokenNarration;
+        }
       }
 
       // Canonical continuous narration timeline calculation:
@@ -1128,9 +1278,10 @@ export class ShortCreator {
       });
       let rawCaptions: Caption[] = [];
       // Canonical vocabulary persisted as captionTimingSource.
-      let timingSource: "elevenlabs_alignment" | "whisper" | "synthetic" = "synthetic";
+      let timingSource: "elevenlabs_alignment" | "whisper" | "deterministic_fallback" = "deterministic_fallback";
       let alignmentConfidence: number | undefined;
       let alignmentUnmapped: string[] | undefined;
+      let captionScriptSimilarity: number | undefined;
       let captionArtifact: DurableSceneArtifact | undefined;
       const captionInputHash = createCaptionInputHash({
         voiceChecksum: voiceArtifact?.checksum || "",
@@ -1215,33 +1366,70 @@ export class ShortCreator {
         }
       }
 
-      // 2. Whisper.
+      // 2. Whisper: a TIMING/ALIGNMENT source only. Whisper transcribes the
+      //    actual rendered audio, so its own words can mishear, drop, or add
+      //    words relative to the canonical narration that was actually sent
+      //    to TTS - that canonical text is what gets burned into the video,
+      //    never Whisper's transcript. Whisper's timestamps are aligned onto
+      //    the canonical words via the same LCS pairing already used for
+      //    ElevenLabs alignment above (see whisperAlignment.ts). If Whisper's
+      //    transcript diverges too far from the canonical text to trust its
+      //    timing at all, this falls through to the deterministic fallback
+      //    below rather than anchor known-correct words to an untrustworthy
+      //    transcript.
       if (!captionArtifact && rawCaptions.length === 0) {
+        const canonicalText = String((originalSceneSpec as any).captionText || sceneTimeline.narration || "");
         try {
           artifactReuse.providerInvocations.whisper++;
-          rawCaptions = await this.whisper.CreateCaption(
+          const whisperCaptions = await this.whisper.CreateCaption(
             captionAudioPath,
             voiceAudio?.language || (voiceArtifact?.metadata?.reuseKey as any)?.language || spec.language,
           );
-          if (rawCaptions.length > 0) {
-            timingSource = "whisper";
+          if (whisperCaptions.length > 0 && canonicalText.trim()) {
+            const aligned = alignWhisperToNarration(whisperCaptions, canonicalText);
+            captionScriptSimilarity = aligned.scriptSimilarity;
+            if (aligned.captions.length > 0 && aligned.scriptSimilarity >= WHISPER_SCRIPT_SIMILARITY_THRESHOLD) {
+              rawCaptions = aligned.captions;
+              alignmentConfidence = aligned.confidence;
+              timingSource = "whisper";
+            } else {
+              logger.info(
+                { sceneIndex: index, scriptSimilarity: aligned.scriptSimilarity },
+                "Whisper transcript diverged too far from the canonical narration; using deterministic timing for this scene",
+              );
+            }
           }
         } catch (whisperErr) {
-          logger.warn(whisperErr, `Whisper transcription notice for scene ${index + 1}; using synthesized word timestamps`);
+          logger.warn(whisperErr, `Whisper transcription notice for scene ${index + 1}; using deterministic word timestamps`);
         }
       }
 
-      // 3. Deterministic synthetic fallback.
+      // 3. Deterministic fallback: the canonical narration, evenly
+      //    distributed across the scene. Used whenever no timing source
+      //    above is trustworthy - the canonical text is always what gets
+      //    shown, never invented and never a mistranscription.
+      //
+      //    Distributed across the REAL measured audio duration
+      //    (actualVoiceDuration), never the pre-correction planned
+      //    targetSceneDuration: a scene whose narration was expanded/
+      //    condensed above can end with real audio well outside its
+      //    original target, and distributing word timing against the
+      //    stale target then clamping each endMs to that same stale total
+      //    produced inverted windows (startMs > endMs) for every word past
+      //    the point where wIdx*wordMs first exceeds it - degenerate
+      //    caption timing that fed corrupted phrase/highlight boundaries
+      //    into the ASS builder (the real root cause isolated for the
+      //    Short Studio 2.5 Arabic glyph-defect closure pass).
       if (!rawCaptions || rawCaptions.length === 0) {
-        timingSource = "synthetic";
+        timingSource = "deterministic_fallback";
         const captionText = String((originalSceneSpec as any).captionText || sceneTimeline.narration || "");
         const words = captionText.trim().split(/\s+/).filter(Boolean);
         if (words.length > 0) {
-          const totalMs = Math.round(targetSceneDuration * 1000);
-          const wordMs = Math.max(250, Math.floor(totalMs / words.length));
+          const totalMs = Math.round((actualVoiceDuration > 0 ? actualVoiceDuration : targetSceneDuration) * 1000);
+          const wordMs = Math.max(1, Math.floor(totalMs / words.length));
           rawCaptions = words.map((w, wIdx) => {
             const startMs = wIdx * wordMs;
-            const endMs = Math.min(totalMs, startMs + wordMs);
+            const endMs = wIdx === words.length - 1 ? totalMs : startMs + wordMs;
             return {
               text: (wIdx > 0 ? " " : "") + w,
               startMs,
@@ -1252,20 +1440,37 @@ export class ShortCreator {
       }
       voiceArtifacts[voiceArtifacts.length - 1].timingSource = timingSource;
       voiceArtifacts[voiceArtifacts.length - 1].captionTimingSource = timingSource;
+      // Always canonical_narration: every path above (alignment, whisper,
+      // deterministic fallback) burns the known narration script, never a
+      // transcription - only the timing strategy differs.
+      voiceArtifacts[voiceArtifacts.length - 1].captionTextSource = "canonical_narration";
       if (alignmentConfidence !== undefined) {
         voiceArtifacts[voiceArtifacts.length - 1].alignmentConfidence = alignmentConfidence;
+        voiceArtifacts[voiceArtifacts.length - 1].captionAlignmentConfidence = alignmentConfidence;
         voiceArtifacts[voiceArtifacts.length - 1].alignmentUnmappedTokens = alignmentUnmapped;
+      }
+      if (captionScriptSimilarity !== undefined) {
+        voiceArtifacts[voiceArtifacts.length - 1].captionScriptSimilarity = captionScriptSimilarity;
       }
       captionTimingSources.add(timingSource);
 
-      // Enforce caption boundaries strictly within the scene duration
+      // Fit the caption timeline inside the scene duration WITHOUT ever
+      // dropping canonical words. Filtering out anything past the boundary
+      // (the previous approach) silently truncated the visible sentence
+      // whenever real timing (Whisper or alignment) ran a little long
+      // relative to the scene's planned duration - proportionally
+      // compressing the whole timeline keeps every word on screen instead.
       const maxSceneMs = Math.round(targetSceneDuration * 1000) + 100;
-      const captions: Caption[] = rawCaptions
-        .filter((c) => c.startMs < maxSceneMs)
-        .map((c) => ({
+      const lastRawEndMs = rawCaptions.reduce((max, c) => Math.max(max, c.endMs), 0);
+      const captionScale = lastRawEndMs > maxSceneMs ? maxSceneMs / lastRawEndMs : 1;
+      const captions: Caption[] = rawCaptions.map((c) => {
+        const startMs = Math.round(c.startMs * captionScale);
+        return {
           ...c,
-          endMs: Math.min(c.endMs, maxSceneMs),
-        }));
+          startMs,
+          endMs: Math.max(startMs, Math.round(c.endMs * captionScale)),
+        };
+      });
       if (!captionArtifact && voiceArtifact) {
         captionArtifact = artifactStore.persistJson({
           type: "captions",
@@ -1509,6 +1714,9 @@ export class ShortCreator {
             url: `http://localhost:${this.config.port}/api/tmp/${tempMp3FileName}`,
             duration: targetSceneDuration,
           },
+          // See the single-segment branch below for why this - not
+          // `audio.duration` above - is what an audio-first renderer must use.
+          realNarrationDurationMs: Math.round(sceneSpeechDuration * 1000),
           speechWindowsMs: [{ startMs: speechWindowStartMs, endMs: speechWindowEndMs }],
         });
       } else {
@@ -1883,6 +2091,11 @@ export class ShortCreator {
         // captions and its audio are untouched: only the picture is cut, so a
         // three-scene script can still carry six or more shots.
         // ------------------------------------------------------------------
+        let sceneVisualCoherence: ReturnType<typeof evaluateVisualCoherence> = {
+          coherent: true,
+          jumps: [],
+          reason: "single shot or no shot data available",
+        };
         if (!isProductAd && mediaDuration > 0) {
           const sceneStartSeconds = sceneTimeline.startSeconds || 0;
           const sceneEdl = buildEditDecisionList({
@@ -2069,6 +2282,7 @@ export class ShortCreator {
               shot.searchTerms = shotIntentPolicy.terms;
               shot.searchQuery = shotIntentPolicy.terms[0] || shot.searchQuery;
               shot.alternativeQueries = shotIntentPolicy.terms.slice(1);
+              shot.matchedConcepts = shotQueryFamilies.matchedConcepts;
 
               if (shotIndex > 0) {
                 try {
@@ -2296,6 +2510,22 @@ export class ShortCreator {
             shotSourceCounts[onlyShot.sourceType] =
               (shotSourceCounts[onlyShot.sourceType] || 0) + 1;
           }
+          // Real (not fabricated) editorial-coherence check (ABUD_SHORTS_
+          // ENGINE_STATUS.md section 17): flags an adjacent pair of shots
+          // within this scene whose recognised concepts share nothing in
+          // common - the deterministic shape of "laptop worker -> filmmaking
+          // crew" jumps found during the real-content proof. Advisory/logged
+          // in this pass, not yet a hard selection gate - see that same
+          // status file section for the scoping note.
+          sceneVisualCoherence = evaluateVisualCoherence(
+            sceneEdl.shots.map((shot) => shot.matchedConcepts || []),
+          );
+          if (!sceneVisualCoherence.coherent) {
+            logger.warn(
+              { sceneIndex: index, reason: sceneVisualCoherence.reason },
+              "Scene visual coherence: adjacent shots share no recognised concept",
+            );
+          }
         }
         sceneQa.push({
           sceneIndex: index,
@@ -2308,6 +2538,7 @@ export class ShortCreator {
           smartCrop: visualAsset.metadata?.smartCropPlan,
           captionSafeLayout: true,
           voiceDurationFit: actualVoiceDuration <= targetSceneDuration * 1.08,
+          visualCoherence: sceneVisualCoherence,
         });
 
         sceneCaptionWords[index] = captions.map((caption) => ({
@@ -2326,6 +2557,14 @@ export class ShortCreator {
             url: `http://localhost:${this.config.port}/api/tmp/${tempMp3FileName}`,
             duration: targetSceneDuration,
           },
+          // The REAL, ffprobe-measured speech length - NOT `audio.duration`
+          // above, which is `targetSceneDuration` (the legacy engine's
+          // held-to-budget visual duration, can be longer than the actual
+          // narration). Revideo's audio-first timeline must never see the
+          // held value, or it silently reimports the exact silence-padding
+          // bug this migration exists to eliminate - see
+          // ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation" section 11.
+          realNarrationDurationMs: Math.round(sceneSpeechDuration * 1000),
           speechWindowsMs: [{ startMs: speechWindowStartMs, endMs: speechWindowEndMs }],
           productNobgUrl: visualAsset?.metadata?.productNobgUrl,
           productImageUrl: visualAsset?.metadata?.productImageUrl,
@@ -2373,6 +2612,45 @@ export class ShortCreator {
       );
     }
 
+    // Total-duration authority (Short Studio 2.5 Arabic duration-defect
+    // closure pass). Per-scene correction above already accepts/condenses
+    // each scene individually within its own tolerance, but per-scene
+    // tolerances can still compound into a total that misses the product's
+    // actual accepted window - exactly how the 18.15s-against-11s Arabic
+    // overshoot slipped through with every individual scene "accepted".
+    // Predict the final MP4 duration BEFORE spending time on render (real
+    // total narration already measured above, plus the bounded natural
+    // breath pause between scenes and the timeline's own bounded outro) and
+    // fail clearly instead of rendering a video already known to be
+    // invalid - never silently accept an overshoot/undershoot this large.
+    const boundedGapSeconds = Math.max(0, scenes.length - 1) * 0.16;
+    const predictedFinalSeconds = Math.round(
+      (totalDurationSeconds + boundedGapSeconds + (timeline.outroDurationSeconds || 0)) * 100,
+    ) / 100;
+    const durationToleranceSeconds = 1;
+    if (timeline.requestedDurationSeconds > 0) {
+      const lowerBound = timeline.requestedDurationSeconds - durationToleranceSeconds;
+      const upperBound = timeline.requestedDurationSeconds + durationToleranceSeconds;
+      if (predictedFinalSeconds < lowerBound || predictedFinalSeconds > upperBound) {
+        logger.error(
+          {
+            videoId,
+            requestedDurationSeconds: timeline.requestedDurationSeconds,
+            predictedFinalSeconds,
+            totalDurationSeconds,
+            boundedGapSeconds,
+            outroDurationSeconds: timeline.outroDurationSeconds || 0,
+            lowerBound,
+            upperBound,
+          },
+          "DURATION_TARGET_NOT_MET: predicted final duration falls outside the accepted range after bounded per-scene correction",
+        );
+        throw new Error(
+          `DURATION_TARGET_NOT_MET: predicted final duration ${predictedFinalSeconds}s falls outside the accepted [${lowerBound}, ${upperBound}]s range for a ${timeline.requestedDurationSeconds}s request.`,
+        );
+      }
+    }
+
 
     let captionRenderer: "libass" | "remotion" = "remotion";
     let captionFontFamily: string | undefined;
@@ -2389,7 +2667,7 @@ export class ShortCreator {
       durationSeconds: totalDurationSeconds,
     });
     let renderFallbackReason: string | undefined;
-    let renderEngineUsed: "ffmpeg_fast" | "hybrid_ffmpeg" | "remotion" | "remotion_fallback" =
+    let renderEngineUsed: "ffmpeg_fast" | "hybrid_ffmpeg" | "remotion" | "remotion_fallback" | "revideo" =
       renderDecision.strategy === "FFMPEG_FAST"
         ? "ffmpeg_fast"
         : renderDecision.strategy === "HYBRID"
@@ -2482,7 +2760,106 @@ export class ShortCreator {
       );
     };
 
-    if (renderDecision.fastPathEligible) {
+    // Revideo evaluation (ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation",
+    // section 11): builds a ProductionTimeline from the SAME already-resolved
+    // scene data the legacy renderers above consume - no TTS/Pexels/Whisper/
+    // planning is duplicated or re-run here, only the render/composition
+    // stage is replaced. Uses `realNarrationDurationMs` (the true,
+    // ffprobe-measured speech length), never `scene.audio.duration` (the
+    // legacy engine's held-to-budget visual duration) - see the field's own
+    // doc comment above for why that distinction is exactly the bug this
+    // migration exists to fix.
+    const runRevideoRender = async () => {
+      const width = orientation === OrientationEnum.portrait ? 1080 : 1920;
+      const height = orientation === OrientationEnum.portrait ? 1920 : 1080;
+      const revideoTemplate: ProductionTemplate = hasProductComposition
+        ? "business_promo"
+        : spec.productionMode === "motion_graphics" || spec.productionMode === "animated_explainer"
+          ? "kinetic_explainer"
+          : "stock_social_reel";
+
+      const revideoSceneInputs: LegacySceneInput[] = scenes.map((scene: any, sceneIdx: number) => {
+        const segments = Array.isArray(scene.segments) ? scene.segments : undefined;
+        const visualPath = this.localPathForMediaUrl(segments && segments.length > 0 ? segments[0].video : scene.video);
+        if (!visualPath || !fs.existsSync(visualPath)) {
+          throw new Error(`Revideo render: scene ${sceneIdx} visual asset is not available (${scene.video}).`);
+        }
+        const additionalVisualPaths = segments && segments.length > 1
+          ? segments.slice(1).map((segment: any) => {
+              const segmentPath = this.localPathForMediaUrl(segment.video);
+              if (!segmentPath || !fs.existsSync(segmentPath)) {
+                throw new Error(`Revideo render: scene ${sceneIdx} additional segment is not available.`);
+              }
+              return segmentPath;
+            })
+          : undefined;
+        const narrationPath = this.localPathForMediaUrl(scene.audio?.url);
+        if (!narrationPath || !fs.existsSync(narrationPath)) {
+          throw new Error(`Revideo render: scene ${sceneIdx} narration audio is not available.`);
+        }
+        // sceneMediaPlan.transitionToNext is attached to the OUTGOING scene;
+        // it becomes the transitionIn of the scene that follows it.
+        const previousScene = sceneIdx > 0 ? (scenes[sceneIdx - 1] as any) : undefined;
+        const narrationDurationMs =
+          Number(scene.realNarrationDurationMs) || Math.round((scene.audio?.duration || 0) * 1000);
+        // See clampCaptionWordsToNarration's own doc comment: the shared
+        // deterministic-timing caption fallback can time words against the
+        // legacy held-to-budget visual duration rather than real narration
+        // length, which would otherwise silently inflate Revideo's total
+        // render duration via its concurrent caption/visual loops.
+        const rawCaptionWords = spec.captionStyle === "none" ? [] : sceneCaptionWords[sceneIdx] || [];
+        const captionWords = clampCaptionWordsToNarration(rawCaptionWords, narrationDurationMs);
+        return {
+          id: `${videoId}-${sceneIdx}`,
+          sceneIndex: sceneIdx,
+          purpose: "scene",
+          visualPath,
+          additionalVisualPaths,
+          narrationPath,
+          narrationDurationMs,
+          captionWords,
+          transition: previousScene?.transition,
+        };
+      });
+
+      const revideoMusicPath = musicForRender?.file
+        ? this.localPathForMediaUrl(musicForRender.url) || path.join(this.config.musicDirPath, musicForRender.file)
+        : undefined;
+
+      const revideoTimeline = productionTimelineFromLegacyScenes({
+        id: videoId,
+        width,
+        height,
+        fps: 25,
+        template: revideoTemplate,
+        scenes: revideoSceneInputs,
+        musicPath: revideoMusicPath,
+        musicVolume: 0.18,
+      });
+
+      const revideoRenderer = new RevideoRenderer(
+        this.config.tempDirPath,
+        undefined,
+        undefined,
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+      );
+      const result = await revideoRenderer.render(revideoTimeline);
+      fs.ensureDirSync(path.dirname(this.getVideoPath(videoId)));
+      fs.copySync(result.outputPath, this.getVideoPath(videoId));
+      compositionMs = result.compositionMs;
+      finalEncodeMs = result.finalEncodeMs;
+      remotionFramesRendered = 0;
+    };
+
+    if (this.config.videoRenderEngine === "revideo") {
+      renderEngineUsed = "revideo";
+      // Fail-closed (section 12): deliberately no try/catch and no legacy
+      // fallback here. If Revideo fails, the whole production must fail
+      // clearly - qualification needs truth, not a silently-substituted
+      // legacy render reported as a Revideo success. Legacy remains
+      // available only via the explicit VIDEO_RENDER_ENGINE=legacy default.
+      await runRevideoRender();
+    } else if (renderDecision.fastPathEligible) {
       try {
         const fastCaptionAssPath = burnCaptionsWithLibass
           ? this.createTimelineCaptionAss({
@@ -2540,14 +2917,18 @@ export class ShortCreator {
       artifacts: {
         videoId,
         sceneCount: scenes.length,
-        renderStrategy: renderDecision.strategy,
+        renderStrategy: renderEngineUsed === "revideo" ? "REVIDEO" : renderDecision.strategy,
         fastPathEligible: renderDecision.fastPathEligible,
         fallbackReason: renderFallbackReason,
       },
       timingMs: Date.now() - renderStartedAt,
     });
 
-    if (burnCaptionsWithLibass && renderEngineUsed !== "ffmpeg_fast" && renderEngineUsed !== "hybrid_ffmpeg") {
+    // Revideo draws captions itself (timelineScene.tsx - including Arabic
+    // RTL shaping via a bundled font, see section 9), from the same
+    // sceneCaptionWords used above - never route it through the libass burn
+    // pass too, or captions would be drawn twice.
+    if (burnCaptionsWithLibass && renderEngineUsed !== "ffmpeg_fast" && renderEngineUsed !== "hybrid_ffmpeg" && renderEngineUsed !== "revideo") {
       const burnStartedAt = Date.now();
       await this.emitProgress(onProgress, {
         status: "rendering",
@@ -2796,11 +3177,28 @@ export class ShortCreator {
       // report).
       const visualQualityPass = isExplicitGraphicsMode || professionalVisualQuality.readyForProfessionalAuto;
       const audioSilencePass = !mixedSilenceGate.criticalFailure;
-      const professionalReady = finalAudioQa.pass && audioSilencePass && visualQualityPass;
+      // TECHNICAL: the media itself is a valid, playable render. CONTENT: the
+      // script that was actually spoken/burned is topical, complete, and not
+      // generic filler - recomputed here (not just at job-creation time in
+      // routes.ts) because a job can reach the render worker through paths
+      // that never went through that gate (retries, internal APIs). Neither
+      // technical nor content validity alone is "professional" - a technically
+      // perfect render of a meaningless script is exactly the defect this
+      // separation exists to catch.
+      const scriptQuality = validateScriptQuality(
+        String(spec.userPrompt || ""),
+        spec.scenes || [],
+        spec.cta,
+        spec.language === "ar" ? "ar" : "en",
+      );
+      const technicalReady = finalAudioQa.pass && audioSilencePass && visualQualityPass;
+      const contentReady = scriptQuality.pass;
+      const professionalReady = technicalReady && contentReady;
       const readinessFailureReasons: string[] = [
         ...(finalAudioQa.pass ? [] : ["Audio mastering did not pass quality checks."]),
         ...(audioSilencePass ? [] : ["Audio timing needs another pass; a section of the video was unexpectedly quiet."]),
         ...(visualQualityPass ? [] : ["One or more sections need better footage; a scene fell back to a graphic instead of real video."]),
+        ...(contentReady ? [] : [scriptQuality.reason || "Script did not pass the content quality gate."]),
       ];
 
       // V2.4 Pass 5 wall-clock accounting: the OpenCLIP pool's init cost is
@@ -2829,8 +3227,14 @@ export class ShortCreator {
         error: professionalReady ? undefined : readinessFailureReasons.join(" "),
         professionalReady,
         mixedSilenceGate: mixedSilenceGate as unknown as Record<string, unknown>,
-        renderStrategy: renderDecision.strategy,
-        rendererVersion: "hybrid-fast-v1",
+        // renderDecision.strategy is computed unconditionally before the
+        // VIDEO_RENDER_ENGINE branch (see above) and never reflects it - it
+        // would otherwise misreport a Revideo-rendered video as
+        // "REMOTION_FULL" in its own metadata sidecar, exactly the kind of
+        // false record the Revideo evaluation's audit trail depends on not
+        // having. renderEngineUsed is the actual, post-render truth.
+        renderStrategy: renderEngineUsed === "revideo" ? "REVIDEO" : renderDecision.strategy,
+        rendererVersion: renderEngineUsed === "revideo" ? "revideo-0.11.0" : "hybrid-fast-v1",
         fastPathEligible: renderDecision.fastPathEligible,
         fastPathUsed: renderEngineUsed === "ffmpeg_fast" || renderEngineUsed === "hybrid_ffmpeg",
         renderFallbackReason,
@@ -2908,8 +3312,20 @@ export class ShortCreator {
         // were timed rather than implying Whisper for every production.
         captionTimingSource: captionTimingSources.size === 1
           ? Array.from(captionTimingSources)[0]
-          : Array.from(captionTimingSources).join('+') || 'synthetic',
+          : Array.from(captionTimingSources).join('+') || 'deterministic_fallback',
         captionTimingSources: Array.from(captionTimingSources),
+        // Every timing path burns the canonical narration script - never a
+        // transcription - so this is constant, but persisted explicitly per
+        // the caption-fidelity contract rather than left implicit.
+        captionTextSource: "canonical_narration",
+        // Worst-case (minimum) across scenes: a single badly-aligned scene
+        // must not be hidden behind an average that looks fine.
+        captionScriptSimilarity: voiceArtifacts.reduce((min: number | undefined, v: any) =>
+          typeof v.captionScriptSimilarity === "number" ? Math.min(min ?? 1, v.captionScriptSimilarity) : min,
+        undefined as number | undefined),
+        captionAlignmentConfidence: voiceArtifacts.reduce((min: number | undefined, v: any) =>
+          typeof v.captionAlignmentConfidence === "number" ? Math.min(min ?? 1, v.captionAlignmentConfidence) : min,
+        undefined as number | undefined),
         voiceArtifacts,
         costEstimate: spec.costEstimate as any,
         productionSpec: spec as any,
@@ -2961,6 +3377,26 @@ export class ShortCreator {
         creativeGrade: creativeQualityResult.creativeGrade,
         creativeDiagnostics: creativeQualityResult.diagnostics,
         creativeWarnings: creativeQualityResult.warnings,
+        // Human-visible quality metrics (deterministic/explainable - see
+        // scriptQuality.ts and qualityEngine.ts; visualRelevanceScore/
+        // sceneCoherenceScore/audioContinuityScore reuse the same keyword-
+        // relevance and audio-continuity signals already computed above
+        // under their existing names, surfaced here for direct visibility).
+        technicalReady,
+        contentReady,
+        topicRelevanceScore: scriptQuality.topicRelevanceScore,
+        genericFillerDetected: scriptQuality.genericFillerDetected,
+        scriptCompleteness: scriptQuality.scriptCompleteness,
+        ctaCompleteness: spec.cta?.text ? validateSentenceCompleteness(String(spec.cta.text), spec.language === "ar" ? "ar" : "en").complete : true,
+        visualRelevanceScore: professionalVisualQuality.averageSemanticScore,
+        // Honest signal-type label (section 15 of the Revideo real-content
+        // proof review): "visual_semantic" only when real frame-level
+        // OpenCLIP analysis actually ran; "metadata_relevance" when it fell
+        // back to the lexical/keyword pre-score (e.g. opencv unavailable) -
+        // never silently reported as if it were a validated visual check.
+        visualRelevanceMethod: professionalVisualQuality.visualRelevanceMethod,
+        sceneCoherenceScore: creativeQualityResult.diagnostics.visualDiversityScore,
+        audioContinuityScore: creativeQualityResult.diagnostics.audioContinuityScore,
         maxNarrationSilenceMs: deadAirReport.maxNarrationSilenceMs,
         deadAirReport,
         mediaPlanScore: mediaPlanScoreV24,
@@ -2997,6 +3433,7 @@ export class ShortCreator {
           truePeakDbtp: finalAudioQa.finalMixMetrics.truePeakDbtp,
           clippingDetected: finalAudioQa.finalMixMetrics.clippingDetected,
           effectivelySilent: finalAudioQa.finalMixMetrics.effectivelySilent,
+          loudnessTargetMet: finalAudioQa.loudnessTargetMet,
           duckingProfile: "balanced",
         },
         createdAt: stats.mtime.toISOString(),

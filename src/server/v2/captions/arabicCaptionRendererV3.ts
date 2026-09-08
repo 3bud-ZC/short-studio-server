@@ -1,6 +1,8 @@
 import {
+  CAPTION_FONTS,
   captionFontFor,
   resolveCaptionStyle,
+  type CaptionFontSpec,
   type CaptionStyleSpec,
 } from "./captionStyles";
 
@@ -273,6 +275,60 @@ export function buildPhraseText(phrase: CaptionPhrase, style: CaptionStyleSpec, 
   return lines.map(escapeAssText).join("\\N");
 }
 
+export type PhraseSegment = { startMs: number; endMs: number; body: string };
+
+/**
+ * `karaoke_current_word`: exactly one word highlighted at a time, the rest of
+ * the phrase in the primary colour. `\k` cannot express this - once a word is
+ * "sung" it stays in the secondary colour for the rest of the run - so this
+ * emits one Dialogue event per active-word window instead, each an inline
+ * `\c` colour override per token over the SAME shaped phrase text. Adjacent
+ * windows tile the phrase's full duration with no gap, so the text reads as
+ * continuous while only the active word's colour changes.
+ */
+export function buildCurrentWordSegments(
+  phrase: CaptionPhrase,
+  style: CaptionStyleSpec,
+  lines: string[],
+): PhraseSegment[] {
+  const highlight = toAssColour(style.highlightColour);
+  const primary = toAssColour(style.primaryColour);
+  const tokensPerLine = lines.map((line) => line.split(/\s+/).filter(Boolean));
+  const wordCount = phrase.words.length;
+
+  const segments: PhraseSegment[] = [];
+  for (let i = 0; i < wordCount; i++) {
+    const start = phrase.words[i].startMs;
+    const end = i < wordCount - 1 ? phrase.words[i + 1].startMs : phrase.endMs;
+    if (end <= start) continue;
+
+    let tokenIndex = 0;
+    const renderedLines = tokensPerLine.map((tokens) =>
+      tokens
+        .map((token) => {
+          const colour = tokenIndex === i ? highlight : primary;
+          tokenIndex += 1;
+          return `{\\c${colour}}${escapeAssText(token)}`;
+        })
+        .join(" "),
+    );
+    segments.push({ startMs: start, endMs: end, body: renderedLines.join("\\N") });
+  }
+
+  if (segments.length === 0) {
+    segments.push({ startMs: phrase.startMs, endMs: phrase.endMs, body: lines.map(escapeAssText).join("\\N") });
+  }
+  return segments;
+}
+
+/** Splits a phrase into the Dialogue-event timing/body pairs it should render as. */
+export function buildPhraseSegments(phrase: CaptionPhrase, style: CaptionStyleSpec, lines: string[]): PhraseSegment[] {
+  if (style.highlight === "karaoke_current_word") {
+    return buildCurrentWordSegments(phrase, style, lines);
+  }
+  return [{ startMs: phrase.startMs, endMs: phrase.endMs, body: buildPhraseText(phrase, style, lines) }];
+}
+
 export type AssBuildResult = {
   content: string;
   phrases: Array<{
@@ -288,14 +344,55 @@ export type AssBuildResult = {
 };
 
 /**
+ * Every named `CaptionStyleSpec.font` today points at an Arabic-script face
+ * (Cairo, Noto Kufi Arabic, ...) - there is no separate style per language.
+ * A caption batch is effectively single-language in practice (one video, one
+ * narration language), so a whole-batch check is enough: if none of the
+ * words contain an Arabic-range character, use the bundled Latin face
+ * (Inter) instead of the style's own Arabic one rather than asking libass to
+ * fall back through an Arabic-named family for English glyphs.
+ */
+export function captionFontForWords(style: CaptionStyleSpec, words: CaptionWord[]): CaptionFontSpec {
+  const hasArabic = words.some((word) => ARABIC_RANGE.test(word.text));
+  return hasArabic ? captionFontFor(style) : CAPTION_FONTS.inter;
+}
+
+function containsArabic(words: CaptionWord[]): boolean {
+  return words.some((word) => ARABIC_RANGE.test(word.text));
+}
+
+/**
+ * Arabic Auto Professional captions must stay as uninterrupted logical
+ * phrases. Real libass pixel inspection showed the per-word inline colour
+ * override path can surface missing-glyph boxes inside Arabic words, while the
+ * same text/timing renders cleanly when the phrase is emitted as one plain run.
+ * Keep the current-word policy for non-Arabic Bold Social captions.
+ */
+export function captionStyleForWords(style: CaptionStyleSpec, words: CaptionWord[]): CaptionStyleSpec {
+  if (
+    containsArabic(words) &&
+    (style.id === "social_ad" || style.id === "bold_social") &&
+    style.highlight === "karaoke_current_word"
+  ) {
+    return {
+      ...style,
+      highlight: "none",
+      animation: style.animation === "pop" ? "fade" : style.animation,
+    };
+  }
+  return style;
+}
+
+/**
  * Renders caption words into a complete ASS script.
  *
  * `PlayResX/PlayResY` are set to the real frame size so every measurement here
  * is in output pixels and libass does not rescale our margins.
  */
 export function buildArabicAss(words: CaptionWord[], options: AssRenderOptions): AssBuildResult {
-  const { style, frame } = options;
-  const font = captionFontFor(style);
+  const { frame } = options;
+  const style = captionStyleForWords(options.style, words);
+  const font = captionFontForWords(style, words);
   const phrases = chunkIntoPhrases(words);
 
   const platformSafe = options.platformSafeBottomRatio ?? 0;
@@ -359,11 +456,20 @@ export function buildArabicAss(words: CaptionWord[], options: AssRenderOptions):
       ].join(","),
     );
 
-    const fadeTag = style.animation === "none" ? "" : `{\\fad(${style.fadeInMs},${style.fadeOutMs})}`;
-    const body = buildPhraseText(phrase, style, lines);
-    dialogue.push(
-      `Dialogue: 0,${formatAssTime(phrase.startMs)},${formatAssTime(phrase.endMs)},${styleName},,0,0,0,,${fadeTag}${body}`,
-    );
+    const segments = buildPhraseSegments(phrase, style, lines);
+    segments.forEach((segment, segmentIndex) => {
+      const isFirst = segmentIndex === 0;
+      const isLast = segmentIndex === segments.length - 1;
+      let fadeTag = "";
+      if (style.animation !== "none") {
+        if (segments.length === 1) fadeTag = `{\\fad(${style.fadeInMs},${style.fadeOutMs})}`;
+        else if (isFirst) fadeTag = `{\\fad(${style.fadeInMs},0)}`;
+        else if (isLast) fadeTag = `{\\fad(0,${style.fadeOutMs})}`;
+      }
+      dialogue.push(
+        `Dialogue: 0,${formatAssTime(segment.startMs)},${formatAssTime(segment.endMs)},${styleName},,0,0,0,,${fadeTag}${segment.body}`,
+      );
+    });
 
     rendered.push({
       text: phrase.text,

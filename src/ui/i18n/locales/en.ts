@@ -11,7 +11,7 @@ import type { TranslationCatalog } from "../types";
  */
 export const en: TranslationCatalog = {
   // ---------------------------------------------------------------- common
-  "common.appName": "ABUD Shorts",
+  "common.appName": "Short Studio",
   "common.appTagline": "Video Production Engine",
   "common.refresh": "Refresh",
   "common.refreshing": "Refreshing…",
@@ -55,7 +55,7 @@ export const en: TranslationCatalog = {
   "common.openNavigation": "Open navigation menu",
   "common.mainNavigation": "Main navigation",
   "common.pageNotFound": "Page not found",
-  "common.pageNotFoundBody": "That address does not match anything in ABUD Shorts.",
+  "common.pageNotFoundBody": "That address does not match anything in Short Studio.",
   "common.nothingAtPath": "Nothing lives at {path}",
   "common.nothingAtPathBody":
     "The link may be out of date. Use the menu to go to your videos, productions or settings.",
@@ -140,9 +140,9 @@ export const en: TranslationCatalog = {
   "dashboard.alerts.serviceUnavailable": "{service} is unavailable",
   "dashboard.alerts.serviceUnavailableAction": "Open System Health",
   "dashboard.alerts.serviceAttention": "{service} needs attention",
-  "dashboard.alerts.elevenLabsMissing": "ElevenLabs is not configured",
+  "dashboard.alerts.elevenLabsMissing": "Arabic voice needs setup",
   "dashboard.alerts.elevenLabsMissingBody":
-    "Arabic narration requires ElevenLabs. English production is unaffected.",
+    "Arabic narration needs Local Voice setup (VoiceTut or KemeTone) or an optional ElevenLabs connection. English production is unaffected.",
   "dashboard.alerts.configure": "Configure",
   "dashboard.alerts.lowStorage": "Storage is running low",
   "dashboard.alerts.lowStorageBody": "{used} of {total} used.",
@@ -452,7 +452,7 @@ export const en: TranslationCatalog = {
   "publishing.connect.choose": "Choose where you want your finished videos to go.",
   "publishing.connect.oauthIntro":
     "{blurb} You will be taken to {destination} to approve access, then brought straight back here.",
-  "publishing.connect.noPassword": "ABUD Shorts never sees your password.",
+  "publishing.connect.noPassword": "Short Studio never sees your password.",
   "publishing.connect.oauthSetupFailed": "The OAuth setup details could not be loaded.",
   "publishing.connect.oauthStartFailed": "The connection could not be started.",
   "publishing.connect.oauthConfigMissing":
@@ -479,7 +479,7 @@ export const en: TranslationCatalog = {
   "publishing.connect.dest.uploadPost.label": "Upload-Post",
   "publishing.connect.dest.uploadPost.blurb": "Publish to several platforms through one service.",
   "publishing.connect.field.displayName": "Display name",
-  "publishing.connect.field.displayNameHelp": "Only used to label this connection inside ABUD Shorts.",
+  "publishing.connect.field.displayNameHelp": "Only used to label this connection inside Short Studio.",
   "publishing.connect.field.channelChat": "Channel or chat",
   "publishing.connect.field.channelChatHelp":
     "The channel username, or the numeric chat ID for a private group.",
@@ -495,7 +495,7 @@ export const en: TranslationCatalog = {
   "integrations.title": "Integrations",
   "integrations.eyebrow": "Configure",
   "integrations.description":
-    "Connect the services ABUD Shorts uses. Anything marked Optional can be skipped — the engine works without it.",
+    "Connect the services Short Studio uses. Anything marked Optional can be skipped — the engine works without it.",
   "integrations.storageUnavailable":
     "Secure storage is unavailable, so integrations cannot be saved right now. Contact your installer.",
 
@@ -802,9 +802,7 @@ export const en: TranslationCatalog = {
   "settings.integrations.pexels": "Pexels API",
   "settings.integrations.gemini": "Google Gemini AI",
   "settings.integrations.uploadPost": "Upload-Post API",
-  "settings.integrations.telegram": "Telegram bot token",
   "settings.integrations.key": "Key: {value}",
-  "settings.integrations.token": "Token: {value}",
   "settings.integrations.notConfigured": "Not configured",
   "settings.integrations.notConfiguredLocalAi": "Not configured (local AI active)",
   "settings.integrations.localAiFallback": "Local AI fallback",
@@ -813,7 +811,6 @@ export const en: TranslationCatalog = {
   "settings.publishing.description": "Default publication mode, privacy and scheduling time zone.",
   "settings.field.publishingMode": "Default publishing mode",
   "settings.field.publishingModeDraft": "Draft (review before publishing)",
-  "settings.field.publishingModeDirect": "Publish automatically",
   "settings.field.publishingModeScheduled": "Schedule by default",
   "settings.field.youtubePrivacy": "Default YouTube privacy",
   "settings.field.youtubeUnlisted": "Unlisted (recommended)",
@@ -822,7 +819,9 @@ export const en: TranslationCatalog = {
   "settings.field.timezone": "Default time zone",
 
   "settings.account.title": "Account & security",
-  "settings.account.description": "Your owner sign-in for this installation.",
+  "settings.account.description": "Access controls for this installation.",
+  "settings.account.localAccessMode": "Access Mode: Local Single-User",
+  "settings.account.localRemoteAccess": "Remote Access: Disabled",
   "settings.account.currentUsername": "Current username: {username}",
   "settings.account.changeUsername": "Change username",
   "settings.account.newUsername": "New username",
@@ -841,7 +840,7 @@ export const en: TranslationCatalog = {
 
   "settings.security.title": "Access tokens",
   "settings.security.description":
-    "Tokens for connecting other tools to ABUD Shorts. Not needed for normal use.",
+    "Tokens for connecting other tools to Short Studio. Not needed for normal use.",
   "settings.token.newOnce": "New token, shown once:",
   "settings.token.name": "Token name",
   "settings.token.create": "Create",
@@ -956,10 +955,10 @@ export const en: TranslationCatalog = {
   "health.queueDepth": "Queue depth",
   "health.activeRenders": "Active renders",
   "health.arabicReady": "Arabic production is ready",
-  "health.arabicNotReady": "Arabic production needs ElevenLabs",
+  "health.arabicNotReady": "Arabic production needs voice setup",
   "health.arabicNotReadyBody":
-    "Arabic narration requires ElevenLabs. English and local production remain available.",
-  "health.configureElevenLabs": "Configure ElevenLabs",
+    "Arabic narration needs Local Voice setup (VoiceTut or KemeTone) or an optional ElevenLabs connection. English and local production remain available.",
+  "health.configureElevenLabs": "Set up Arabic voice",
 
   // Health check detail lines. The server sends a key alongside its English
   // wording so the customer reads their own language while a support bundle
@@ -972,10 +971,11 @@ export const en: TranslationCatalog = {
   "health.msg.videoEngineUnavailable": "The rendering service did not respond.",
   "health.msg.automationHealthy": "The automation service is responding.",
   "health.msg.automationDegraded": "The automation service answered with an error.",
-  "health.msg.voiceReady":
-    "Local English narration is available, and ElevenLabs is configured for Arabic.",
+  "health.msg.voiceReady": "Local English and Local Voice Arabic narration are ready.",
+  "health.msg.voiceReadyElevenLabsOnly":
+    "Local English narration is available, and ElevenLabs is configured as an optional premium Arabic voice.",
   "health.msg.voiceEnglishOnly":
-    "Local English narration is available. Arabic narration requires ElevenLabs, which is not configured.",
+    "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone), or an optional ElevenLabs connection.",
   "health.msg.aiConfigured": "A script generation provider is configured.",
   "health.msg.aiNotConfigured": "Optional. Add a provider to generate scripts automatically.",
   "health.msg.mediaConfigured": "A stock footage provider is configured.",
@@ -983,7 +983,7 @@ export const en: TranslationCatalog = {
     "Optional. Add a stock footage provider to source visuals automatically.",
   "health.msg.publishingConnected": "Publishing channels are connected.",
   "health.msg.publishingNotConfigured":
-    "Optional. Connect a channel to publish directly from ABUD Shorts.",
+    "Optional. Connect Upload-Post to publish from Short Studio after owner approval.",
   "health.msg.storageWritable": "Video storage is writable.",
   "health.msg.quickCheckTimedOut": "Did not respond within the quick check.",
   "health.msg.optionalUnreachable": "Optional. Not reachable within the quick check.",
@@ -1014,7 +1014,7 @@ export const en: TranslationCatalog = {
   "updates.availableHeading": "Version {version} is available",
   "updates.publishedOn": "published {date}",
   "updates.installWindows":
-    "To install it, open the Start Menu and choose \"ABUD Shorts → ABUD Shorts - Update\".",
+    "To install it, open the Start Menu and choose \"Short Studio → Short Studio Update\".",
   "updates.installServer": "To install it, sign in to this server and run:",
   "updates.safetyNote":
     "A backup is created first. If anything is wrong after the update, the previous version is restored automatically.",
@@ -1066,16 +1066,16 @@ export const en: TranslationCatalog = {
 
   // ----------------------------------------------------------------- setup
   "setup.title": "Setup",
-  "setup.wizardTitle": "ABUD Shorts Engine",
+  "setup.wizardTitle": "Short Studio",
   "setup.wizardSubtitle": "First-run setup",
   "setup.versionLabel": "Version {version}",
   "setup.stepCounter": "Step {current} of {total}",
   "setup.welcome": "Welcome",
-  "setup.welcomeHeading": "Welcome to ABUD Shorts Engine",
+  "setup.welcomeHeading": "Welcome to Short Studio",
   "setup.welcomeBody":
     "This wizard prepares the video engine, your administrator sign-in, default production settings and optional publishing channels. Everything renders on this machine; cloud providers stay optional.",
   "setup.welcomeBodyVoice":
-    "English narration runs locally with Kokoro. Arabic narration uses ElevenLabs, which you can connect in this wizard or later under Integrations.",
+    "English narration runs locally with Kokoro. Egyptian Arabic narration also runs locally by default, with VoiceTut (or the lighter KemeTone on modest hardware); ElevenLabs is an optional premium alternative you can connect in this wizard or later under Integrations.",
   "setup.localFirst": "Local-first video production",
   "setup.systemCheck": "System check",
   "setup.systemCheckHeading": "System check",
@@ -1094,6 +1094,11 @@ export const en: TranslationCatalog = {
   "setup.stockFootage": "Stock footage",
   "setup.voiceAndAi": "Voice & AI",
   "setup.publishing": "Publishing",
+  "setup.publishingHeading": "Social Publishing & Distribution",
+  "setup.publishingBody":
+    "Connect Upload-Post when you are ready for approved scheduling and distribution.",
+  "setup.publishingUploadPostOnly":
+    "Upload-Post is the supported customer publishing gateway. Direct YouTube, Meta, TikTok and Telegram adapters are legacy internal routes.",
   "setup.videoDefaults": "Video defaults",
   "setup.review": "Review",
   "setup.ready": "Ready",
@@ -1102,7 +1107,7 @@ export const en: TranslationCatalog = {
   "setup.defaultNarrationLanguageHint":
     "The language new videos are narrated in. Separate from the interface language you are reading now.",
   "setup.arabicRequiresElevenLabs":
-    "Arabic narration requires ElevenLabs. Add the key in this wizard, or connect it later under Integrations.",
+    "Egyptian Arabic narration runs locally by default (VoiceTut, or KemeTone on lighter hardware). ElevenLabs is an optional premium alternative — add the key in this wizard, or connect it later under Integrations.",
 
   // ---------------------------------------------------------------- errors
   "errors.generic": "Something went wrong.",

@@ -91,7 +91,7 @@ test("writeBrandKit + readBrandKit roundtrip", () => {
 test("resetBrandKit restores defaults", () => {
   writeBrandKit({ ...DEFAULT_BRAND_KIT, brandName: "Changed" });
   const result = resetBrandKit();
-  expect(result.brandName).toBe("Abud");
+  expect(result.brandName).toBe("Short Studio");
   expect(store["abud-brand-kit"]).toBeDefined();
 });
 

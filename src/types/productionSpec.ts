@@ -161,6 +161,18 @@ export const productionSceneSpecSchema = z.object({
   treatmentHint: z.string().trim().max(40).optional(),
   transition: transitionEnum.default("cut"),
   notes: z.string().trim().max(300).optional(),
+  /**
+   * Additional, real, grounded supporting sentences a content generator can
+   * offer to append to `narration` if real TTS synthesis comes out
+   * significantly shorter than this scene's target duration - never invented
+   * filler, genuine supporting content the generator already had ready but
+   * did not need for the initial pre-TTS size estimate. Consumed by
+   * ShortCreator's bounded post-TTS duration-correction loop (see
+   * scriptDurationController.ts's decideCorrectionAction), at most one
+   * sentence per retry, up to a small bounded retry count. Absent or empty
+   * means no further expansion is possible for this scene.
+   */
+  narrationExpansionUnits: z.array(z.string().trim().min(1)).optional(),
 });
 export type ProductionSceneSpec = z.infer<typeof productionSceneSpecSchema>;
 

@@ -41,6 +41,7 @@ export type FastHealthItemLike = {
   status: string;
   optional: boolean;
   message?: string;
+  messageKey?: string;
 };
 
 /** Statuses that mean a production is still moving through the pipeline. */
@@ -439,10 +440,13 @@ export function buildDashboardAlerts(input: {
   }
 
   const voice = (input.health?.items || []).find((item) => item.id === "voice");
-  // The voice item stays "healthy" without ElevenLabs because English
-  // production is unaffected; the message is what carries the Arabic gap, and
-  // this alert is how the customer is told about it without being alarmed.
-  if (voice && /ElevenLabs/i.test(voice.message || "") && /not configured/i.test(voice.message || "")) {
+  // The voice item stays "healthy" whether or not a paid provider is
+  // configured, because English production is unaffected; this alert is how
+  // the customer is told about the Arabic gap without being alarmed. Keyed on
+  // messageKey (set deterministically by fastHealth.ts) rather than matching
+  // words in the message text, which breaks silently whenever that copy is
+  // edited - the Arabic-requires-ElevenLabs rewrite it that way once already.
+  if (voice && voice.messageKey === "health.msg.voiceEnglishOnly") {
     alerts.push({
       id: "elevenlabs-missing",
       severity: "info",

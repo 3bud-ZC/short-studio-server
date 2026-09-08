@@ -47,6 +47,16 @@ export class PublishingScheduler {
   public async tick(): Promise<number> {
     if (!this.db.enabled) return 0;
 
+    // Publications the provider is still processing are settled from provider
+    // truth on the same heartbeat that runs due schedules. Without this nothing
+    // ever called getStatus(), so an asynchronous provider completion could only
+    // be recorded by editing the database by hand.
+    try {
+      await this.publishingService.reconcileProcessingPublications();
+    } catch (error) {
+      logger.error({ error }, "Remote state reconciliation sweep failed");
+    }
+
     try {
       // Find due pending schedules
       const dueRows = await this.db.query<{

@@ -16,6 +16,7 @@ import { readMetadata } from "../videoMetadata";
 import { V2Database } from "./db";
 import { getV2Health, validatePexelsProvider } from "./health";
 import { getFastHealth, type ProviderConfigurationSnapshot } from "./system/fastHealth";
+import { resolveUploadPostStatus } from "./integrations/credentialResolver";
 import { JobService } from "./jobs";
 import { N8nOrchestrator } from "./orchestrator";
 import {
@@ -36,6 +37,7 @@ import {
   voiceRevisionSchema,
 } from "./types";
 import { ContentAIRegistry } from "./content-ai/registry";
+import { validateScriptQuality } from "./content-ai/scriptQuality";
 import { estimateProductionCost } from "./cost-estimator";
 import {
   productionSpecSchema,
@@ -76,6 +78,7 @@ import {
 import { resolveTrustedProxy } from "./system/trustedProxy";
 import { AuthService } from "./auth/authService";
 import { ApiTokenService, type ApiTokenScope } from "./auth/apiTokenService";
+import { isLocalSingleUserAccess, localSingleUserOwner } from "./auth/localSingleUser";
 import {
   ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
   ARABIC_LIGHTWEIGHT_PROVIDER,
@@ -1203,6 +1206,30 @@ function contentConfidenceBlocker(spec: {
   };
 }
 
+/**
+ * Fails a job closed BEFORE any render compute is spent when the generated
+ * script either (a) never materially engages the customer's actual topic -
+ * generic filler such as "Here's something worth seeing... Follow for more"
+ * can still report contentProvenance: DETERMINISTIC/high confidence, so the
+ * confidence gate above does not catch it - or (b) is grammatically
+ * unfinished (a dangling conjunction/preposition, or no terminal
+ * punctuation at all). See scriptQuality.ts for the deterministic,
+ * explainable checks behind this.
+ */
+function scriptQualityBlocker(
+  prompt: string,
+  spec: { scenes?: Array<{ narration?: unknown }>; cta?: { text?: unknown }; language?: string },
+): { error: string; message: string; action: { label: string; href: string } } | null {
+  const language = spec.language === "ar" ? "ar" : "en";
+  const result = validateScriptQuality(prompt, spec.scenes || [], spec.cta, language);
+  if (result.pass) return null;
+  return {
+    error: "script_quality_insufficient",
+    message: result.reason || "Short Studio could not create a sufficiently specific script for this topic. Please add more detail or enable an advanced content provider.",
+    action: { label: "Connect a Content AI Provider", href: "/providers" },
+  };
+}
+
 function hasCommandHint(envKey: string): boolean {
   return Boolean(process.env[envKey]?.trim());
 }
@@ -1571,10 +1598,16 @@ function isPublicHealthOrBootstrapPath(req: ExpressRequest): boolean {
   );
 }
 
-function requireV2Access(authService: AuthService, apiTokenService: ApiTokenService) {
+function requireV2Access(config: Config, authService: AuthService, apiTokenService: ApiTokenService) {
   return async (req: ExpressRequest, res: ExpressResponse, next: express.NextFunction) => {
     try {
       if (isPublicHealthOrBootstrapPath(req)) {
+        next();
+        return;
+      }
+
+      if (isLocalSingleUserAccess(config)) {
+        (req as any).v2Auth = { type: "local_owner", user: localSingleUserOwner() };
         next();
         return;
       }
@@ -1653,6 +1686,7 @@ export function createV2PublicRouter(
       providerVault.readPlaintext(providerId, credentialType),
     );
     void providerSecrets.refreshElevenLabsApiKey();
+    void providerSecrets.refresh("upload_post", "api_key");
   }
 
   async function configuredProviderIds(): Promise<Set<string>> {
@@ -1667,6 +1701,11 @@ export function createV2PublicRouter(
     if (process.env.COMFYUI_BASE_URL) ids.add("comfyui");
     if (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY) ids.add("gemini");
     if (new ElevenLabsVoiceProvider().isConfigured()) ids.add("elevenlabs");
+    if (new VoiceRegistry({} as any).isArabicProductionConfigured()) {
+      ids.add("local_voice");
+      ids.add("voicetut");
+    }
+    if (process.env.UPLOAD_POST_API_KEY) ids.add("upload_post");
     if (providerVault.isAvailable()) {
       const vaultCredentials = await providerVault.list().catch(() => []);
       vaultCredentials.forEach((credential) => {
@@ -1850,14 +1889,30 @@ export function createV2PublicRouter(
     }
 
     if (isArabicLanguage(spec?.language || controls.language, (spec?.dialect || controls.dialect) as any)) {
-      add(
-        "elevenlabs",
-        "ElevenLabs Arabic voice",
-        providerIds.has("elevenlabs"),
-        true,
-        ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
-        { label: "Configure ElevenLabs", href: "/providers" },
-      );
+      const wantsElevenLabs =
+        controls.voiceProvider === ARABIC_PREMIUM_CLOUD_PROVIDER ||
+        spec?.voiceProvider === ARABIC_PREMIUM_CLOUD_PROVIDER;
+      if (wantsElevenLabs) {
+        add(
+          "elevenlabs",
+          "ElevenLabs Arabic voice",
+          providerIds.has("elevenlabs"),
+          true,
+          ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
+          { label: "Configure ElevenLabs", href: "/providers" },
+        );
+      } else {
+        const localVoiceConfigured = new VoiceRegistry({} as any).isArabicProductionConfigured();
+        const hasArabicVoice = localVoiceConfigured || providerIds.has("elevenlabs");
+        add(
+          "local_voice",
+          "Local Egyptian Arabic voice",
+          hasArabicVoice,
+          true,
+          ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE,
+          { label: "Open Local Voice Setup", href: "/providers" },
+        );
+      }
     } else {
       add("kokoro", "Built-in English voice", true, false);
     }
@@ -1941,7 +1996,7 @@ export function createV2PublicRouter(
   }
 
   router.use(express.json({ limit: "2mb" }));
-  router.use(requireV2Access(authService, apiTokenService));
+  router.use(requireV2Access(config, authService, apiTokenService));
 
   // Mount Publishing & Distribution Routes
   router.use("/publishing", createPublishingRouter(config, publishingService));
@@ -2401,6 +2456,11 @@ export function createV2PublicRouter(
       const confidenceBlock = contentConfidenceBlocker(canonicalSpec);
       if (confidenceBlock) {
         res.status(409).json(confidenceBlock);
+        return;
+      }
+      const scriptQualityBlock = scriptQualityBlocker(parsed.data.prompt, canonicalSpec as any);
+      if (scriptQualityBlock) {
+        res.status(409).json(scriptQualityBlock);
         return;
       }
       const readiness = await checkCreateReadiness(parsed.data, canonicalSpec);
@@ -2866,6 +2926,11 @@ export function createV2PublicRouter(
       const vaultByProvider = new Map(vaultCredentials.map((credential) => [credential.providerId, credential]));
       const snapshot: ProviderConfigurationSnapshot = {
         elevenLabsConfigured: new ElevenLabsVoiceProvider().isConfigured(),
+        // Local Voice (VoiceTut, or KemeTone as the lightweight fallback) is
+        // the default Arabic route - the same signal job creation uses (see
+        // the local_voice_setup_required check above) so this health check
+        // never claims Arabic is broken while local voice is actually ready.
+        localVoiceConfigured: new VoiceRegistry({} as any).isArabicProductionConfigured(),
         pexelsConfigured: Boolean(
           vaultByProvider.has("pexels") ||
           (config.pexelsApiKey &&
@@ -3446,6 +3511,7 @@ export function createV2PublicRouter(
       ? await providerVault.list().catch(() => [])
       : [];
     const vaultByProvider = new Map(vaultCredentials.map((credential) => [credential.providerId, credential]));
+    const uploadPostStatus = await resolveUploadPostStatus();
     const localModelManager = new LocalModelManager();
     const voicetutRecord = localModelManager.read("voicetut");
     const kemetoneRecord = localModelManager.read("kemetone");
@@ -3867,7 +3933,10 @@ export function createV2PublicRouter(
           languages: ["multilingual", "ar", "en"],
           model: ELEVENLABS_DEFAULT_MODEL_ID,
           arabicProduction: true,
-          arabicSupport: elevenLabsConfigured ? "canonical_arabic_production_provider" : "not_configured",
+          // VoiceTut, not ElevenLabs, is the canonical/default Arabic production
+          // provider (see the "voicetut" entry above, isDefault: true) -
+          // ElevenLabs is an explicit, opt-in premium alternative.
+          arabicSupport: elevenLabsConfigured ? "premium_opt_in_arabic_option" : "not_configured",
           // Accent quality is a human judgement; the API does not certify it.
           egyptianSupport: "human_listening_required",
           voicePresets: ELEVENLABS_PRESET_IDS,
@@ -3945,12 +4014,12 @@ export function createV2PublicRouter(
         name: "Upload-Post (Multi-Platform)",
         category: "Publishing",
         tier: "cloud",
-        status: Boolean(process.env.UPLOAD_POST_API_KEY) ? "healthy" : "not_configured",
-        configured: Boolean(process.env.UPLOAD_POST_API_KEY) || vaultByProvider.has("upload_post"),
+        status: uploadPostStatus.configured ? "healthy" : "not_configured",
+        configured: uploadPostStatus.configured,
         isDefault: true,
-        message: Boolean(process.env.UPLOAD_POST_API_KEY)
+        message: uploadPostStatus.configured
           ? "Upload-Post multi-platform distribution connected."
-          : "UPLOAD_POST_API_KEY is not configured.",
+          : "Upload-Post API key is not configured.",
         checkedAt: new Date().toISOString(),
       },
       {
@@ -4279,6 +4348,9 @@ export function createV2PublicRouter(
         message: "Upload-Post not configured",
         checkedAt: new Date().toISOString(),
       });
+      if (providerVault.isAvailable() && val.configured) {
+        await providerVault.markTested("upload_post", val.status).catch(() => undefined);
+      }
       res.status(200).json(val);
       return;
     }
@@ -4347,6 +4419,7 @@ export function createV2PublicRouter(
 
   router.get("/settings", async (req, res) => {
     const settings = await readAppSettings(db);
+    const uploadPostSettingsStatus = await resolveUploadPostStatus();
     res.status(200).json({
       settings: {
         defaultCreationMode: "prompt",
@@ -4380,8 +4453,8 @@ export function createV2PublicRouter(
         redactedKey: redactConfiguredKey(process.env.ELEVENLABS_API_KEY),
       },
       uploadPost: {
-        configured: Boolean(process.env.UPLOAD_POST_API_KEY),
-        redactedKey: redactConfiguredKey(process.env.UPLOAD_POST_API_KEY),
+        configured: uploadPostSettingsStatus.configured,
+        redactedKey: uploadPostSettingsStatus.redactedKey,
       },
       telegram: {
         configured: Boolean(process.env.TELEGRAM_BOT_TOKEN),
@@ -4708,7 +4781,12 @@ export function createV2PublicRouter(
     // secret, no path, no provider state.
     const info = getProductInfo();
     const resolved = await resolveInstallationPublicUrl(db, config);
-    res.status(200).json({ ...info, canonicalUrl: resolved.url });
+    res.status(200).json({
+      ...info,
+      canonicalUrl: resolved.url,
+      accessMode: config.accessMode,
+      remoteAccess: config.accessMode === "local" ? "disabled" : "secure_server",
+    });
   });
 
   /**
@@ -4841,7 +4919,11 @@ export function createV2PublicRouter(
   router.get("/setup/status", async (req, res) => {
     try {
       const status = await authService.getSetupState();
-      res.status(200).json(status);
+      res.status(200).json({
+        ...status,
+        accessMode: config.accessMode,
+        ownerCredentialRequired: config.accessMode !== "local",
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to get setup status", message: String(error) });
     }
@@ -4900,6 +4982,11 @@ export function createV2PublicRouter(
   });
 
   router.get("/auth/me", async (req, res) => {
+    const auth = (req as any).v2Auth;
+    if (auth?.user) {
+      res.status(200).json({ user: auth.user });
+      return;
+    }
     const token = bearerToken(req);
     if (!token) {
       res.status(401).json({ error: "Unauthorized." });
@@ -5130,9 +5217,25 @@ export function createV2PublicRouter(
     const liveVerified = configured && req.query.verify === "true"
       ? (await provider.validate().catch(() => undefined))?.healthy === true
       : false;
-    res.status(200).json(
-      capabilityManager.checkArabicProductionReadiness({ configured, liveVerified }),
-    );
+    // checkArabicProductionReadiness() is deliberately ElevenLabs-specific
+    // (see its accepted contract and arabicVoicePolicy.test.ts) - it answers
+    // "is the ElevenLabs route ready", not "is Arabic ready overall". Local
+    // Voice (VoiceTut, or KemeTone as the lightweight fallback) is the actual
+    // default Arabic route, so the response this endpoint returns is widened
+    // here with that signal rather than by changing the narrower function.
+    const elevenLabsReadiness = capabilityManager.checkArabicProductionReadiness({ configured, liveVerified });
+    const localVoiceConfigured = new VoiceRegistry({} as any).isArabicProductionConfigured();
+    res.status(200).json({
+      ...elevenLabsReadiness,
+      localVoiceConfigured,
+      ready: elevenLabsReadiness.ready || localVoiceConfigured,
+      statusText: localVoiceConfigured
+        ? "READY — LOCAL VOICE CONFIGURED"
+        : elevenLabsReadiness.statusText,
+      message: localVoiceConfigured
+        ? "Local Voice (VoiceTut or KemeTone) is ready for Arabic narration."
+        : elevenLabsReadiness.message,
+    });
   });
 
   router.get("/system/readiness", (req, res) => {

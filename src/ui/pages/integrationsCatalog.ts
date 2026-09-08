@@ -161,35 +161,6 @@ export const INTEGRATION_CATALOG: Record<string, IntegrationEntry> = {
   },
 
   // ------------------------------------------------------------- Publishing
-  youtube: {
-    id: "youtube",
-    shortName: "YouTube",
-    category: "Publishing",
-    connectionType: "oauth",
-    optional: true,
-  },
-  meta: {
-    id: "meta",
-    shortName: "Meta",
-    category: "Publishing",
-    connectionType: "oauth",
-    optional: true,
-  },
-  tiktok: {
-    id: "tiktok",
-    shortName: "TikTok",
-    category: "Publishing",
-    connectionType: "oauth",
-    optional: true,
-  },
-  telegram: {
-    id: "telegram",
-    shortName: "Telegram",
-    category: "Publishing",
-    connectionType: "key",
-    credentialType: "bot_token",
-    optional: true,
-  },
   upload_post: {
     id: "upload_post",
     shortName: "Upload-Post",

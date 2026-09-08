@@ -1,5 +1,5 @@
 # ==============================================================================
-# ABUD Shorts Engine V2 - Safe Uninstaller (Windows)
+# Short Studio Server - Safe Uninstaller (Windows)
 # ==============================================================================
 # The default removes the running software and leaves every byte the customer
 # produced exactly where it is. Destroying data requires an explicit switch and
@@ -9,7 +9,7 @@
 [CmdletBinding()]
 param(
     [string]$InstallRoot = "",
-    [string]$ComposeProject = "abud-shorts",
+    [string]$ComposeProject = "",
     [switch]$RemoveData
 )
 
@@ -24,11 +24,64 @@ function Write-TextFile {
     [System.IO.File]::WriteAllText($Path, $Content, (New-Object System.Text.UTF8Encoding($false)))
 }
 
-if (-not $InstallRoot) { $InstallRoot = Join-Path $env:ProgramData "AbudShorts" }
+$LegacyAbudRoot = Join-Path $env:ProgramData "AbudShorts"
+$FreshShortStudioRoot = Join-Path $env:ProgramData "ShortStudio"
+if (-not $InstallRoot) {
+    if (Test-Path (Join-Path $LegacyAbudRoot "shared\config\.env")) {
+        $InstallRoot = $LegacyAbudRoot
+    } else {
+        $InstallRoot = $FreshShortStudioRoot
+    }
+}
+$ExistingEnvFile = Join-Path $InstallRoot "shared\config\.env"
+$IsLegacyAbudInstall = (($InstallRoot -eq $LegacyAbudRoot) -and (Test-Path $ExistingEnvFile))
+if (-not $IsLegacyAbudInstall -and $InstallRoot -and (Test-Path $ExistingEnvFile)) {
+    $legacyEnvLine = Get-Content $ExistingEnvFile | Where-Object { $_ -match "^ABUD_CONTAINER_PREFIX=" } | Select-Object -Last 1
+    $IsLegacyAbudInstall = [bool]$legacyEnvLine
+}
 $AbudShared      = Join-Path $InstallRoot "shared"
 $AbudDataDir     = Join-Path $AbudShared "data"
 $AbudEnvFile     = Join-Path $AbudShared "config\.env"
 $AbudCurrentFile = Join-Path $InstallRoot "current.txt"
+
+if (-not $ComposeProject) {
+    $existingPrefixLine = if (Test-Path $AbudEnvFile) {
+        Get-Content $AbudEnvFile | Where-Object { $_ -match "^(SHORT_STUDIO_CONTAINER_PREFIX|ABUD_CONTAINER_PREFIX)=" } | Select-Object -Last 1
+    } else { $null }
+    if ($existingPrefixLine) {
+        $ComposeProject = $existingPrefixLine.Substring($existingPrefixLine.IndexOf("=") + 1)
+    } else {
+        $ComposeProject = if ($IsLegacyAbudInstall) { "abud-shorts" } else { "short-studio" }
+    }
+}
+
+function Get-EnvValue {
+    param([string]$Key, [string]$Default = "")
+    if (-not (Test-Path $AbudEnvFile)) { return $Default }
+    $line = Select-String -Path $AbudEnvFile -Pattern "^$([regex]::Escape($Key))=" | Select-Object -Last 1
+    if ($null -eq $line) { return $Default }
+    return $line.Line.Substring($Key.Length + 1)
+}
+
+# The real, already-existing volume/network names on a legacy installation are
+# project-prefixed - see the identical note in install.ps1. Fresh Short Studio
+# installs write explicit names too, derived from their compose project, so
+# isolated rehearsals do not share the default short-studio volumes.
+$PostgresVolumeName = if ($IsLegacyAbudInstall) {
+    Get-EnvValue "ABUD_POSTGRES_VOLUME" "${ComposeProject}_abud-shorts-postgres-data"
+} else {
+    Get-EnvValue "SHORT_STUDIO_POSTGRES_VOLUME" "$ComposeProject-postgres-data"
+}
+$N8nVolumeName = if ($IsLegacyAbudInstall) {
+    Get-EnvValue "ABUD_N8N_VOLUME" "${ComposeProject}_abud-shorts-n8n-data"
+} else {
+    Get-EnvValue "SHORT_STUDIO_N8N_VOLUME" "$ComposeProject-n8n-data"
+}
+$NetworkName = if ($IsLegacyAbudInstall) {
+    Get-EnvValue "ABUD_NETWORK" "${ComposeProject}_abud-shorts-v2"
+} else {
+    Get-EnvValue "SHORT_STUDIO_NETWORK" "$ComposeProject-v2"
+}
 
 # Local Voice is host-native, so it is never removed by `docker compose down`
 # below - it has to be stopped explicitly, always, or an uninstall (even the
@@ -46,8 +99,19 @@ if (Test-Path $localVoiceLibPath) {
     } catch { }
 }
 
+function Invoke-Docker {
+    param([Parameter(Mandatory = $true, Position = 0)][string[]]$DockerArgs)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & docker @DockerArgs 2>&1 | ForEach-Object { "$_" }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "  ABUD Shorts Engine - Uninstaller" -ForegroundColor Cyan
+Write-Host "  Short Studio Server - Uninstaller" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
 $composeFile = ""
@@ -63,15 +127,28 @@ if (-not (Test-Path $composeFile)) {
 
 function Invoke-ComposeDown([string[]]$ExtraArgs) {
     if (-not (Test-Path $composeFile)) {
-        & docker compose --project-name $ComposeProject down @ExtraArgs 2>$null | Out-Null
+        $composeArgs = @("compose", "--project-name", $ComposeProject, "down") + $ExtraArgs
+        Invoke-Docker $composeArgs | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Docker Compose could not stop this installation." }
         return
     }
+    $env:SHORT_STUDIO_DATA_DIR = $AbudDataDir
     $env:ABUD_DATA_DIR = $AbudDataDir
+    $env:SHORT_STUDIO_RELEASE_DIR = (Split-Path $composeFile)
     $env:ABUD_RELEASE_DIR = (Split-Path $composeFile)
+    $env:SHORT_STUDIO_POSTGRES_VOLUME = $PostgresVolumeName
+    $env:SHORT_STUDIO_N8N_VOLUME = $N8nVolumeName
+    $env:SHORT_STUDIO_NETWORK = $NetworkName
+    if ($IsLegacyAbudInstall) {
+        $env:ABUD_POSTGRES_VOLUME = $PostgresVolumeName
+        $env:ABUD_N8N_VOLUME = $N8nVolumeName
+        $env:ABUD_NETWORK = $NetworkName
+    }
     $composeArgs = @("compose", "--project-name", $ComposeProject)
     if (Test-Path $AbudEnvFile) { $composeArgs += @("--env-file", $AbudEnvFile) }
     $composeArgs += @("--file", $composeFile, "down") + $ExtraArgs
-    & docker @composeArgs 2>$null | Out-Null
+    Invoke-Docker $composeArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Docker Compose could not stop this installation." }
 }
 
 Write-Host "[1/2] Stopping and removing the application containers..." -ForegroundColor Yellow
@@ -83,7 +160,8 @@ if (-not $RemoveData) {
     Write-Host ""
     Write-Host "  PRESERVED:" -ForegroundColor Green
     Write-Host "    Videos, uploads and media   $AbudDataDir"
-    Write-Host "    Database                    Docker volume ${ComposeProject}_abud-shorts-postgres-data"
+    Write-Host "    Database                    Docker volume $PostgresVolumeName"
+    Write-Host "    Automation data             Docker volume $N8nVolumeName"
     Write-Host "    Backups                     $(Join-Path $AbudShared 'backups')"
     Write-Host "    Configuration and secrets   $(Join-Path $AbudShared 'config')"
     Write-Host "    Local Voice model + runtime  $(Join-Path $AbudShared 'runtime') , $(Join-Path $AbudDataDir 'models')"
@@ -109,7 +187,9 @@ if ($reply -ne "DELETE") {
 Write-Host "[2/2] Removing all data..." -ForegroundColor Yellow
 Invoke-ComposeDown @("-v")
 if (Test-Path $AbudShared) { Remove-Item $AbudShared -Recurse -Force }
-$startMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\ABUD Shorts"
-if (Test-Path $startMenu) { Remove-Item $startMenu -Recurse -Force -ErrorAction SilentlyContinue }
+foreach ($groupName in @("Short Studio", "ABUD Shorts")) {
+    $startMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$groupName"
+    if (Test-Path $startMenu) { Remove-Item $startMenu -Recurse -Force -ErrorAction SilentlyContinue }
+}
 Write-Host "      All data removed." -ForegroundColor Green
 Write-Host "=================================================================" -ForegroundColor Cyan

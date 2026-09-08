@@ -35,6 +35,11 @@ const HOST_SCRIPTS = [
   "upgrade.ps1",
   "scripts/host/abud-lib.sh",
   "scripts/host/abud-update.sh",
+  // short-studio.* is canonical and carries the real logic; abud-shorts.* is
+  // a thin legacy-alias forwarder kept for installations upgraded from ABUD
+  // Shorts Engine 2.4 - both must be covered by every safety assertion below.
+  "scripts/host/short-studio.sh",
+  "scripts/host/short-studio.ps1",
   "scripts/host/abud-shorts.sh",
   "scripts/host/abud-shorts.ps1",
 ];
@@ -45,6 +50,8 @@ describe("F4 - client package hygiene", () => {
       "install.sh",
       "install.ps1",
       "docker-compose.prod.yml",
+      "scripts/host/short-studio.sh",
+      "scripts/host/short-studio.ps1",
       "scripts/host/abud-shorts.sh",
       "scripts/host/abud-update.sh",
       "scripts/host/abud-shorts.ps1",
@@ -102,6 +109,7 @@ describe("F4 - client package hygiene", () => {
       "CLIENT_QUICK_START.md",
       "docs/UPDATING.md",
       "scripts/host/abud-update.sh",
+      "scripts/host/short-studio.sh",
       "integrations/n8n/abud-shorts-v2-control-plane-workflow.json",
       "LICENSE",
     ];
@@ -147,29 +155,39 @@ describe("F4 - installation and update never destroy customer data", () => {
   });
 
   it("stops only the services whose image changes during an update", () => {
-    for (const script of ["scripts/host/abud-update.sh", "scripts/host/abud-shorts.ps1"]) {
+    // The real update logic lives in short-studio.ps1 (abud-shorts.ps1 is a
+    // thin forwarder to it - see HOST_SCRIPTS above).
+    for (const script of ["scripts/host/abud-update.sh", "scripts/host/short-studio.ps1"]) {
       const source = read(script);
       // PostgreSQL and n8n keep running through an update, so no data volume is
       // ever detached while the version is switched.
       expect(source).toMatch(/abud-shorts-app.*abud-shorts-render-worker/s);
-      expect(source).not.toMatch(/stop\s+abud-shorts-postgres/);
+      expect(source).not.toMatch(/stop\s+(?:short-studio|abud-shorts)-postgres/);
       expect(source).not.toMatch(/stop["'\s,()]+(?:Get-ContainerName\s*)?["']?postgres/);
     }
   });
 
   it("allows isolated client installs to run beside the primary stack", () => {
     const compose = read("docker-compose.prod.yml");
-    expect(compose).toMatch(/container_name:\s*\$\{ABUD_CONTAINER_PREFIX:-abud-shorts\}-app/);
-    expect(compose).toMatch(/container_name:\s*\$\{ABUD_CONTAINER_PREFIX:-abud-shorts\}-postgres/);
+    // Fresh installs get short-studio-*; an install upgraded from ABUD Shorts
+    // Engine 2.4 falls back to its existing ABUD_CONTAINER_PREFIX so it
+    // reattaches to its real running containers instead of new ones.
+    expect(compose).toMatch(/container_name:\s*\$\{SHORT_STUDIO_CONTAINER_PREFIX:-\$\{ABUD_CONTAINER_PREFIX:-short-studio\}\}-app/);
+    expect(compose).toMatch(/container_name:\s*\$\{SHORT_STUDIO_CONTAINER_PREFIX:-\$\{ABUD_CONTAINER_PREFIX:-short-studio\}\}-postgres/);
 
     const shellInstaller = read("install.sh");
-    expect(shellInstaller).toMatch(/ABUD_COMPOSE_PROJECT=.*abud-shorts/);
-    expect(shellInstaller).toMatch(/ABUD_CONTAINER_PREFIX=\$ABUD_COMPOSE_PROJECT/);
+    // The isolated project name is still fully overridable (--compose-project
+    // / ABUD_COMPOSE_PROJECT env), it just now defaults from installation
+    // detection rather than a bare literal - both real strings are present.
+    expect(shellInstaller).toMatch(/ABUD_COMPOSE_PROJECT="abud-shorts"/);
+    expect(shellInstaller).toMatch(/ABUD_COMPOSE_PROJECT="short-studio"/);
+    expect(shellInstaller).toMatch(/ABUD_CONTAINER_PREFIX="?\$ABUD_COMPOSE_PROJECT/);
     expect(shellInstaller).toMatch(/--project-name "\$ABUD_COMPOSE_PROJECT"/);
 
     const windowsInstaller = read("install.ps1");
-    expect(windowsInstaller).toMatch(/\[string\]\$ComposeProject = "abud-shorts"/);
-    expect(windowsInstaller).toMatch(/ABUD_CONTAINER_PREFIX=\$ComposeProject/);
+    expect(windowsInstaller).toMatch(/"abud-shorts"/);
+    expect(windowsInstaller).toMatch(/\$ComposeProject = "short-studio"/);
+    expect(windowsInstaller).toMatch(/(?:SHORT_STUDIO_CONTAINER_PREFIX|ABUD_CONTAINER_PREFIX)\s*=\s*\$ComposeProject/);
   });
 
   it("keeps customer data outside every release directory", () => {
@@ -180,7 +198,7 @@ describe("F4 - installation and update never destroy customer data", () => {
     expect(lib).toMatch(/ABUD_BACKUP_DIR="\$ABUD_SHARED\/backups"/);
 
     const compose = read("docker-compose.prod.yml");
-    expect(compose).toMatch(/\$\{ABUD_DATA_DIR[^}]*\}:\/app\/data/);
+    expect(compose).toMatch(/\$\{SHORT_STUDIO_DATA_DIR:-\$\{ABUD_DATA_DIR.*?:\/app\/data/);
   });
 
   it("takes a backup before it changes anything, and stops if it cannot", () => {
@@ -188,7 +206,7 @@ describe("F4 - installation and update never destroy customer data", () => {
     expect(shell).toMatch(/create_pre_upgrade_backup/);
     expect(shell).toMatch(/A safety backup could not be created, so the update was stopped/);
 
-    const powershell = read("scripts/host/abud-shorts.ps1");
+    const powershell = read("scripts/host/short-studio.ps1");
     expect(powershell).toMatch(/New-PreUpgradeBackup/);
     expect(powershell).toMatch(/A safety backup could not be created, so the update was stopped/);
   });
@@ -248,9 +266,10 @@ describe("F4 - update security posture", () => {
 
   it("publishes only the application, never the database, automation or worker", () => {
     const compose = read("docker-compose.prod.yml");
-    const publishedPorts = compose.match(/^\s+- "\$\{?[^"]*\}?:\d+"/gm) || [];
+    const publishedPorts = compose.match(/^\s+- "(?:127\.0\.0\.1:)?\$\{?[^"]*\}?:\d+"/gm) || [];
     // Exactly one published port, and it is the app's.
     expect(publishedPorts).toHaveLength(1);
+    expect(publishedPorts[0]).toContain("127.0.0.1:");
     expect(publishedPorts[0]).toContain("HOST_PORT");
   });
 
@@ -267,7 +286,7 @@ describe("F4 - update security posture", () => {
   it("runs the client stack from an immutable image rather than a source build", () => {
     const compose = read("docker-compose.prod.yml");
     expect(compose).not.toMatch(/^\s+build:/m);
-    expect(compose).toMatch(/image:\s*\$\{ABUD_IMAGE/);
+    expect(compose).toMatch(/image:\s*\$\{SHORT_STUDIO_IMAGE:-\$\{ABUD_IMAGE/);
   });
 
   it("imports the n8n control plane in the array shape the importer accepts", () => {
@@ -280,10 +299,18 @@ describe("F4 - update security posture", () => {
     // concatenate them into one JSON array before importing.
     // Only the tracked compose files: docker-compose.reltest.yml is a local
     // rehearsal file and is not in the repository.
-    for (const name of ["docker-compose.prod.yml", "docker-compose.v2.yml"]) {
+    // docker-compose.prod.yml is the customer-facing artifact and uses the
+    // renamed temp file; docker-compose.v2.yml is developer-only tooling that
+    // builds from source and was intentionally left as-is by this rebrand -
+    // the temp filename is purely an ephemeral in-container detail either way.
+    const tempFileByCompose: Record<string, RegExp> = {
+      "docker-compose.prod.yml": /import:workflow --input=\/tmp\/short-studio-workflows\.json/,
+      "docker-compose.v2.yml": /import:workflow --input=\/tmp\/abud-workflows\.json/,
+    };
+    for (const [name, expectedTempFile] of Object.entries(tempFileByCompose)) {
       const compose = read(name);
       expect(compose).not.toMatch(/import:workflow --input=\/workflows\//);
-      expect(compose).toMatch(/import:workflow --input=\/tmp\/abud-workflows\.json/);
+      expect(compose).toMatch(expectedTempFile);
       // publish:workflow is not a command in the pinned n8n and only ever
       // logged "command publish:workflow not found".
       expect(compose).not.toMatch(/n8n publish:workflow/);
@@ -300,7 +327,7 @@ describe("F4 - update security posture", () => {
   });
 
   it("pulls the application image by digest, not by a movable tag", () => {
-    for (const script of ["scripts/host/abud-update.sh", "scripts/host/abud-shorts.ps1"]) {
+    for (const script of ["scripts/host/abud-update.sh", "scripts/host/short-studio.ps1"]) {
       const source = read(script);
       expect(source, `${script} must build a digest-pinned image reference`).toMatch(
         /@(?:\$\{REL_DIGEST\}|\$\(\$release\.imageDigest\))/,
@@ -316,14 +343,14 @@ describe("F4 - update security posture", () => {
   });
 
   it("refuses a manifest whose channel does not match the installation", () => {
-    for (const script of ["scripts/host/abud-update.sh", "scripts/host/abud-shorts.ps1"]) {
+    for (const script of ["scripts/host/abud-update.sh", "scripts/host/short-studio.ps1"]) {
       expect(read(script)).toMatch(/is not on the \$?\{?channel|is not on the \$channel/i);
     }
   });
 
   it("prevents two updates running at once", () => {
     expect(read("scripts/host/abud-lib.sh")).toMatch(/Update already in progress/);
-    expect(read("scripts/host/abud-shorts.ps1")).toMatch(/Update already in progress/);
+    expect(read("scripts/host/short-studio.ps1")).toMatch(/Update already in progress/);
   });
 
   it("requires an explicit proxy flag before trusting forwarded headers", () => {
@@ -346,14 +373,14 @@ describe("F4 - update security posture", () => {
 describe("F4 - client-facing language", () => {
   it("tells the customer a command they can run, not a Docker invocation", () => {
     const quickStart = read("CLIENT_QUICK_START.md");
-    expect(quickStart).toMatch(/abud-shorts update/);
+    expect(quickStart).toMatch(/short-studio update/);
     expect(quickStart).not.toMatch(/docker compose/);
   });
 
   it("keeps Git out of the customer update path", () => {
     const updating = read("docs/UPDATING.md");
     expect(updating).not.toMatch(/git (pull|clone|checkout)/);
-    expect(updating).toMatch(/sudo abud-shorts update/);
+    expect(updating).toMatch(/sudo short-studio update/);
   });
 
   it("does not carry a shared or default password anywhere in the installers", () => {
@@ -389,6 +416,43 @@ describe("release automation cannot be triggered by a Git tag push", () => {
     const nextTop = rest.search(/^\S/m);
     return nextTop < 0 ? rest : rest.slice(0, nextTop);
   };
+
+  // Context: the 2.5 rebrand added PREVIOUS_PRODUCT_VERSION = "2.4.0" to
+  // src/version.ts, immediately above PRODUCT_VERSION. Both release workflows
+  // read the version with an unanchored `grep -oP 'PRODUCT_VERSION\s*=\s*"'`,
+  // which also matches inside PREVIOUS_PRODUCT_VERSION, so the greps returned
+  // two lines and the identity gate compared package.json against "2.4.0" and
+  // refused to build the 2.5.0 candidate. Anchoring to the exported constant is
+  // what keeps a future PREVIOUS_/LEGACY_ constant from shadowing the real one.
+  it("both workflows read the version constants unambiguously", () => {
+    const versionTs = readExecutable("src/version.ts");
+
+    for (const [name, yml] of [
+      ["release.yml", releaseYml],
+      ["ghcr-candidate.yml", candidateYml],
+    ] as const) {
+      for (const constant of ["PRODUCT_VERSION", "DATABASE_SCHEMA_VERSION"]) {
+        const pattern = new RegExp(`grep -oP '\\^export const ${constant}\\\\s\\*=`);
+        expect(yml, `${name} anchors its ${constant} grep`).toMatch(pattern);
+      }
+    }
+
+    // The anchored pattern must resolve to exactly one value against the real
+    // version file, which is the property the workflows actually depend on.
+    for (const constant of ["PRODUCT_VERSION", "DATABASE_SCHEMA_VERSION"]) {
+      const matches = versionTs
+        .split("\n")
+        .filter((line) => new RegExp(`^export const ${constant}\\s*=`).test(line));
+      expect(matches, `exactly one ${constant} declaration`).toHaveLength(1);
+    }
+
+    // And the unanchored form really is ambiguous, so this test would have
+    // caught the failure rather than passing vacuously.
+    const looseProductVersion = versionTs
+      .split("\n")
+      .filter((line) => /PRODUCT_VERSION\s*=\s*"/.test(line));
+    expect(looseProductVersion.length).toBeGreaterThan(1);
+  });
 
   it("release.yml runs only on manual workflow_dispatch", () => {
     const on = triggerBlock(releaseYml);
@@ -506,6 +570,6 @@ describe("F4 - image reference parsing", () => {
 
   it("is implemented in both updaters, not just one", () => {
     expect(read("scripts/host/abud-update.sh")).toMatch(/image_repository/);
-    expect(read("scripts/host/abud-shorts.ps1")).toMatch(/Get-ImageRepository/);
+    expect(read("scripts/host/short-studio.ps1")).toMatch(/Get-ImageRepository/);
   });
 });

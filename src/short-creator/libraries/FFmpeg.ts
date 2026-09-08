@@ -466,7 +466,35 @@ export class FFMpeg {
     return new Promise((resolve, reject) => {
       ffmpeg(inputPath)
         .audioFilters([
-          "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB:stop_periods=1:stop_duration=0.12:stop_threshold=-45dB",
+          // Root cause of the Kokoro English duration anomaly (ABUD_SHORTS_
+          // ENGINE_STATUS.md, Kokoro duration closure pass): a single
+          // `silenceremove` invocation with BOTH `start_periods` and
+          // `stop_periods` set does not wait for the true end of the file to
+          // find "the" trailing silence - it treats the FIRST silence run it
+          // encounters after the leading trim as the one trailing silence to
+          // remove, and discards everything after it. Real speech has
+          // several natural inter-word/inter-sentence pauses well before the
+          // real end (confirmed via `silencedetect` on real Kokoro output:
+          // gaps at ~2.3s, ~5.5s, ~6.9s, ... in a 19.4s clip), so this was
+          // silently truncating narration to ~1.9-2.2s regardless of how
+          // long the actual speech was - proven directly: three real Kokoro
+          // WAVs of 7.375s/13.15s/19.4s all collapsed to the exact same
+          // 1.950625s through the old single-pass chain. `stop_periods=1`
+          // ALONE (no start_periods in the same call) produced an EMPTY
+          // output file entirely.
+          //
+          // Fix: the standard ffmpeg idiom for trimming ONLY true trailing
+          // silence without touching mid-stream pauses - reverse the audio,
+          // trim what is now the "start" (the real end), reverse back. This
+          // never sees more than one silence run per pass, so it cannot
+          // mistake a mid-speech pause for the end. Verified: 7.375s/13.15s/
+          // 19.4s real Kokoro clips now come out as 6.58s/12.34s/18.40s -
+          // each proportionally shorter (real leading+trailing silence
+          // trimmed), not collapsed to one fixed number.
+          "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB",
+          "areverse",
+          "silenceremove=start_periods=1:start_duration=0.12:start_threshold=-45dB",
+          "areverse",
           "highpass=f=80",
           "acompressor=threshold=-18dB:ratio=2.2:attack=12:release=180:makeup=1",
           "loudnorm=I=-16:TP=-2:LRA=11",

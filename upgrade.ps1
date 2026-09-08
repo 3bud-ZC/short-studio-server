@@ -1,8 +1,8 @@
 # ==============================================================================
-# ABUD Shorts Engine V2 - Upgrade entry point (Windows)
+# Short Studio Server - Upgrade entry point (Windows)
 # ==============================================================================
 # Kept so existing documentation and habits keep working. The real updater is
-# scripts\host\abud-shorts.ps1, which is also what the "ABUD Shorts - Update"
+# scripts\host\short-studio.ps1, which is also what the "Short Studio - Update"
 # Start Menu shortcut runs: one code path, one set of safety checks, one
 # rollback.
 # ==============================================================================
@@ -18,14 +18,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($InstallRoot) { $env:ABUD_HOME = $InstallRoot }
-if (-not $env:ABUD_HOME) { $env:ABUD_HOME = Join-Path $env:ProgramData "AbudShorts" }
+if (-not $env:ABUD_HOME) {
+    $legacyRoot = Join-Path $env:ProgramData "AbudShorts"
+    # An installation upgraded from ABUD Shorts Engine 2.4 stays at its
+    # existing data root - see the identical detection in install.ps1.
+    $env:ABUD_HOME = if (Test-Path (Join-Path $legacyRoot "shared\config\.env")) { $legacyRoot } else { Join-Path $env:ProgramData "ShortStudio" }
+}
 
 $candidates = @(
-    (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "scripts\host\abud-shorts.ps1")
+    (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "scripts\host\short-studio.ps1")
 )
 $currentFile = Join-Path $env:ABUD_HOME "current.txt"
 if (Test-Path $currentFile) {
-    $candidates += (Join-Path (Get-Content $currentFile -Raw).Trim() "scripts\host\abud-shorts.ps1")
+    $candidates += (Join-Path (Get-Content $currentFile -Raw).Trim() "scripts\host\short-studio.ps1")
 }
 
 foreach ($candidate in $candidates) {
@@ -35,6 +40,6 @@ foreach ($candidate in $candidates) {
     }
 }
 
-Write-Host "Error: the ABUD Shorts updater was not found." -ForegroundColor Red
-Write-Host 'On an installed system, use the Start Menu shortcut "ABUD Shorts - Update".'
+Write-Host "Error: the Short Studio updater was not found." -ForegroundColor Red
+Write-Host 'On an installed system, use the Start Menu shortcut "Short Studio - Update".'
 exit 1

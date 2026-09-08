@@ -24,6 +24,9 @@ function makeConfig(): Config {
     videosDirPath: path.join(root, "videos"),
     tempDirPath: path.join(root, "cache"),
     serviceRole: "app",
+    accessMode: "secure_server",
+    bindHost: "127.0.0.1",
+    publicBindHost: "127.0.0.1",
   } as Config;
 }
 
@@ -124,7 +127,7 @@ class AuthMatrixDb {
   }
 }
 
-function makeApp(db: AuthMatrixDb) {
+function makeApp(db: AuthMatrixDb, config: Config = makeConfig()) {
   const jobs = {
     listJobs: async () => [],
     listJobRows: async () => [],
@@ -140,7 +143,7 @@ function makeApp(db: AuthMatrixDb) {
     subscribe: () => () => {},
   };
   const app = express();
-  app.use("/api/v2", createV2PublicRouter(makeConfig(), db as any, jobs as any));
+  app.use("/api/v2", createV2PublicRouter(config, db as any, jobs as any));
   return app;
 }
 
@@ -151,6 +154,30 @@ describe("V2 auth route matrix", () => {
 
   it("rejects anonymous sensitive routes", async () => {
     await request(makeApp(new AuthMatrixDb())).get("/api/v2/settings").expect(401);
+  });
+
+  it("allows local single-user browser access without creating another owner", async () => {
+    const config = makeConfig();
+    config.accessMode = "local";
+    const db = new AuthMatrixDb({ setupComplete: true, adminConfigured: true });
+
+    const me = await request(makeApp(db, config)).get("/api/v2/auth/me").expect(200);
+    expect(me.body.user).toMatchObject({
+      id: "local-owner",
+      role: "admin",
+      accessMode: "local",
+      remoteAccess: "disabled",
+    });
+
+    await request(makeApp(db, config)).get("/api/v2/settings").expect(200);
+    expect(db.adminConfigured).toBe(true);
+  });
+
+  it("reports owner credentials as unnecessary in local setup status", async () => {
+    const config = makeConfig();
+    config.accessMode = "local";
+    const res = await request(makeApp(new AuthMatrixDb(), config)).get("/api/v2/setup/status").expect(200);
+    expect(res.body.ownerCredentialRequired).toBe(false);
   });
 
   it("allows a valid admin session", async () => {

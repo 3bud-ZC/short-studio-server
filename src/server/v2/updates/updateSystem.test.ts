@@ -401,7 +401,7 @@ describe("F4 - version endpoint", () => {
   it("exposes product, version, build, schema and channel without secrets", () => {
     const info = getProductInfo();
 
-    expect(info.name).toContain("ABUD Shorts Engine");
+    expect(info.name).toContain("Short Studio");
     expect(info.version).toBe(PRODUCT_VERSION);
     expect(info.schemaVersion).toBe(DATABASE_SCHEMA_VERSION);
     expect(info.build).toBeTruthy();
@@ -470,7 +470,10 @@ describe("F4 - host updater record written by PowerShell", () => {
     // The other half of the fix: the updater writes UTF-8 without a BOM in the
     // first place, so nothing downstream has to compensate.
     const repoRoot = path.resolve(__dirname, "..", "..", "..", "..");
-    for (const script of ["install.ps1", "scripts/host/abud-shorts.ps1"]) {
+    // scripts/host/abud-shorts.ps1 is now a thin legacy-alias forwarder to
+    // short-studio.ps1 and writes no files itself - short-studio.ps1 carries
+    // the real host-write logic this check exists to cover.
+    for (const script of ["install.ps1", "scripts/host/short-studio.ps1"]) {
       const source = fs.readFileSync(path.join(repoRoot, script), "utf-8");
       expect(source, `${script} must write BOM-free UTF-8`).toMatch(/UTF8Encoding\(\$false\)/);
       expect(source, `${script} must not write files with Out-File -Encoding utf8`).not.toMatch(

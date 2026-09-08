@@ -1,5 +1,5 @@
 # ==============================================================================
-# ABUD Shorts Engine - GHCR candidate image workflow
+# Short Studio Server - GHCR candidate image workflow
 # ==============================================================================
 # Manual-only candidate gate. It uses the repository GITHUB_TOKEN with package
 # write permission, publishes only sha-<commit> candidate tags, and can later
@@ -79,8 +79,8 @@ jobs:
           fi
 
           VERSION="$(node -p "require('./package.json').version")"
-          SOURCE_VERSION="$(grep -oP 'PRODUCT_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
-          SCHEMA_VERSION="$(grep -oP 'DATABASE_SCHEMA_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
+          SOURCE_VERSION="$(grep -oP '^export const PRODUCT_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
+          SCHEMA_VERSION="$(grep -oP '^export const DATABASE_SCHEMA_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
           if [ "$SOURCE_VERSION" != "$VERSION" ]; then
             echo "::error::package.json is $VERSION but src/version.ts is $SOURCE_VERSION."
             exit 1
@@ -135,13 +135,25 @@ jobs:
 
       - name: Set up pnpm
         if: inputs.mode == 'candidate'
+        # No version pin here: package.json packageManager (pnpm@11.7.0) is the
+        # single source of truth, and pinning both makes the action refuse to run.
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Install dependencies
         if: inputs.mode == 'candidate'
         run: pnpm install --frozen-lockfile
+
+      # The suite contains real-FFmpeg tests (silence detection over an actual
+      # mixed track, voice mastering) that shell out to ffmpeg and ffprobe. The
+      # ubuntu runner image does not ship either, so without this the candidate
+      # build fails on two media test files that pass everywhere ffmpeg exists.
+      - name: Install FFmpeg for the real-media test suite
+        if: inputs.mode == 'candidate'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
 
       - name: Set up the CPU quality runtime the test suite shells out to
         if: inputs.mode == 'candidate'
@@ -176,7 +188,7 @@ jobs:
             --platform linux/amd64 \
             --file v2.Dockerfile \
             --tag "$IMAGE" \
-            --label "org.opencontainers.image.title=ABUD Shorts Engine" \
+            --label "org.opencontainers.image.title=Short Studio Server" \
             --label "org.opencontainers.image.description=Client-installed short-video production system" \
             --label "org.opencontainers.image.version=${{ steps.identity.outputs.version }}" \
             --label "org.opencontainers.image.revision=${{ steps.identity.outputs.sha }}" \

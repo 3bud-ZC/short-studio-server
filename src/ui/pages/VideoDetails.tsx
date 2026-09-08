@@ -56,7 +56,7 @@ function formatFileSize(bytes?: number): string {
 const CAPTION_TIMING_LABELS: Record<string, string> = {
   elevenlabs_alignment: "ElevenLabs Alignment",
   whisper: "Whisper",
-  synthetic: "Synthetic",
+  deterministic_fallback: "Deterministic Fallback",
 };
 
 function captionTimingLabel(video: any): string {
@@ -76,9 +76,9 @@ function captionTimingLabel(video: any): string {
  * de-underscored, capitalised form rather than being dropped.
  */
 const PROVIDER_LABELS: Record<string, string> = {
-  motion_canvas: "ABUD Motion",
-  abud_motion: "ABUD Motion",
-  abud_mockup: "ABUD Mockup",
+  motion_canvas: "Short Studio Motion",
+  abud_motion: "Short Studio Motion",
+  abud_mockup: "Short Studio Mockup",
   pexels: "Pexels",
   pixabay: "Pixabay",
   uploaded_media: "Your uploads",
@@ -529,7 +529,7 @@ const VideoDetailsContent: React.FC = () => {
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  This video has not been distributed to any social platforms yet. Click "Publish / Schedule" to distribute it to YouTube, TikTok, Instagram, Facebook, or Telegram.
+                  This video has not been distributed yet. Use Upload-Post from the publishing flow for supported channels after owner approval.
                 </Typography>
               )}
             </SectionCard>
@@ -963,7 +963,7 @@ const VideoDetailsContent: React.FC = () => {
                     <Stack direction="row" justifyContent="space-between">
                       <Typography color="text.secondary">Brand Used</Typography>
                       <Typography fontWeight={700}>
-                        {video.brandStyle?.hasBrand ? "Yes" : "ABUD defaults"}
+                        {video.brandStyle?.hasBrand ? "Yes" : "Short Studio defaults"}
                       </Typography>
                     </Stack>
                   </Stack>
@@ -1020,7 +1020,7 @@ const VideoDetailsContent: React.FC = () => {
                   <Typography>Caption Style: {labelWith(CAPTION_LABELS, video.captionStyle) || "Bold"}</Typography>
                   {video.brandStyle?.sources && (
                     <Typography variant="caption" color="text.secondary">
-                      Colours you supplied: {suppliedBrandFields(video) || "none - ABUD defaults were used"}.
+                      Colours you supplied: {suppliedBrandFields(video) || "none - Short Studio defaults were used"}.
                     </Typography>
                   )}
                 </Stack>

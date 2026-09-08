@@ -2,6 +2,7 @@ import axios, { AxiosError } from "axios";
 import fs from "fs";
 import path from "path";
 import { logger } from "../../../../logger";
+import { resolveUploadPostApiKey } from "../../integrations/credentialResolver";
 import {
   DEFAULT_PLATFORM_CAPABILITIES,
   type PlatformCapabilities,
@@ -16,22 +17,65 @@ import type { PublishingPlatform, PublishingProviderId } from "../types";
 
 type UploadPostStatus = "processing" | "published" | "failed";
 
+/**
+ * Upload-Post reports per-platform outcomes in two different shapes.
+ *
+ * `POST /api/upload` returns them keyed by platform:
+ *   { status: "completed", results: { youtube: { success, post_id, url } } }
+ *
+ * `GET /api/uploadposts/status` returns them as a list:
+ *   { status: "completed", results: [ { success, platform_post_id, post_url } ] }
+ *
+ * Only the list shape used to be understood, so a real publish - which always
+ * comes back keyed by platform - yielded no public URL and no per-platform
+ * success check. The publication was then marked published with a null
+ * `provider_url`, which is what forced an operator to repair the row by hand.
+ * Normalizing both shapes here keeps every caller on one representation.
+ */
+function uploadPostResultRows(data: Record<string, unknown>): Record<string, unknown>[] {
+  const raw = data.results;
+  const candidates = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object"
+      ? Object.values(raw as Record<string, unknown>)
+      : [];
+  return candidates.filter(
+    (entry): entry is Record<string, unknown> => typeof entry === "object" && Boolean(entry),
+  );
+}
+
 function pickUploadPostId(data: Record<string, unknown>): string | undefined {
   const id = data.request_id || data.job_id || data.id || data.postId;
   return typeof id === "string" && id.trim() ? id.trim() : undefined;
 }
 
 function pickUploadPostUrl(data: Record<string, unknown>): string | undefined {
-  const resultUrl = Array.isArray(data.results)
-    ? (data.results.find((entry) => typeof entry === "object" && entry && "post_url" in entry) as Record<string, unknown> | undefined)?.post_url
-    : undefined;
-  const url = data.publishedUrl || data.published_url || data.url || data.post_url || resultUrl;
+  const resultRow = uploadPostResultRows(data).find(
+    (entry) => typeof entry.post_url === "string" || typeof entry.url === "string",
+  );
+  const url =
+    data.publishedUrl ||
+    data.published_url ||
+    data.url ||
+    data.post_url ||
+    resultRow?.post_url ||
+    resultRow?.url;
   return typeof url === "string" && /^https:\/\//i.test(url) ? url : undefined;
 }
 
+/**
+ * The provider's own terminal vocabulary ("completed"), recorded verbatim so
+ * `publications.remote_state` says what the remote reported rather than just
+ * repeating the local status back at itself.
+ */
+function pickUploadPostRemoteState(data: Record<string, unknown>): string | undefined {
+  const state = data.status || data.state;
+  return typeof state === "string" && state.trim() ? state.trim().toLowerCase() : undefined;
+}
+
 function mapUploadPostStatus(data: Record<string, unknown>): UploadPostStatus {
-  if (Array.isArray(data.results) && data.results.length > 0) {
-    const resultRows = data.results.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && Boolean(entry));
+  const resultRows = uploadPostResultRows(data);
+  if (resultRows.length > 0) {
     if (resultRows.some((entry) => entry.success === false)) return "failed";
     if (resultRows.every((entry) => entry.success === true)) return "published";
   }
@@ -46,12 +90,16 @@ export class UploadPostProvider implements PublishingProvider {
   public readonly displayName = "Upload-Post (Multi-Platform)";
   public readonly category = "publishing" as const;
 
-  private apiKey?: string;
+  private explicitApiKey?: string;
   private baseUrl: string;
 
   constructor(options: { apiKey?: string; baseUrl?: string } = {}) {
-    this.apiKey = options.apiKey || process.env.UPLOAD_POST_API_KEY;
+    this.explicitApiKey = options.apiKey?.trim() || undefined;
     this.baseUrl = options.baseUrl || process.env.UPLOAD_POST_BASE_URL || "https://api.upload-post.com";
+  }
+
+  public async resolveApiKey(candidate?: unknown): Promise<string | undefined> {
+    return resolveUploadPostApiKey(candidate || this.explicitApiKey);
   }
 
   private endpoint(pathname: string): string {
@@ -79,7 +127,7 @@ export class UploadPostProvider implements PublishingProvider {
     credentials?: Record<string, unknown>,
     accountId?: string,
   ): Promise<PublishingValidationResult> {
-    const key = (credentials?.apiKey as string) || (credentials?.token as string) || this.apiKey;
+    const key = await this.resolveApiKey(credentials?.apiKey || credentials?.token);
     const checkedAt = new Date().toISOString();
     const started = Date.now();
 
@@ -176,9 +224,7 @@ export class UploadPostProvider implements PublishingProvider {
   }
 
   public async publishVideo(params: PublishVideoParams): Promise<PublishResult> {
-    const key =
-      (params.account?.encryptedCredentials as string) ||
-      this.apiKey;
+    const key = await this.resolveApiKey(params.account?.encryptedCredentials);
 
     if (!key) {
       return {
@@ -271,6 +317,7 @@ export class UploadPostProvider implements PublishingProvider {
           status,
           providerPostId,
           providerUrl,
+          remoteState: pickUploadPostRemoteState(data),
           message:
             data.message ||
             (status === "published"
@@ -309,9 +356,7 @@ export class UploadPostProvider implements PublishingProvider {
   }
 
   public async scheduleVideo(params: ScheduleVideoParams): Promise<PublishResult> {
-    const key =
-      (params.account?.encryptedCredentials as string) ||
-      this.apiKey;
+    const key = await this.resolveApiKey(params.account?.encryptedCredentials);
 
     if (!key) {
       return {
@@ -399,7 +444,7 @@ export class UploadPostProvider implements PublishingProvider {
     providerPostId: string,
     context?: Record<string, unknown>,
   ): Promise<PublishStatusResult> {
-    const key = (context?.apiKey as string) || this.apiKey;
+    const key = await this.resolveApiKey(context?.apiKey);
     if (!key) {
       return {
         status: "failed",
@@ -432,6 +477,7 @@ export class UploadPostProvider implements PublishingProvider {
           status,
           providerPostId,
           providerUrl: pickUploadPostUrl(data),
+          remoteState: pickUploadPostRemoteState(data),
           progressPercent: data.progress,
           message: data.message,
           rawResponse: data,
@@ -456,7 +502,7 @@ export class UploadPostProvider implements PublishingProvider {
     providerPostId: string,
     context?: Record<string, unknown>,
   ): Promise<boolean> {
-    const key = (context?.apiKey as string) || this.apiKey;
+    const key = await this.resolveApiKey(context?.apiKey);
     if (!key) return false;
 
     try {

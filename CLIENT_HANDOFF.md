@@ -1,17 +1,22 @@
-# ABUD Shorts Engine V2.4.0 - Client Handoff
+# Short Studio 2.5.0 - Client Handoff
+
+Short Studio is the renamed, commercially productized continuation of ABUD
+Shorts Engine. An installation upgraded from ABUD Shorts Engine 2.4.0 keeps
+its existing database, videos, Provider Vault, backups, and n8n data.
 
 ## What The Client Receives
 
-- `ABUD-Shorts-Engine-2.4.0.tar.gz`
+- `Short-Studio-Server-2.5.0.tar.gz`
 - `update-manifest.json`
-- `ABUD-Shorts-Engine-2.4.0.tar.gz.sha256`
+- `Short-Studio-Server-2.5.0.tar.gz.sha256`
 - Release notes and quick-start documentation
 
 ## Install
 
-Windows: extract the package, then double-click `INSTALL-ABUD-SHORTS.bat`.
+Windows: extract the package, then run the Short Studio installer in the
+install folder and follow the Setup Wizard.
 
-Linux/VPS:
+Linux/VPS (host scripts provided; native Linux host qualification is not part of the Short Studio 2.5 release qualification, which was carried out on Windows):
 
 ```bash
 sudo ./install.sh --url https://shorts.yourdomain.com
@@ -22,17 +27,21 @@ sudo ./install.sh --url https://shorts.yourdomain.com
 Linux/VPS:
 
 ```bash
-sudo abud-shorts status
-sudo abud-shorts update
-sudo abud-shorts backup
-sudo abud-shorts diagnostics
-sudo abud-shorts restart
-sudo abud-shorts rollback
+sudo short-studio status
+sudo short-studio update
+sudo short-studio backup
+sudo short-studio doctor
+sudo short-studio restart
+sudo short-studio rollback
 ```
 
-Windows: double-click `START-ABUD-SHORTS.bat` / `UPDATE-ABUD-SHORTS.bat` /
-`BACKUP-ABUD-SHORTS.bat` / `DIAGNOSTICS-ABUD-SHORTS.bat` in the install
-folder, or use the **ABUD Shorts** Start Menu shortcuts.
+(An installation upgraded from ABUD Shorts Engine 2.4 can keep using
+`sudo abud-shorts <command>` - it is kept as a compatibility alias for the
+same commands, it is just not the name new installs are shown.)
+
+Windows: use the **Short Studio** Start Menu shortcuts (Start, Stop, Status,
+Update, Backup, Doctor, Uninstall) created by the installer in the install
+folder.
 
 ## First Setup
 
@@ -48,5 +57,5 @@ package artifacts.
 ## Support
 
 Use **Settings -> System -> Download Support Bundle** or run
-`sudo abud-shorts diagnostics`. The bundle is designed to redact passwords,
-API keys and OAuth tokens.
+`sudo short-studio doctor` / `sudo short-studio logs`. The bundle is designed
+to redact passwords, API keys and OAuth tokens.

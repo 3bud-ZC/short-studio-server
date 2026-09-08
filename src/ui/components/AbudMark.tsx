@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 
 /**
- * ABUD identity mark.
+ * Short Studio identity mark.
  *
  * Drawn as inline SVG from primitives - a lightning bolt in the product's own
  * violet. Nothing here is downloaded or traced from third-party branding.
@@ -72,7 +72,7 @@ export const AbudWordmark: React.FC<{
           sx={{ fontWeight: 700, letterSpacing: "-0.01em", color: theme.abud.textPrimary }}
           noWrap
         >
-          ABUD Shorts
+          Short Studio
         </Typography>
         {subtitle && (
           <Typography

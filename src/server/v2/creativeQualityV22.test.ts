@@ -281,7 +281,7 @@ describe("Arabic caption renderer V3", () => {
     expect(built.content).toContain(`PlayResY: ${FRAME.height}`);
     expect(built.content).toContain("[Events]");
     expect(built.content).toContain("Dialogue:");
-    expect(built.fontFamily).toBe("Noto Kufi Arabic");
+    expect(built.fontFamily).toBe("Cairo");
     expect(built.phrases.length).toBeGreaterThan(0);
   });
 
@@ -293,8 +293,8 @@ describe("Arabic caption renderer V3", () => {
     expect(built.content).not.toMatch(/[‫‮]/);
   });
 
-  it("keeps the active word inside one shaped run using karaoke timing", () => {
-    const built = renderArabicCaptions(ARABIC_WORDS, "social_ad", FRAME);
+  it("keeps the active word inside one shaped run using karaoke timing (Karaoke preset)", () => {
+    const built = renderArabicCaptions(ARABIC_WORDS, "karaoke", FRAME);
     // \k markers mean libass fills the existing run; no duplicate positioned
     // word is drawn over the phrase, which is what broke shaping in V2.2.
     expect(built.content).toMatch(/\\k\d+/);
@@ -302,6 +302,14 @@ describe("Arabic caption renderer V3", () => {
     expect(dialogueLines.length).toBe(built.phrases.length);
     // One event per phrase - not one per word.
     expect(dialogueLines.length).toBeLessThan(ARABIC_WORDS.length);
+  });
+
+  it("Arabic Bold Social (social_ad) renders one uninterrupted logical phrase, never per-word overrides", () => {
+    const built = renderArabicCaptions(ARABIC_WORDS, "social_ad", FRAME);
+    expect(built.content).not.toMatch(/\\k\d+/);
+    expect(built.content).not.toMatch(/\\c&H/);
+    const dialogueLines = built.content.split("\n").filter((line) => line.startsWith("Dialogue:"));
+    expect(dialogueLines.length).toBe(built.phrases.length);
   });
 
   it("emits no karaoke markers for a phrase-level style", () => {

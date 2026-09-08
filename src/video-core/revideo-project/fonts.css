@@ -1,0 +1,31 @@
+/**
+ * Local, offline font registration for the Revideo/Chromium render page.
+ *
+ * @revideo/2d's Txt node lays text out on a real (hidden) DOM element and
+ * only transfers it to the canvas after `await document.fonts.ready`
+ * (see node_modules/@revideo/2d/lib/components/TxtLeaf.js) - so a normal
+ * `@font-face` rule is exactly what that draw path expects: setting the
+ * element's `font-family` on a real DOM node is what actually triggers
+ * Chromium to load the face, and `document.fonts.ready` then blocks the
+ * draw until it resolves. No runtime web-font fetch: both `url()` targets
+ * below resolve through Vite's own module graph to the tracked binaries in
+ * `assets/fonts/`, so this works identically in the offline render worker.
+ *
+ * Both files are variable fonts; declaring the full weight axis (rather
+ * than one static weight) lets the caption engine ask for Bold/ExtraBold by
+ * number and get a real interpolated instance instead of a faux-bold
+ * synthetic weight.
+ */
+@font-face {
+  font-family: 'Cairo';
+  src: url('../../../assets/fonts/Cairo-Variable.ttf') format('truetype');
+  font-weight: 200 1000;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../../../assets/fonts/Inter-Variable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: block;
+}

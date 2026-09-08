@@ -9,16 +9,19 @@ describe("dashboard auth redirects", () => {
 
   it("does not redirect bootstrap auth routes", () => {
     expect(shouldRedirectToLogin(401, "/api/v2/auth/login")).toBe(false);
+    expect(shouldRedirectToLogin(401, "/api/v2/auth/me")).toBe(false);
     expect(shouldRedirectToLogin(401, "/api/v2/auth/setup-admin")).toBe(false);
     expect(shouldRedirectToLogin(401, "/api/v2/setup/status")).toBe(false);
     expect(shouldRedirectToLogin(403, "/api/v2/jobs")).toBe(false);
+  });
+
+  it("does not redirect in local single-user mode", () => {
+    expect(shouldRedirectToLogin(401, "/api/videos", "local")).toBe(false);
   });
 });
 
 describe("media URL builder", () => {
   it("never requests a path that still contains an unresolved id", () => {
-    // A media record arriving without a filename produced a request for
-    // /api/v2/media/uploads/undefined - a guaranteed 404 and a console error.
     expect(withMediaAccessToken("/api/v2/media/uploads/undefined")).toBe("");
     expect(withMediaAccessToken("/api/v2/media/uploads/null")).toBe("");
     expect(withMediaAccessToken("")).toBe("");
