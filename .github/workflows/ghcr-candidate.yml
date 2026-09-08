@@ -143,6 +143,18 @@ jobs:
         if: inputs.mode == 'candidate'
         run: pnpm install --frozen-lockfile
 
+      # The suite contains real-FFmpeg tests (silence detection over an actual
+      # mixed track, voice mastering) that shell out to ffmpeg and ffprobe. The
+      # ubuntu runner image does not ship either, so without this the candidate
+      # build fails on two media test files that pass everywhere ffmpeg exists.
+      - name: Install FFmpeg for the real-media test suite
+        if: inputs.mode == 'candidate'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+
       - name: Set up the CPU quality runtime the test suite shells out to
         if: inputs.mode == 'candidate'
         run: bash scripts/install-quality-pack.sh
