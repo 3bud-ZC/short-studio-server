@@ -24,6 +24,7 @@ import {
   type PlatformCapabilities,
   type PublishingProvider,
   type PublishResult,
+  type PublishStatusResult,
 } from "./publishingProvider";
 import {
   type BatchPublicationInput,
@@ -832,7 +833,7 @@ export class PublishingService {
             provider_post_id = $3,
             provider_url = $4,
             published_at = CASE WHEN $2 = 'published' THEN now() ELSE published_at END,
-            remote_state = $2,
+            remote_state = $5,
             remote_state_checked_at = now(),
             last_error = null,
             technical_error = null,
@@ -844,6 +845,11 @@ export class PublishingService {
             publishResult.status === "processing" ? "processing" : "published",
             publishResult.providerPostId || null,
             publishResult.providerUrl || null,
+            // The remote's own word for the state where the provider has one
+            // ("completed"); otherwise our mapped status, so the column is
+            // never null once a provider has answered.
+            publishResult.remoteState ||
+              (publishResult.status === "processing" ? "processing" : "published"),
           ],
         );
 
@@ -944,6 +950,151 @@ export class PublishingService {
       await this.failPublication(pub.id, errMsg, techMsg, retryable);
       return (await this.getPublication(pub.id)) || pub;
     }
+  }
+
+  /**
+   * Turns a provider's asynchronous completion into the final local record.
+   *
+   * A provider is allowed to accept the bytes and finish the post later - the
+   * schema has carried `remote_state` and `remote_state_checked_at` for exactly
+   * that since V2-04, and every provider implements `getStatus()`. Nothing ever
+   * called it, so a publication that came back "processing" stayed processing
+   * for good, and the only way to record the real outcome was to edit
+   * PostgreSQL by hand. This is that missing owner: the one code path that moves
+   * processing -> published (or -> failed) from provider truth.
+   *
+   * Safe to call repeatedly. A publication that is no longer processing, or that
+   * has no provider ticket to poll, is returned untouched, so replaying the same
+   * provider completion neither writes a second time nor emits a second event.
+   */
+  public async reconcilePublication(publicationId: string): Promise<PublicationRecord | null> {
+    const pub = await this.getPublication(publicationId);
+    if (!pub) return null;
+    if (pub.status !== "processing" || !pub.providerPostId) return pub;
+
+    const provider = this.registry.getProviderForPlatform(pub.platform, pub.provider);
+    if (!provider) return pub;
+
+    // Direct OAuth adapters poll with the connected account's token; the
+    // aggregator and Telegram poll with their own credentials.
+    let context: Record<string, unknown> = {};
+    if (pub.accountId) {
+      const resolved = await this.accounts.getUsableCredentials(pub.accountId);
+      if (resolved.ok) context = resolved.credentials as Record<string, unknown>;
+    }
+
+    let remote: PublishStatusResult;
+    try {
+      remote = await provider.getStatus(pub.providerPostId, context);
+    } catch (error) {
+      // A poll that cannot reach the provider says nothing about the post, so
+      // the publication keeps its current state and is picked up next tick.
+      logger.warn({ error, publicationId: pub.id }, "Remote state poll failed");
+      return pub;
+    }
+
+    if (remote.status === "processing") {
+      await this.db.query(
+        `UPDATE publications SET
+          remote_state = $2,
+          remote_state_checked_at = now(),
+          provider_url = COALESCE(provider_url, $3),
+          updated_at = now()
+        WHERE id = $1 AND status = 'processing'`,
+        [pub.id, remote.remoteState || "processing", remote.providerUrl || null],
+      );
+      return (await this.getPublication(pub.id)) || pub;
+    }
+
+    if (remote.status === "failed") {
+      await this.db.query(
+        `UPDATE publications SET remote_state = $2, remote_state_checked_at = now()
+         WHERE id = $1 AND status = 'processing'`,
+        [pub.id, remote.remoteState || "failed"],
+      );
+      await this.failPublication(
+        pub.id,
+        remote.error || "The platform rejected this post after processing it.",
+        "remote_state:failed",
+        false,
+      );
+      return (await this.getPublication(pub.id)) || pub;
+    }
+
+    // Terminal success. The guard on `status = 'processing'` is what makes a
+    // replayed completion a no-op rather than a second published_at.
+    const updated = await this.db.query(
+      `UPDATE publications SET
+        status = 'published',
+        provider_url = COALESCE($3, provider_url),
+        published_at = COALESCE(published_at, now()),
+        remote_state = $2,
+        remote_state_checked_at = now(),
+        last_error = null,
+        technical_error = null,
+        error_category = null,
+        updated_at = now()
+      WHERE id = $1 AND status = 'processing'
+      RETURNING id`,
+      [pub.id, remote.remoteState || "published", remote.providerUrl || null],
+    );
+
+    if (updated.length === 0) {
+      // Something else finished it between the read and the write.
+      return (await this.getPublication(pub.id)) || pub;
+    }
+
+    await this.db.query(
+      `UPDATE scheduled_publications SET status = 'executed', updated_at = now() WHERE publication_id = $1`,
+      [pub.id],
+    );
+
+    await this.recordEvent(
+      pub.id,
+      "published",
+      "provider_completed",
+      remote.message || `${pub.platform} finished processing and the post is live.`,
+      undefined,
+      remote.rawResponse,
+    );
+
+    this.broadcastEvent({
+      id: String(Date.now()),
+      publicationId: pub.id,
+      status: "published",
+      stage: "published",
+      message: `Published to ${pub.platform}.`,
+      createdAt: new Date(),
+    });
+
+    return (await this.getPublication(pub.id)) || pub;
+  }
+
+  /**
+   * Sweeps the publications still waiting on a provider. Oldest check first, so
+   * a backlog drains fairly instead of one row being polled every tick.
+   */
+  public async reconcileProcessingPublications(limit = 10): Promise<number> {
+    if (!this.db.enabled) return 0;
+
+    const rows = await this.db.query<{ id: string }>(
+      `SELECT id FROM publications
+       WHERE status = 'processing' AND provider_post_id IS NOT NULL
+       ORDER BY remote_state_checked_at ASC NULLS FIRST
+       LIMIT $1`,
+      [limit],
+    );
+
+    let settled = 0;
+    for (const row of rows) {
+      try {
+        const after = await this.reconcilePublication(row.id);
+        if (after && after.status !== "processing") settled++;
+      } catch (error) {
+        logger.error({ error, publicationId: row.id }, "Reconciliation error");
+      }
+    }
+    return settled;
   }
 
   public async retryPublication(publicationId: string): Promise<PublicationRecord> {

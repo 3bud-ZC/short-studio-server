@@ -49,6 +49,13 @@ export type PublishResult = {
   providerPostId?: string;
   providerUrl?: string;
   status: "published" | "scheduled" | "processing" | "failed";
+  /**
+   * The provider's own word for where the post stands ("completed",
+   * "in_progress", ...), recorded verbatim in `publications.remote_state`.
+   * Providers with no separate vocabulary leave this unset, and the local
+   * status is stored instead.
+   */
+  remoteState?: string;
   message?: string;
   error?: string;
   technicalError?: string;
@@ -60,6 +67,8 @@ export type PublishStatusResult = {
   status: "processing" | "published" | "failed";
   providerPostId: string;
   providerUrl?: string;
+  /** As on {@link PublishResult}: the provider's own state word. */
+  remoteState?: string;
   progressPercent?: number;
   message?: string;
   error?: string;
