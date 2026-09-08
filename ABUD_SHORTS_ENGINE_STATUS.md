@@ -68,7 +68,12 @@ video short-studio-final-ar-v3.mp4 published as UNLISTED (Provider ID:
 https://www.youtube.com/watch?v=Fy7MMJmHxhk). Exactly 1 external upload/post,
 0 duplicates.
 
-GA: BLOCKED pending final release ceremony only.
+Publishing Persistence: CLOSED / PASS. The normal product lifecycle now
+persists a completed Upload-Post publication automatically (status,
+provider_post_id, provider_url, remote_state, published_at) and reconciles a
+provider that finishes asynchronously, with no operator SQL. Fix: 6c38844.
+
+GA: READY FOR OWNER FINAL GA AUTHORIZATION.
 
 Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
 migration; no database migration was added or required for branding alone).
@@ -13835,6 +13840,155 @@ pixel QA result: **PASS**.
   - Additional posts / Retries: 0
 - **GA:** BLOCKED pending final release ceremony only
 
+### Short Studio 2.5 — Final Publishing Persistence Closure
 
+**Scope.** Zero-external-write pass on `v2.5-short-studio`. Nothing was
+published, uploaded, drafted, scheduled or retried. The real owner-authorized
+YouTube publication (`753d09d288124b7c8e76bc8f7820f793` / `Fy7MMJmHxhk`) was
+left exactly as it stands, including its `unlisted` visibility and its YouTube
+metadata. Only read-only `GET` checks were made against Upload-Post.
 
+**Test harness path: PROVIDER-DIRECT HARNESS.** The owner test publication did
+not go through `PublishingService`. Four independent pieces of evidence in the
+canonical database say so:
 
+- `publishing_events` for the publication holds stages `upload_started` and
+  `completed`. The normal lifecycle writes `created`, `preflight`,
+  `upload_started` and `provider_accepted`; `completed` is not a stage the
+  product emits at all.
+- The stored messages ("Starting authorized test upload to Upload-Post.",
+  "Video published to YouTube Shorts.") are not the product's strings
+  ("Starting video upload to platform.", "Published successfully on youtube.").
+- The `queued`/`preflight` event that `publishPublication()` always writes
+  before a non-internal provider call is absent.
+- `publications.remote_state` was `completed`, a value the pre-fix product code
+  could never write; it wrote the mapped local status (`published`).
+
+The harness called `UploadPostProvider.publishVideo()` directly, so no product
+code ever saw the successful result and nothing was persisted automatically.
+That is why the row, the attempt and the events all had to be written by hand.
+
+**Manual SQL root cause: QA-HARNESS-ONLY *and* PRODUCT DEFECT.** Bypassing the
+service explains why *everything* had to be written by hand. It does not explain
+all of it away: two real defects meant the normal path could not have produced a
+truthful record either, and both are now fixed.
+
+- **`provider_url` could never persist on a real success.** Upload-Post returns
+  per-platform outcomes in two shapes. `GET /api/uploadposts/status` returns a
+  list; `POST /api/upload` — the call a real publish makes — returns them keyed
+  by platform. Only the list shape was parsed, so `pickUploadPostUrl()` returned
+  `undefined` for every genuine publish and the publication was stored published
+  with a null `provider_url`. Proven against the exact provider body captured in
+  `publishing_attempts.provider_response` for this publication. The same gap
+  meant a request whose only platform carried `success: false` would have been
+  recorded as published.
+- **Nothing owned the `processing -> published` transition.** Every provider
+  implements `getStatus()`, and `remote_state` / `remote_state_checked_at` plus
+  `idx_publications_remote_state` have existed since V2-04 for exactly this, but
+  no product code ever called it. A provider that accepted the bytes and
+  finished the post later left the publication in `processing` permanently, with
+  hand-written SQL the only way to record the outcome.
+
+**Fix (narrow).** Commit `6c38844`
+(`fix(publishing): persist a completed Upload-Post publication automatically`).
+`uploadPostResultRows()` normalizes both provider result shapes;
+`reconcilePublication()` / `reconcileProcessingPublications()` are the single
+owner of the terminal transition, swept on the `PublishingScheduler` heartbeat
+that already runs; the terminal write is guarded on the row still being
+`processing`, so a replayed provider completion is a no-op rather than a second
+`published_at`. `remote_state` now records the provider's own word for the state
+(`completed`) instead of repeating the local status. 5 files, +543/-10.
+
+**Regression.** `src/server/v2/publishing.test.ts` section 12, six deterministic
+tests driven by the real captured Upload-Post payloads with no direct SQL
+repair, proving the normal lifecycle:
+
+- synchronous completion persists `status=published`, `provider_post_id`,
+  `provider_url`, `remote_state=completed`, `published_at`
+- `processing -> provider completed -> published` settles automatically, both
+  through the service sweep and through `PublishingScheduler.tick()`
+- exactly 1 `publishing_attempts` row, status `succeeded`, attempt 1
+- `publishing_events` stages exactly
+  `created, preflight, upload_started, provider_accepted, provider_completed`
+- replaying the identical provider completion leaves status, `published_at`,
+  `provider_url`, event count and attempt count unchanged
+- the same idempotency key returns the same publication and never re-sends
+- a per-platform `success: false` inside a `completed` request is recorded
+  `failed`, not published
+
+The regression was mutation-tested: reverting the parser to the array-only
+assumption fails it with `expected null to be 'https://www.youtube.com/...'`,
+which is precisely the manual-SQL symptom.
+
+**Real PostgreSQL verification.** The sweep query and the guarded terminal write
+were executed verbatim against a real PostgreSQL server in a throwaway database
+(`closure_probe_*`, created and dropped in the same run; the production
+`abud_shorts` database was never opened). Result: sweep finds the processing
+row, first write affects 1 row and yields `status=published`,
+`remote_state=completed`, `provider_url` set, `published_at` set, Arabic title
+byte-exact; replay affects **0 rows** with `published_at` unchanged; 1 row, 0
+duplicates.
+
+**Arabic UTF-8 title persistence: PASS — no product change.** The multipart body
+the provider actually sends was captured and carries
+`أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة` as correct UTF-8, and real
+PostgreSQL round-trips it byte-exact. The corruption came from the temporary
+PowerShell/psql QA harness, not from product code, so no product code was
+changed for encoding; a regression pins both the wire body and the stored title.
+
+**Honest divergence — the live post title is corrupted.** The read-only provider
+status response records `post_title` as
+`????? ????? ????????? ?????? ???????? ???????`, and a public YouTube oEmbed
+read returns the same. The Arabic was destroyed by the harness *before* the
+request left the machine, so the live YouTube video carries the mangled title.
+The later manual SQL "correction" set the local row to the correct Arabic, which
+means **local truth and external truth differ on the title field only**. Every
+other field matches. This was not repaired: changing YouTube metadata is outside
+this pass's authorization, and it is recorded here so the owner can decide.
+
+**Gates.** `npm run typecheck` PASS (server, ui, revideo-project: 0 errors).
+`npx vitest run` PASS — 91 files / **1288 tests**, 0 failed (up from 1282; +6
+new). `npm run build` PASS.
+
+**Image.** Built exactly from `v2.Dockerfile` at source `6c38844` as
+`abud-shorts-engine:v2-6c38844`; image ID
+`sha256:dcffaed21f51ae3f11b54228ab041bb37be1a52a495ca4dc9d28ab3573c13163`.
+The previously accepted candidate
+(`sha256:c8f4b37678ef9b80acd568daf0381e2ad4c9136985b6ef5d059b95149e05f6d0`) is
+preserved as `abud-shorts-engine:v2-72c15f9-accepted-rollback`, and the release
+tag `ghcr.io/3bud-zc/abud-shorts-engine:2.5.0` now points at the new image so
+the installed `.env` pin stays accurate. Only `abud-shorts-app` and
+`abud-shorts-render-worker` were recreated, with `--no-deps`; PostgreSQL and n8n
+were untouched. No `docker cp`, no prune, no `down -v`. Both containers report
+**healthy** on the new image.
+
+**Live post-source validation (read-only).** The existing publication read back
+through the normal Short Studio API on the new image reports: platform
+`youtube`, account `NeuralCraft` (`@neuralcraft-c8c`), visibility `unlisted`,
+status `published`, provider `upload_post`, provider post id
+`753d09d288124b7c8e76bc8f7820f793`, URL
+`https://www.youtube.com/watch?v=Fy7MMJmHxhk`, `publishedAt`
+`2026-09-08T19:45:55.336Z`, attempt count 1, and the correct Arabic title. The
+read-only Upload-Post status check for that request id returns `completed`,
+1/1, `success: true`, same post id and URL — local truth matches provider truth
+on every field except the title noted above. The new reconciliation sweep
+performed no provider calls, because there are 0 publications in `processing`.
+
+**Ledger:**
+- **External Test Publication:** PASS — already completed, untouched
+- **Normal Publishing Persistence:** PASS
+- **Manual SQL Root Cause:** QA-HARNESS-ONLY for the record, attempt and events;
+  PRODUCT DEFECT for `provider_url` and for terminal reconciliation
+- **Product Persistence Defect:** YES — fixed in `6c38844`
+- **Automatic Terminal Reconciliation:** PASS
+- **Arabic Title Persistence:** PASS (product); live post title corrupted by the
+  QA harness and deliberately left as-is
+- **Idempotency:** PASS
+- **Duplicate Count:** 0
+- **Publications:** 2 rows (1 real test publication + 1 historical migration
+  record), unchanged
+- **Publishing Attempts:** 2 rows, unchanged. **Publishing Events:** 3 rows,
+  unchanged
+- **Additional External Writes This Pass:** 0 (Uploads 1 total, Publications 1
+  total, Drafts 0, Schedules 0, Retries/Additional Posts 0)
+- **GA:** READY FOR OWNER FINAL GA AUTHORIZATION
