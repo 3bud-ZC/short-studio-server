@@ -61,12 +61,11 @@ Arabic Caption Tofu: PASS.
 2.5 Renderer: FFMPEG/HYBRID - FINAL. Final Caption Renderer: LIBASS. Revideo:
 EXPERIMENTAL / DEFERRED POST-2.5.
 
-Publishing: Upload-Post is IN PROGRESS and remains the customer-supported
-publishing gateway per product decision; historical direct-provider adapters
-remain in the codebase as internal/legacy extension points, not in default
-routing.
+Publishing: Upload-Post is AUTHENTICATED & VERIFIED via Provider Vault. Live
+destination discovered: YouTube (NeuralCraft / @neuralcraft-c8c). Awaiting
+owner target authorization for test publish.
 
-GA: BLOCKED pending publishing + final release closure.
+GA: BLOCKED pending one owner-authorized test publication + final release ceremony.
 
 Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
 migration; no database migration was added or required for branding alone).
@@ -13785,5 +13784,22 @@ pixel QA result: **PASS**.
 - **Linux Native:** BLOCKED — NO AUTHORIZED NATIVE TARGET.
 - **Repository Rename Capability:** READY — Admin permission verified; rename deferred as final release step.
 - **GA:** BLOCKED pending owner-authorized test publication + final release ceremony (and Linux-native verification if still treated as a mandatory GA gate).
+
+### Short Studio 2.5 — Commercial Closure Phase B Pre-Publish Authorization
+
+**Scope & Verification.** Resumed on `v2.5-short-studio`. The owner manually configured the active Upload-Post API key via the Short Studio Integrations UI into the AES-256-GCM encrypted Provider Vault (`eyJh••••EJeM`). Canonical runtime verified on exact candidate image (`sha256:c8f4b37678ef9b80acd568daf0381e2ad4c9136985b6ef5d059b95149e05f6d0`) with `short-studio-app` (healthy), `short-studio-render-worker` (healthy), `short-studio-postgres` (healthy), and `short-studio-n8n` (healthy). App and worker run on port 3130 bound to 127.0.0.1.
+
+**Ledger:**
+- **Upload-Post Configured:** true
+- **Upload-Post Authenticated:** PASS (`status: healthy`, latency 5377ms, live token verified on Upload-Post API, `invalid_credentials: false`)
+- **Credential Source:** Provider Vault (`upload_post` / `api_key`)
+- **Live Connected Destinations:**
+  - **YouTube:** `NeuralCraft` (Handle: `@neuralcraft-c8c`, Safe Provider Profile: `abud`, Status: connected, `reauth_required: false`, Visibility Options: `private`, `unlisted`, `public`)
+  - *(Note: TikTok profile slot `abud` is present in Upload-Post but not connected: `social_accounts.tiktok: ""`)*
+- **Historical / Migrated Records (Local DB only):**
+  - **YouTube:** `Migration Channel` (Local ID: `acct-mig-001`, `channel-mig-001`, seeded rehearsal record, not confirmed as live destination)
+- **External Publication:** AWAITING OWNER TARGET AUTHORIZATION (0 external writes: 0 posts, 0 drafts, 0 uploads, 0 schedules)
+- **GA:** BLOCKED pending one owner-authorized test publication + final release ceremony (and Linux-native verification if still treated as a mandatory GA gate)
+
 
 
