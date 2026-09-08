@@ -13587,3 +13587,98 @@ post-2.5 experimental work, not something 2.5 waits on). Upload-Post:
 **BLOCKED pending owner video acceptance**. GA: **BLOCKED pending owner
 video acceptance + publishing closure**.
 
+### Short Studio 2.5 - Final Arabic duration-aware content planning closure
+
+**Content-planning fix (commit `9db98cb`).** The Arabic content pack
+(`buildTechEducationalScenesArabic` in `localProvider.ts`) always emitted
+exactly 4 equal-share scenes regardless of how long each beat's real
+required narration actually was - the root content-planning cause (compounding
+with a separate VoiceTut speaking-rate miscalibration, `30.62` chars/s
+against 5 real measured samples showing `13.2`) behind the historical 11s-
+request/18.15s-actual Arabic overshoot. Fixed by routing the Arabic pack
+through the same `allocateBeatDurations`/`composeNarrationForDuration`
+machinery the English pack already used: hook/CTA are essential and always
+survive; problem/solution are the first dropped when the duration budget is
+tight; narration is composed to genuinely fit its allocated slot rather than
+crushing all 4 beats into an equal, too-small share. Added a persisted
+`ContentDurationBudget` contract and a pre-TTS `checkContentDurationFeasibility`
+gate (`CONTENT_DURATION_BUDGET_NOT_MET`) so GPU/TTS time is never spent on
+content already known to be impossible for the requested duration.
+
+**Newly found and fixed this pass (commit `a81f98a`): Arabic topic-relevance
+false negative.** Producing the real qualifying candidate surfaced a second,
+independent, pre-existing bug: `extractTopicConcepts` stemmed Arabic tokens
+through the same (English-only, effectively no-op for Arabic) `stemWord`
+function used for English, so a prompt concept like "النسخ" (with the
+definite article) never literal-substring-matched narration's natural
+indefinite phrasing "نسخة" - silently zeroing `topicRelevanceScore` and
+failing `contentReady`/`professionalReady`/`status` even on a duration- and
+technically-perfect render. Confirmed pre-existing (the old 4-scene
+narration scored the same way before this pass's scene-count change, so this
+is not a regression from it). Fixed with `normalizeArabicForMatching`
+(strips the leading "ال", trailing taa marbuta/haa, normalizes alef
+variants) threaded through `computeTopicRelevanceScore`; the Arabic CTA's
+required sentence was also swapped to one that keeps the "backup" keyword
+under the tight-duration beat allocator, at the exact same Unicode length as
+the original so the duration target is unaffected. Full suite: 91 files /
+1273 tests passing after both fixes, including new regression coverage for
+the stemming behavior and the duration-aware Arabic scene count.
+
+**Real qualifying candidate (image `abud-shorts-engine:v2-a81f98a`, ID
+`db55ad1b48ef`, git SHA `a81f98a`): content-planning and duration gates now
+genuinely pass.** Real Egyptian-Arabic production (VoiceTut/Mohamed, real
+Pexels, canonical FFmpeg/hybrid renderer, libass captions), same 11s/backup-
+topic prompt as every prior Arabic attempt this project has made. Pre-TTS
+budget: 2 scenes selected, `narrationBudgetMs: 9340` vs
+`estimatedNarrationMs: 9242` (feasible, no gate trip). Real post-TTS result:
+duration **11.01s** (0.1% variance), zero bounded corrections needed on
+either scene, `technicalScore: 100`, `mediaPlanScore: 100`,
+`technicalReady/contentReady/professionalReady` all **true** for the first
+time ever on this topic, `topicRelevanceScore: 0.8`,
+`genericFillerDetected: false`, `scriptCompleteness: true`,
+`ctaCompleteness: true`, `validationResult.valid: true`,
+`audioQa.pass: true`, `mixedSilenceGate.pass: true` (0ms detected silence),
+`captionQa.pass: true`, `status: "ready"`.
+
+**BLOCKING finding from mandatory real pixel inspection (not metadata):
+Arabic caption tofu/missing-glyph defect is still present, and the
+automated `captionQa` gate does not detect it.** Despite every metadata
+field above reporting green (including `captionQa.pass: true`), lossless
+PNG frame extraction and direct visual inspection of the rendered
+`final-owner-ar-v2.mp4` found real missing-glyph ("tofu") boxes at four
+separate points across both scenes: ~1.5s ("مشروع" rendered as "مشر" +
+a tofu box, mid-word), ~3.0s ("فجأة" rendered as "فجأ" + a tofu box),
+~6.5-8.5s (two tofu boxes, in "عشان" and "تعرف"), and ~10.3s ("احتياطية"
+rendered with its leading "ا" replaced by a tofu box). Both scenes used
+`captionTimingSource: "deterministic_fallback"` (Whisper `scriptSimilarity`
+0.62 and 0.60, both below the trust threshold). This is the same failure
+signature ("مشروع" -> "مشر" + missing-glyph box) previously root-caused and
+believed fixed in the Arabic glyph-defect closure pass (stale-target,
+degenerate-timing-window bug in the deterministic-fallback word-timing
+generator) - but that generator's code was re-read this pass and is
+structurally sound (monotonic, distributed across real measured audio
+duration, no artificial per-word floor), so this is not a reproduction of
+the previously-fixed mechanism. The defect now appears to live further
+downstream - most likely in phrase-grouping/2-line-wrap or in
+karaoke/`\k`-tag ASS generation from fallback word boundaries not aligning
+with Arabic grapheme-cluster/ligature reshaping boundaries - but the exact
+downstream mechanism was not isolated, since captions/libass/
+`karaoke_current_word`/Arabic shaping are explicitly out of this pass's
+scope and were not modified. Separately, `captionQa`'s automated pass/fail
+signal was proven, with real evidence, not to catch this class of defect -
+real pixel inspection is not optional for Arabic caption sign-off.
+
+**FINAL VERDICT for this pass: BLOCKED.** The content-planning defect this
+pass targeted is genuinely fixed and verified (duration, technical, and all
+content-quality gates pass for the first time on this topic). Release is
+still blocked by a separate, real, pre-existing caption-rendering defect
+found only via required pixel inspection - not fabricated as a pass, and not
+patched without review given it falls outside this pass's authorized scope.
+No candidate was exported to `FINAL-OWNER-REVIEW`. English was not
+re-rendered (the topic-relevance fix is `language === "ar"`-gated; the full
+regression suite, including English-specific content-ai and caption tests,
+passes unchanged) - the existing `short-studio-final-en-v2.mp4` (11.16s,
+PASS) stands. Evidence (candidate video, extracted frames, spec/results
+JSON) preserved in the session scratchpad and in the reused container's data
+volume for a follow-up captions-pipeline investigation.
+
