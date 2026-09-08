@@ -1290,7 +1290,15 @@ export class LocalContentAIProvider implements ContentAIProvider {
         visualPrompt: "Small business owner smiling confidently while working on a laptop",
         transition: "cut",
         units: [
-          { role: "required", text: "تابعنا عشان تعرف أسهل طريقة تحافظ بيها على ملفاتك من الضياع." },
+          // Explicitly names "نسخة احتياطية" (backup copy) - not just generic
+          // "protect your files" - so the topic stays clear even when a
+          // tight budget drops the problem/solution beats (allocateBeatDurations)
+          // and this required sentence ends up carrying the CTA alone. Same
+          // length as the sentence it replaced (60 chars) to keep the same
+          // duration profile; mirrors the equivalent English CTA fix
+          // (buildTechEducationalScenesEnglish's own comment on this same
+          // pattern).
+          { role: "required", text: "تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك." },
           {
             role: "optional",
             text: brand

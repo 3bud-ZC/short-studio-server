@@ -17,6 +17,43 @@ describe("extractTopicConcepts", () => {
     expect(computeTopicRelevanceScore("Cloud backup protects your business files from data loss.", concepts)).toBeGreaterThanOrEqual(0.7);
     expect(concepts).not.toEqual(expect.arrayContaining(["quick", "second", "ad"]));
   });
+
+  // Short Studio 2.5 Arabic content-planning closure: real, previously
+  // undetected bug found while producing the real Arabic candidate - the
+  // prompt's own definite-article/indefinite phrasing never literal-
+  // substring-matched the narration's natural phrasing even when clearly
+  // the same concept ("النسخ الاحتياطي" - THE-backup, prompt's own wording -
+  // vs "نسخة احتياطية" - a-backup, the natural indefinite form narration
+  // actually uses), silently failing topicRelevanceScore for the real
+  // backup-topic production regardless of scene count (confirmed: the
+  // pre-existing 4-scene narration scored the same low score before this
+  // fix too - not a regression from any scene-count change).
+  test("Arabic: matches the prompt's definite-article phrasing against the narration's natural indefinite form", () => {
+    const prompt = "أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة";
+    const concepts = extractTopicConcepts(prompt, "ar");
+    const narration =
+      "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس. تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك.";
+    const score = computeTopicRelevanceScore(narration, concepts, "ar");
+    expect(score).toBeGreaterThanOrEqual(0.3);
+  });
+
+  test("extractTopicConcepts strips the Arabic definite article, so 'النسخ' becomes 'نسخ', not the raw prefixed word", () => {
+    // This is the actual root cause: before the fix, Arabic tokens went
+    // through the same (no-op-for-Arabic) `stemWord` as English, so the
+    // extracted concept stayed "النسخ" (with the definite article attached)
+    // and never literal-substring-matched narration's unprefixed "نسخة".
+    const prompt = "أهمية النسخ الاحتياطي لملفات المشاريع الصغيرة";
+    const concepts = extractTopicConcepts(prompt, "ar");
+    expect(concepts).not.toContain("النسخ");
+    expect(concepts).not.toContain("الاحتياطي");
+    expect(concepts).toContain("نسخ");
+  });
+
+  test("the raw (unnormalized) definite-article form does not substring-match the narration - demonstrates why normalization is required", () => {
+    const narration =
+      "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس. تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك.";
+    expect(computeTopicRelevanceScore(narration, ["النسخ", "الاحتياطي"], "ar")).toBe(0);
+  });
 });
 
 describe("computeTopicRelevanceScore", () => {

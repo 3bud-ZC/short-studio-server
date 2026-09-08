@@ -55,7 +55,7 @@ export function extractTopicConcepts(prompt: string, language: "en" | "ar" = "en
   for (const token of tokens) {
     if (token.length < 3) continue;
     if (stopwords.has(token)) continue;
-    concepts.add(stemWord(token));
+    concepts.add(language === "ar" ? normalizeArabicForMatching(token) : stemWord(token));
   }
   return Array.from(concepts);
 }
@@ -66,11 +66,40 @@ function stemWord(word: string): string {
     .replace(/(ing|ed|ies|es|s)$/i, (suffix) => (word.length - suffix.length >= 3 ? "" : suffix));
 }
 
+/**
+ * Light Arabic normalization for topic-concept matching only - not a full
+ * morphological analyzer (Arabic broken plurals, e.g. "مشروع"/"مشاريع", need
+ * a real lexicon and are out of scope here). Strips the leading definite
+ * article "ال" and a trailing taa marbuta/haa, and normalizes alef variants
+ * (أ/إ/آ -> ا) - real, found gap: "النسخ الاحتياطي" (the prompt's own
+ * phrasing) never literal-substring-matched "نسخة احتياطية" (the natural
+ * indefinite form narration actually uses) even when both are clearly the
+ * same concept, silently failing every Arabic production's topicRelevance
+ * gate regardless of scene count (confirmed: the pre-existing 4-scene
+ * narration scored the same 0.2/1 before this fix, not a regression from
+ * any scene-count change).
+ */
+function normalizeArabicForMatching(word: string): string {
+  return word
+    .replace(/[أإآ]/g, "ا")
+    .replace(/^ال(?=..)/, "")
+    .replace(/[ةه]$/, "");
+}
+
 /** 0..1 share of extracted topic concepts that appear somewhere in the generated text. */
-export function computeTopicRelevanceScore(text: string, topicConcepts: string[]): number {
+export function computeTopicRelevanceScore(text: string, topicConcepts: string[], language: "en" | "ar" = "en"): number {
   if (topicConcepts.length === 0) return 1;
   const normalized = text.toLowerCase();
-  const hits = topicConcepts.filter((concept) => normalized.includes(concept)).length;
+  const hits = topicConcepts.filter((concept) => {
+    if (normalized.includes(concept)) return true;
+    // Arabic concepts are already normalized (see extractTopicConcepts);
+    // apply the same normalization to every word of the candidate text so a
+    // narration using the natural indefinite/unprefixed form still matches.
+    if (language !== "ar") return false;
+    return normalized
+      .split(/\s+/)
+      .some((textWord) => normalizeArabicForMatching(textWord).includes(concept));
+  }).length;
   return hits / topicConcepts.length;
 }
 
@@ -165,7 +194,7 @@ export function validateScriptQuality(
   const fullText = [...narrationTexts, ctaText].join(" ");
 
   const topicConcepts = extractTopicConcepts(prompt, language);
-  const topicRelevanceScore = computeTopicRelevanceScore(fullText, topicConcepts);
+  const topicRelevanceScore = computeTopicRelevanceScore(fullText, topicConcepts, language);
   const genericFillerDetected = detectGenericFiller(fullText, topicConcepts);
 
   const requiredConcepts = Math.min(MIN_TOPIC_CONCEPTS_REQUIRED, topicConcepts.length);
