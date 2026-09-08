@@ -61,11 +61,14 @@ Arabic Caption Tofu: PASS.
 2.5 Renderer: FFMPEG/HYBRID - FINAL. Final Caption Renderer: LIBASS. Revideo:
 EXPERIMENTAL / DEFERRED POST-2.5.
 
-Publishing: Upload-Post is AUTHENTICATED & VERIFIED via Provider Vault. Live
-destination discovered: YouTube (NeuralCraft / @neuralcraft-c8c). Awaiting
-owner target authorization for test publish.
+Publishing: Upload-Post is AUTHENTICATED & LIVE VERIFIED. Single owner-authorized
+test publication to YouTube (NeuralCraft / @neuralcraft-c8c) SUCCEEDED:
+video short-studio-final-ar-v3.mp4 published as UNLISTED (Provider ID:
+753d09d288124b7c8e76bc8f7820f793, YouTube ID: Fy7MMJmHxhk, URL:
+https://www.youtube.com/watch?v=Fy7MMJmHxhk). Exactly 1 external upload/post,
+0 duplicates.
 
-GA: BLOCKED pending one owner-authorized test publication + final release ceremony.
+GA: BLOCKED pending final release ceremony only.
 
 Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
 migration; no database migration was added or required for branding alone).
@@ -13800,6 +13803,38 @@ pixel QA result: **PASS**.
   - **YouTube:** `Migration Channel` (Local ID: `acct-mig-001`, `channel-mig-001`, seeded rehearsal record, not confirmed as live destination)
 - **External Publication:** AWAITING OWNER TARGET AUTHORIZATION (0 external writes: 0 posts, 0 drafts, 0 uploads, 0 schedules)
 - **GA:** BLOCKED pending one owner-authorized test publication + final release ceremony (and Linux-native verification if still treated as a mandatory GA gate)
+
+### Short Studio 2.5 — Commercial Closure Phase B Owner-Authorized Test Publication
+
+**Scope & Verification.** Resumed on `v2.5-short-studio`. Executed exactly ONE owner-authorized test publication using the approved Arabic production candidate video (`short-studio-final-ar-v3.mp4`) to the authorized destination: YouTube / `NeuralCraft` (`@neuralcraft-c8c`) via Upload-Post profile `abud` with visibility `unlisted`. Canonical runtime verified healthy on exact candidate image (`c8f4b37678ef`).
+
+**Execution & Live Audit Ledger:**
+- **Owner Test Publication Authorization:** APPROVED
+- **Authorized Target:** YouTube / NeuralCraft / @neuralcraft-c8c (Upload-Post profile: `abud`)
+- **Authorized Video:** `short-studio-final-ar-v3.mp4` (H.264 / AAC, 1080x1920, 11.000s, 3,585,285 bytes, SHA256: `bc712ccc75cfb4c33dc8e6217d93a5a882979a092cc2a81fa005cf3387ed7b32`)
+- **Authorized Visibility:** unlisted
+- **Preflight:** PASS (FFprobe probe verified: 1080x1920, 11.000s, videoCodec: h264, audioCodec: aac, 0 blocking issues)
+- **Upload-Post Authentication:** PASS (API key resolved from Provider Vault `upload_post`/`api_key`)
+- **Test Publication:** PASS (HTTP 200, latency 35228ms)
+- **Provider Publication ID:** `753d09d288124b7c8e76bc8f7820f793` (Job ID: `7fdafe6a9b014c75af6ed949e4a2d1cf`)
+- **YouTube Video ID:** `Fy7MMJmHxhk`
+- **Publication URL:** `https://www.youtube.com/watch?v=Fy7MMJmHxhk`
+- **Final Provider State:** completed / published (`success: true`, attempts: 1)
+- **Final Visibility:** unlisted (verified absent from channel public videos and shorts feeds; accessible via unlisted direct URL / oEmbed)
+- **Idempotency Key:** `owner_auth_yt_neuralcraft_ar_v3_unlisted`
+- **Duplicate Count:** 0
+- **Database Records:**
+  - `publications`: 1 test record (`cmtt2v9120000m5s3f9he0q01`, status `published`, account `acct-neuralcraft-001`, provider `upload_post`, URL `https://www.youtube.com/watch?v=Fy7MMJmHxhk`) + 1 historical migration record (`pub-mig-001`, untouched). Total rows: 2.
+  - `publishing_attempts`: 1 attempt record (id: 2, status `succeeded`, provider response recorded).
+  - `publishing_events`: 2 lifecycle events (id: 2 `upload_started`, id: 3 `completed`).
+- **External Writes Accounting:**
+  - Uploads: 1
+  - Publications / Posts: 1
+  - Drafts: 0
+  - Schedules: 0
+  - Additional posts / Retries: 0
+- **GA:** BLOCKED pending final release ceremony only
+
 
 
 
