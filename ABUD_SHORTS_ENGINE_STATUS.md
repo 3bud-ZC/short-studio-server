@@ -13762,10 +13762,28 @@ at the requested words: `مشروع`, `فجأة`, `عشان`, `تعرف`, and `�
 Direct inspection found 0 tofu, 0 missing glyphs, and 0 broken joins. Final
 pixel QA result: **PASS**.
 
-**Export.** Because the final Arabic v3 candidate was clean, exported exactly:
-`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\short-studio-final-ar-v3.mp4`.
-The existing passing English video
-`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\short-studio-final-en-v2.mp4`
-was not regenerated. Upload-Post was not configured, nothing was published,
-`main` was not merged, and no `2.5.0` tag was created.
+### Short Studio 2.5 — Commercial Closure Phase A
+
+**Scope & Decisions.** Resumed from working tree on `v2.5-short-studio`. Preserved all approved video gates (Owner Arabic Video Review: APPROVED, Owner English Video Review: APPROVED, Video Quality Gate: PASS / CLOSED, Production Renderer: FFMPEG/HYBRID — FINAL, Caption Renderer: LIBASS — FINAL, Revideo: DEFERRED POST-2.5, Arabic Content Planning: PASS, Arabic Duration: PASS, Arabic Caption Tofu: PASS). No video, caption, voice, or duration logic touched.
+
+**Ledger:**
+- **Owner Arabic Video:** APPROVED
+- **Owner English Video:** APPROVED
+- **Video Quality Gate:** PASS / CLOSED
+- **Upload-Post Customer Policy:** PASS — Upload-Post only. Normal customer publishing routes strictly to Upload-Post (`youtube`, `tiktok`, `instagram`, `facebook`, `linkedin`, `twitter`, `threads`). Direct adapters (YouTube, Meta, TikTok, Telegram) remain only for internal/legacy records and never auto-fallback.
+- **Upload-Post Vault Resolution:** PASS — Centralized resolver `src/server/v2/integrations/credentialResolver.ts` resolves credentials with precedence: Provider Vault -> Environment -> Not Configured.
+- **Upload-Post Configured:** true (resolved from AES-256-GCM encrypted Provider Vault).
+- **Upload-Post Authenticated:** BLOCKED — live read-only check (`GET /api/uploadposts/me`) safely executed with rehearsal key from vault; API truthfully responded with `invalid_credentials` (401/403 unauthorized, latency 4603ms). Real active owner API key needed for live external posting.
+- **Connected Destinations:** `acct-mig-001 | Migration Channel | YouTube | test status: invalid_credentials (safe, read-only)`
+- **External Publication:** AWAITING OWNER TARGET AUTHORIZATION (0 external writes: 0 posts, 0 drafts, 0 uploads, 0 schedules).
+- **Browser QA:** PASS — Playwright matrix verified 32/32 checks across Desktop 1440x900 and Mobile 390x844; English and Arabic RTL (`dir="rtl"`) layouts clean, no horizontal overflow, no error boundaries, no login barriers in LOCAL_SINGLE_USER, no logout UI.
+- **Runtime:** PASS — `short-studio-app` (healthy, port 3130 bound to 127.0.0.1), `short-studio-render-worker` (healthy), `short-studio-postgres` (healthy), `short-studio-n8n` (healthy). App and worker run identical candidate image `c8f4b37678ef`.
+- **Local Voice:** PASS — VoiceTut healthy on host `http://127.0.0.1:8765`, CUDA acceleration active on NVIDIA GeForce RTX 4070 (12GB VRAM), `models_ready: ["voicetut"]`.
+- **Automated Gates:** PASS — `npm run typecheck` (server, ui, revideo-project: 0 errors); `npx vitest run` (91 files / 1282 tests: 1282 passed, 0 failed); `npm run build` (clean production build).
+- **Release Backup:** PASS — verified backup `short_studio_backup_config_db_2026-09-08T15-57-30-259Z_fm2bb7.abudbak` (326,153 bytes, checksum `bc3e0854e1b13986b686b89be0daf08faccfcfcf37c6879011504c491af91ac9`, `includesSecrets: false`).
+- **Package Hygiene:** PASS — verified via `scripts/release/package-client.mjs` and `scripts/release/verify-package.mjs`. Allowlist enforced; excludes `.env`, secrets, vault data, customer DB/media, logs, node_modules, `.git`, and model weights.
+- **Linux Native:** BLOCKED — NO AUTHORIZED NATIVE TARGET.
+- **Repository Rename Capability:** READY — Admin permission verified; rename deferred as final release step.
+- **GA:** BLOCKED pending owner-authorized test publication + final release ceremony (and Linux-native verification if still treated as a mandatory GA gate).
+
 
