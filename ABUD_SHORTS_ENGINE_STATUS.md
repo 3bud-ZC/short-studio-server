@@ -33,8 +33,16 @@ Legacy: Formerly ABUD Shorts Engine. Built from `main` at commit `be44afe3`
 `v2.5-short-studio`; `main`, the `v2.4.0` tag and the V2.4 GitHub Release are
 untouched by this work.
 
-Video: Production Ready — FFmpeg/Remotion pipeline carried over unchanged from
-2.4, no rendering-path changes in this pass.
+Video: Production Ready — FFmpeg/hybrid (`ffmpeg_fast`/`hybrid_ffmpeg`) is the
+**canonical, final 2.5 production renderer**, with libass as the final caption
+rasterizer. This is a settled product decision, not a placeholder: Revideo
+(`@revideo/renderer`) is **experimental/deferred post-2.5** - real, preserved
+in source, not wired into the default path, and explicitly **not part of the
+2.5 GA gate**. See "Short Studio 2.5 Final Video Engine Closure" near the end
+of this file for the full reasoning (a reproducible Chromium compose hang on
+real content, the production image never having shipped Chromium at all, and
+the Revideo+libass hybrid renderer existing but never wired into
+`ShortCreator`). No further Revideo work is expected before GA.
 
 Arabic Voice: VoiceTut Local High Quality is the production default
 (`ARABIC_PRODUCTION_PROVIDER` in `src/server/v2/voice-providers/types.ts`),
@@ -13433,4 +13441,149 @@ this pass's authorized scope). revideoLibassRenderer.ts wiring gap:
 (all automated gates PASS). Final Arabic Candidate: **BLOCKED** - duration
 overshoot + Arabic glyph defect, both real, neither self-approved. Live
 Revideo Swap: **BLOCKED**. Upload-Post: **BLOCKED**. GA: **BLOCKED**.
+
+### Short Studio 2.5 Final Video Engine Closure
+
+**Final product decision: Revideo is EXPERIMENTAL/DEFERRED POST-2.5, not the
+2.5 default and not part of the GA gate.** Canonical 2.5 production renderer
+is the existing, proven FFmpeg/hybrid path (`ffmpeg_fast`/`hybrid_ffmpeg`);
+final caption renderer is libass. Reasons, all already found and documented
+in this file: the Revideo/Chromium compose stage hangs indefinitely and
+reproducibly on real content with no timeout to ever recover; the real
+production `v2.Dockerfile` never shipped Chromium/Puppeteer at all (Revideo
+only ever ran in the separate `main.Dockerfile` evaluation track); and
+`revideoLibassRenderer.ts` (the tested Revideo+libass hybrid) was never wired
+into `ShortCreator`. Revideo source is untouched and preserved for future
+work; per explicit instruction, none of the above was investigated further
+or fixed this pass, and Revideo is not on the critical path to GA.
+
+**Arabic duration overshoot - root cause.** Traced the real failing
+production end to end. `ShortCreator`'s post-TTS correction loop only ever
+checked the underfill condition (`actualVoiceDuration < target*0.85`) to
+decide whether to append a whole optional narration unit and re-synthesize;
+there was no corresponding check for whether the scene had now *overshot*,
+and no way to walk an over-correction back once made. A complete, tested,
+symmetric decision function for exactly this (`decideCorrectionAction`:
+expand/condense/accept/give_up, bounded retries) already existed in
+`scriptDurationController.ts` but was never called from `ShortCreator` - the
+same class of gap as `revideoLibassRenderer.ts` never being wired in.
+
+**Duration fix.** Replaced the hand-rolled loop with real calls to
+`decideCorrectionAction`, driven by the real measured post-TTS duration each
+round. "Condense" now genuinely drops the last-added optional unit and
+re-synthesizes. Added a pre-render **total-duration authority** gate:
+real total narration + bounded inter-scene breath pauses + bounded outro,
+checked against the requested duration +/-1s, throwing a clear
+`DURATION_TARGET_NOT_MET` error instead of rendering a video already known
+to be invalid. Verified against the real, previously-failing Arabic
+production: the worst single-scene overshoot dropped from +6s (2.8s target,
+8.8s actual) to +1.6s (2.8s target, 4.4s actual) after expand-then-condense,
+and the render now **fails loudly** (`DURATION_TARGET_NOT_MET: predicted
+14.18-14.23s vs the accepted [10, 12]s range for an 11s request`) instead of
+silently shipping the old 18.15s video. This is real, meaningful progress -
+the controller is now correctly symmetric and bounded - but this specific
+topic's content-AI-planned *required* narration (~13.7-14s across 4 scenes)
+is inherently longer than an 11s budget allows even at every scene's
+minimum (required-only) content; closing that gap needs a deeper
+content-planning change (shortening or rebalancing required text itself,
+not just choosing how many optional units to include), which is out of
+scope for this pass and was not attempted without checking with the owner
+first.
+
+**Arabic glyph defect - root cause.** Isolated by reproducing the exact
+real failing narration through the real ASS generator, in a
+production-equivalent Debian/libass/Cairo/HarfBuzz/FriBidi container, under
+all three highlight modes (no highlight, the existing accumulating `\k`
+fill, and the new `karaoke_current_word` per-token colour override) -
+direct pixel inspection of the rendered frames confirmed **all three render
+the exact same phrase cleanly**, no tofu, no missing glyphs, no broken
+joins. `karaoke_current_word` is **not confirmed** as the cause; no
+Arabic-specific highlight-policy change was made (the instruction's
+language-aware-policy step is conditional on confirmation, which this
+investigation did not find). The real cause, found by tracing
+`captionTimingSource: "deterministic_fallback"` (the path used whenever
+Whisper's transcript diverges too far to trust, which this exact scene hit):
+`ShortCreator` distributed fallback word timing across the stale
+**pre-correction** `targetSceneDuration` with a forced 250ms-per-word floor
+and a hard `endMs` clamp to that same stale total - for a scene whose real
+narration ran long (exactly the duration-overshoot scenario above), later
+words' clamped `endMs` fell at or before their own `startMs`, producing
+degenerate/inverted timing windows that fed corrupted phrase and highlight
+boundaries into the caption pipeline. Direct evidence: a lossless-PNG frame
+of the real failing render showed "مشروع" (a perfectly normal word,
+codepoints verified clean) rendering as "مشر" followed by a missing-glyph
+box, mid-word.
+
+**Glyph fix.** Deterministic-fallback word timing now distributes across
+the REAL measured audio duration, never the stale target, with no
+artificial per-word floor - timing windows are always monotonically
+increasing and always cover the full real audio, which structurally
+prevents the inverted-window class of corruption regardless of how far a
+scene's real narration ends up from its original target.
+
+**Tofu regression coverage.** Added to
+`arabicCaptionRendererV3.test.ts`: the requested alef-form/lam-alef-ligature
+fixture (ا أ إ آ لأ لا لإ لآ) carried through to ASS output unmodified under
+both `social_ad` and `karaoke`; the exact previously-failing narration line
+rendered complete with no dropped/truncated words; and a direct
+reproduction of the old degenerate-timing shape confirming the ASS builder
+stays defensive regardless of the `ShortCreator`-level fix. Real render
+verification (actual libass rasterization) is necessarily a manual/CI step
+outside vitest's reach - no real libass rasterizer runs in the unit-test
+environment - and was done manually this pass via the production-equivalent
+Debian container, not skipped.
+
+**Gates.** `npx tsc --noEmit` (server, ui, revideo-project): clean.
+`npx vitest run`: **91 files / 1264 tests passing** (3 new), zero
+unexplained failures. `npm run build`: clean. Committed as `80ccf2b`
+(duration + Arabic timing fix) on top of `27afd82`/`a3e4e09`.
+
+**Candidate.** Built from `v2.Dockerfile` (the canonical 2.5 production
+Dockerfile - no `main.Dockerfile`, no Revideo evaluation image) via a plain
+`docker build`, no `docker cp`, no manual `node_modules` edits:
+`abud-shorts-engine:v2-80ccf2b`, image ID `5d7ffd3826d4`. Verified in an
+isolated container against a fresh data volume (not the live app/render-worker
+containers) with the real GPU-backed VoiceTut/KemeTone local-voice service,
+real Pexels, real Whisper, real ffmpeg/libass.
+
+**Final Arabic candidate: BLOCKED (not self-approved, not exported).**
+Requested 11s (Egyptian Arabic, VoiceTut/Mohamed, real Pexels, canonical
+FFmpeg/hybrid + libass Bold Social). The render correctly refused to
+complete: predicted final duration 14.18-14.23s falls outside the accepted
+[10, 12]s range even after full bounded per-scene correction
+(`DURATION_TARGET_NOT_MET`). This is the fix working as designed, not a new
+failure - the alternative would have been silently shipping another
+invalid ~14-18s video. Closing this needs the deeper content-planning
+change described above.
+
+**Final English same-build smoke: PASS, exported.** Same exact candidate
+image, same topic as the original passing baseline ("Why small businesses
+should back up their files"), Kokoro af_heart, real Pexels, canonical
+FFmpeg/hybrid + libass. Duration **11.16s** (1.5% variance),
+`technicalReady`/`contentReady`/`professionalReady` all **true**,
+`technicalScore: 100`, `validationResult.valid: true`. Delivery verified:
+thumbnail 200, preview 200/206, download 200 `video/mp4`. One honest,
+pre-existing (not a regression from this pass's changes - present
+identically in the original baseline) observation: `captionQa` flags one
+phrase ("critical data due to simple hardware failure?") wrapping to 3
+lines against the style's 2-line limit; direct frame inspection shows it
+reads cleanly with no visual defect, just fuller than the style intends -
+noted, not fixed, out of this pass's two-blocker scope. Exported to
+`C:\ProgramData\ShortStudio\shared\qa\FINAL-OWNER-REVIEW\short-studio-final-en-v2.mp4`.
+
+**Current field values**: 2.5 Production Renderer: **FFMPEG/HYBRID - FINAL**.
+Final Caption Renderer: **LIBASS**. Revideo: **EXPERIMENTAL / DEFERRED
+POST-2.5** (not a GA gate). English previous candidate: **PASS**. Arabic
+previous candidate: **BLOCKED / superseded** (this pass's investigation
+explains why and fixes two real bugs, but does not close it). Arabic
+duration defect: **ROOT-CAUSED AND FIXED at the controller level; this
+specific topic still BLOCKED** by a deeper content-planning gap, not a
+controller bug. Arabic glyph defect: **ROOT-CAUSED AND FIXED** (not
+`karaoke_current_word`; a deterministic-fallback timing bug). Final
+same-build Arabic: **BLOCKED - `DURATION_TARGET_NOT_MET`**. Final
+same-build English: **OWNER REVIEW PENDING** (all automated gates PASS,
+exported). Live Revideo Swap: **REMOVED as a GA gate** (Revideo is
+post-2.5 experimental work, not something 2.5 waits on). Upload-Post:
+**BLOCKED pending owner video acceptance**. GA: **BLOCKED pending owner
+video acceptance + publishing closure**.
 
