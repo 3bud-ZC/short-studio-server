@@ -8,10 +8,10 @@ describe("getSpeakingRate", () => {
     expect(rate.charsPerSecond).toBeCloseTo(15.5, 1);
   });
 
-  it("returns the real measured calibration for voicetut/Mohamed/ar (case-insensitive)", () => {
+  it("returns the recalibrated measured rate for voicetut/Mohamed/ar (case-insensitive) - NOT the original 30.62, which this file's own comment already flagged as unverified and which the Short Studio 2.5 Arabic closure pass found to be off by ~2.4x against 5 real production samples", () => {
     const rate = getSpeakingRate("voicetut", "Mohamed", "ar");
     expect(rate.source).toBe("measured");
-    expect(rate.charsPerSecond).toBeCloseTo(30.62, 1);
+    expect(rate.charsPerSecond).toBeCloseTo(13.2, 1);
   });
 
   it("falls back to the language default (not measured) for an unknown voice in a known language", () => {

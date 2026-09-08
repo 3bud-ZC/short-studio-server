@@ -206,3 +206,91 @@ export function decideCorrectionAction(input: {
   }
   return { action: "condense" };
 }
+
+/**
+ * Planner-stage duration budget contract (Short Studio 2.5 Arabic content-
+ * planning closure, section 7). Distinct from the post-TTS
+ * `decideCorrectionAction` machinery above: this is computed once, BEFORE
+ * any TTS call, purely from the requested duration and the scene structure
+ * the planner already chose - so the planner (and diagnostics/metadata
+ * consumers) can know ahead of time whether its own selected content is
+ * even plausible, without waiting to discover an impossible budget only
+ * after spending a real synthesis call on it.
+ */
+export type ContentDurationBudget = {
+  requestedVideoMs: number;
+  reservedGapMs: number;
+  reservedOutroMs: number;
+  narrationBudgetMs: number;
+  estimatedNarrationMs: number;
+  selectedSceneCount: number;
+  /** estimatedNarrationMs - narrationBudgetMs; positive means the plan is over budget. */
+  estimatedVarianceMs: number;
+};
+
+export function buildContentDurationBudget(input: {
+  requestedVideoSeconds: number;
+  reservedOutroSeconds: number;
+  /** One estimated speech duration (seconds) per already-selected scene, at the real calibrated rate. */
+  sceneEstimatedSeconds: number[];
+  /** Bounded natural pause between consecutive scenes, seconds - matches ShortCreator's own continuous-narration timeline constant. */
+  interSceneGapSeconds?: number;
+}): ContentDurationBudget {
+  const gapSeconds = input.interSceneGapSeconds ?? 0.16;
+  const reservedGapSeconds = Math.max(0, input.sceneEstimatedSeconds.length - 1) * gapSeconds;
+  const narrationBudgetSeconds = Math.max(
+    0,
+    input.requestedVideoSeconds - reservedGapSeconds - input.reservedOutroSeconds,
+  );
+  const estimatedNarrationSeconds = input.sceneEstimatedSeconds.reduce((sum, s) => sum + s, 0);
+  return {
+    requestedVideoMs: Math.round(input.requestedVideoSeconds * 1000),
+    reservedGapMs: Math.round(reservedGapSeconds * 1000),
+    reservedOutroMs: Math.round(input.reservedOutroSeconds * 1000),
+    narrationBudgetMs: Math.round(narrationBudgetSeconds * 1000),
+    estimatedNarrationMs: Math.round(estimatedNarrationSeconds * 1000),
+    selectedSceneCount: input.sceneEstimatedSeconds.length,
+    estimatedVarianceMs: Math.round((estimatedNarrationSeconds - narrationBudgetSeconds) * 1000),
+  };
+}
+
+export type ContentDurationFeasibility = {
+  feasible: boolean;
+  reason?: string;
+  budget: ContentDurationBudget;
+};
+
+/**
+ * Fail-closed pre-TTS feasibility check (section 8). Not a stricter
+ * duplicate of the post-TTS `decideCorrectionAction` gate - that one is
+ * still the real, final authority once actual audio exists. This one asks
+ * a narrower, earlier question: even granting the SAME bounded natural
+ * speed-adjustment the post-TTS corrector is allowed to use (see
+ * ShortCreator's own 0.82x-1.08x bounds), could this scene's estimated
+ * narration plausibly ever land within its target? If not, every one of
+ * those real TTS calls is guaranteed wasted GPU time on content already
+ * known to be impossible - fail before spending it, with a clear reason,
+ * rather than after.
+ */
+export function checkContentDurationFeasibility(
+  scenes: Array<{ durationSeconds: number; estimatedSeconds: number }>,
+  budget: ContentDurationBudget,
+  maxSpeedFactor = 1.08,
+  toleranceRatio = 0.15,
+): ContentDurationFeasibility {
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    // Fastest this scene's estimated narration could plausibly play at,
+    // within the already-established natural speed-adjustment ceiling.
+    const bestCaseSeconds = scene.estimatedSeconds / maxSpeedFactor;
+    const upperBound = scene.durationSeconds * (1 + toleranceRatio);
+    if (bestCaseSeconds > upperBound) {
+      return {
+        feasible: false,
+        reason: `scene ${i + 1} narration (~${scene.estimatedSeconds.toFixed(1)}s estimated) cannot fit its ${scene.durationSeconds.toFixed(1)}s target even at the maximum natural speed-adjustment (${maxSpeedFactor}x)`,
+        budget,
+      };
+    }
+  }
+  return { feasible: true, budget };
+}

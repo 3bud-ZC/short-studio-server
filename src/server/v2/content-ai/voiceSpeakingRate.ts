@@ -65,9 +65,9 @@ const MEASURED_PROFILES: Record<CalibrationKey, SpeakingRateProfile> = {
     basis: "post-mastering-fix direct Kokoro.generate() calibration, 3 samples (101/187/296 chars), averaged ~15.5 chars/s - see this file's own comment for why the original 36.96 was corrupted data",
   },
   [calibrationKey("voicetut", "mohamed", "ar")]: {
-    charsPerSecond: 30.62,
+    charsPerSecond: 13.2,
     source: "measured",
-    basis: "real-proof-ar (real-proof-ar-revideo-project), 2 scenes, 140 chars / 4.572876s combined - NOT re-verified against the masterVoiceAudioFile fix in this pass (Arabic path deliberately left unchanged per this pass's scope); may warrant re-measurement in a future pass",
+    basis: "Short Studio 2.5 Arabic content-planning closure pass: the prior 30.62 value (this file's own comment already flagged it as 'NOT re-verified... may warrant re-measurement') was off by ~2.4x, the dominant cause of the real Arabic duration overshoot (a scene planned for 2.8s assuming a fast rate actually needed ~4.8s at VoiceTut/Mohamed's real pace). Recalibrated from 5 real post-mastering-fix ffprobe-measured VoiceTut/Mohamed samples in this pass's own production runs, speed-adjustment factored out: a 62-char sentence measured 4.44s at a 1.08x speedup (4.80s natural, 12.92 chars/s), and a 127-char two-sentence narration measured 8.78-9.09s across 4 separate real syntheses at 1.08x (9.48-9.82s natural, 12.93-13.40 chars/s) - tightly clustered, averaging 13.2 chars/s.",
   },
 };
 
@@ -86,9 +86,9 @@ const LANGUAGE_DEFAULTS: Record<string, SpeakingRateProfile> = {
     basis: "seeded from the one real (post-mastering-fix) English measurement on file (kokoro/af_heart) - not yet a per-voice measurement",
   },
   ar: {
-    charsPerSecond: 30.62,
+    charsPerSecond: 13.2,
     source: "default",
-    basis: "seeded from the one real Arabic measurement on file (voicetut/mohamed) - not yet a per-voice measurement",
+    basis: "seeded from the recalibrated voicetut/mohamed measurement above (5 real samples, Short Studio 2.5 Arabic closure pass) - not yet a per-voice measurement for any other Arabic voice",
   },
 };
 

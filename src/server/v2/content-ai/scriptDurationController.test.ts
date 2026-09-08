@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   allocateBeatDurations,
+  buildContentDurationBudget,
+  checkContentDurationFeasibility,
   composeNarrationForDuration,
   decideCorrectionAction,
   evaluateDurationFit,
@@ -193,5 +195,58 @@ describe("allocateBeatDurations", () => {
   it("includes every beat, unallocated proportions aside, when the budget comfortably fits all required content", () => {
     const allocations = allocateBeatDurations(beats, 60, rate);
     expect(allocations.every((a) => a.included)).toBe(true);
+  });
+});
+
+describe("buildContentDurationBudget (Short Studio 2.5 Arabic content-planning closure, planner-stage contract)", () => {
+  it("reserves inter-scene gaps proportional to (sceneCount - 1), and outro separately, before computing the narration budget", () => {
+    const budget = buildContentDurationBudget({
+      requestedVideoSeconds: 11,
+      reservedOutroSeconds: 1.5,
+      sceneEstimatedSeconds: [4.7, 4.5],
+    });
+    expect(budget.requestedVideoMs).toBe(11000);
+    expect(budget.reservedGapMs).toBe(160); // one gap between two scenes at the default 0.16s
+    expect(budget.reservedOutroMs).toBe(1500);
+    expect(budget.narrationBudgetMs).toBe(11000 - 160 - 1500);
+    expect(budget.estimatedNarrationMs).toBe(9200);
+    expect(budget.selectedSceneCount).toBe(2);
+  });
+
+  it("reports a positive variance when estimated narration exceeds the narration budget", () => {
+    const budget = buildContentDurationBudget({
+      requestedVideoSeconds: 5,
+      reservedOutroSeconds: 1.5,
+      sceneEstimatedSeconds: [4.8, 4.6],
+    });
+    expect(budget.estimatedVarianceMs).toBeGreaterThan(0);
+  });
+});
+
+describe("checkContentDurationFeasibility (pre-TTS fail-closed guard)", () => {
+  const budget = buildContentDurationBudget({
+    requestedVideoSeconds: 5,
+    reservedOutroSeconds: 1.5,
+    sceneEstimatedSeconds: [12.0],
+  });
+
+  it("fails closed when a scene's estimated narration cannot fit even at the maximum allowed speed-adjustment", () => {
+    const result = checkContentDurationFeasibility(
+      [{ durationSeconds: 2.5, estimatedSeconds: 12.0 }],
+      budget,
+    );
+    expect(result.feasible).toBe(false);
+    expect(result.reason).toContain("cannot fit its 2.5s target");
+  });
+
+  it("stays feasible for a realistic, only-somewhat-tight scene (the real Arabic 11s hook/cta case, ~1.9x natural pace, still recoverable by the post-TTS corrector)", () => {
+    const result = checkContentDurationFeasibility(
+      [
+        { durationSeconds: 4.83, estimatedSeconds: 4.7 },
+        { durationSeconds: 4.67, estimatedSeconds: 4.55 },
+      ],
+      budget,
+    );
+    expect(result.feasible).toBe(true);
   });
 });

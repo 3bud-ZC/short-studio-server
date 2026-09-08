@@ -22,8 +22,14 @@ import {
 import { matchFactPack, type FactPackEntry } from "./factPacks";
 import { detectContentStyle } from "./contentStyleDetector";
 import { extractTopicConcepts } from "./scriptQuality";
-import { getSpeakingRate, type SpeakingRateProfile } from "./voiceSpeakingRate";
-import { allocateBeatDurations, composeNarrationForDuration, type NarrationUnit } from "./scriptDurationController";
+import { estimateSpeechSeconds, getSpeakingRate, type SpeakingRateProfile } from "./voiceSpeakingRate";
+import {
+  allocateBeatDurations,
+  buildContentDurationBudget,
+  checkContentDurationFeasibility,
+  composeNarrationForDuration,
+  type NarrationUnit,
+} from "./scriptDurationController";
 
 function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
@@ -227,6 +233,36 @@ export class LocalContentAIProvider implements ContentAIProvider {
       voiceId: params.voiceId,
     }), prompt, isAr, dialect, resolvedCta);
 
+    // Pre-TTS fail-closed feasibility gate (Short Studio 2.5 Arabic content-
+    // planning closure, section 8): even after the planner has already
+    // chosen how many scenes to keep and how to size them, ask whether the
+    // resulting narration could plausibly ever land within its own scene's
+    // target - using the SAME real calibrated speaking rate and the SAME
+    // bounded natural speed-adjustment ceiling the post-TTS corrector is
+    // allowed to use - before spending a single real TTS call on content
+    // already known to be impossible (e.g. a request too short to hold
+    // even the minimal required message). The post-TTS `decideCorrectionAction`
+    // + total-duration authority gate in ShortCreator remain the final,
+    // real-audio authority; this is strictly an earlier, cheaper guard.
+    const planningRate = getSpeakingRate(params.voiceProvider || "", params.voiceId || "", isAr ? "ar" : "en");
+    const sceneEstimates = scenes.map((s) => estimateSpeechSeconds(s.narration, planningRate));
+    const durationBudget = buildContentDurationBudget({
+      requestedVideoSeconds: durationSeconds,
+      reservedOutroSeconds: Math.min(2.5, Math.max(1.5, Math.round(durationSeconds * 0.1 * 10) / 10)),
+      sceneEstimatedSeconds: sceneEstimates,
+    });
+    const feasibility = checkContentDurationFeasibility(
+      scenes.map((s, i) => ({ durationSeconds: s.durationSeconds, estimatedSeconds: sceneEstimates[i] })),
+      durationBudget,
+      2.5,
+      0.5,
+    );
+    if (!feasibility.feasible) {
+      throw new Error(
+        `CONTENT_DURATION_BUDGET_NOT_MET: ${feasibility.reason} (requested ${durationSeconds}s, narration budget ${(durationBudget.narrationBudgetMs / 1000).toFixed(1)}s, estimated narration ${(durationBudget.estimatedNarrationMs / 1000).toFixed(1)}s across ${durationBudget.selectedSceneCount} scene(s)).`,
+      );
+    }
+
     const ctaText = resolvedCta.text;
     const contentProvenance = factPackMatch ? "DETERMINISTIC" : curiosityStyle ? "SAFE_GENERIC" : "DETERMINISTIC";
 
@@ -261,6 +297,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
       metadata: {
         planner: "LocalContentAIProvider",
         plannerVersion: "3.0.0",
+        durationBudget,
         promptCompiler: {
           version: "prompt_compiler.v3",
           rawPromptLeakGuard: true,
@@ -1170,14 +1207,31 @@ export class LocalContentAIProvider implements ContentAIProvider {
    * Arabic counterpart of buildTechEducationalScenesEnglish - previously
    * missing entirely (any Arabic backup/tech prompt fell through to the
    * topic-neutral generic Arabic template). Same duration-aware composition.
+   *
+   * Short Studio 2.5 Arabic content-planning closure: this function used to
+   * split `contentBudget` into a fixed, equal quarter per beat regardless of
+   * duration - the actual root cause of the real Arabic overshoot (a scene
+   * planned for ~2.8s of an 11s budget, whose own REQUIRED sentence alone
+   * needs ~4.8s at VoiceTut/Mohamed's real calibrated rate, has no way to
+   * fit). `buildTechEducationalScenesEnglish` already solved this correctly
+   * via `allocateBeatDurations` - proportional, real-length-aware
+   * allocation that drops non-essential beats first when the budget is
+   * tight - but the Arabic counterpart never adopted it. Now it does,
+   * beat-for-beat identical in structure to the English version: hook/cta
+   * are essential (a short video is not useful without them), problem/
+   * solution are optional and are the first to be dropped for a tight
+   * budget, exactly like English already does. This is what makes scene
+   * count duration-aware instead of a hardcoded four, and reuses the same
+   * tested allocator rather than inventing Arabic-specific logic.
    */
   private buildTechEducationalScenesArabic(
     contentBudget: number,
     rate: SpeakingRateProfile,
     brand?: string,
   ): ProductionSceneSpec[] {
-    const perScene = contentBudget / 4;
     const beats: Array<{
+      id: string;
+      essential: boolean;
       purpose: ProductionSceneSpec["purpose"];
       onScreenText: string;
       stockSearchTerms: string[];
@@ -1186,6 +1240,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
       units: NarrationUnit[];
     }> = [
       {
+        id: "hook",
+        essential: true,
         purpose: "hook",
         onScreenText: "لو بتشتغل على مشروع صغير",
         stockSearchTerms: ["laptop typing files close up", "small business office desk"],
@@ -1198,6 +1254,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
         ],
       },
       {
+        id: "problem",
+        essential: false,
         purpose: "problem",
         onScreenText: "خسارة الملفات بتكلفك وقتك",
         stockSearchTerms: ["stressed business owner laptop", "frustrated worker computer"],
@@ -1210,6 +1268,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
         ],
       },
       {
+        id: "solution",
+        essential: false,
         purpose: "solution",
         onScreenText: "نسخة احتياطية يومية تلقائية",
         stockSearchTerms: ["external hard drive close up", "cloud storage sync laptop"],
@@ -1222,6 +1282,8 @@ export class LocalContentAIProvider implements ContentAIProvider {
         ],
       },
       {
+        id: "cta",
+        essential: true,
         purpose: "cta",
         onScreenText: "ابدأ دلوقتي",
         stockSearchTerms: ["small business owner smiling laptop", "satisfied entrepreneur office"],
@@ -1240,23 +1302,39 @@ export class LocalContentAIProvider implements ContentAIProvider {
       },
     ];
 
-    return beats.map((beat, sceneIndex) => {
-      const composed = composeNarrationForDuration(beat.units, perScene, rate);
-      const nextUnits = beat.units.slice(composed.unitsUsed);
-      return {
-        sceneIndex,
-        purpose: beat.purpose,
-        durationSeconds: perScene,
-        narration: composed.text,
-        onScreenText: beat.onScreenText,
-        stockSearchTerms: beat.stockSearchTerms,
-        visualPrompt: beat.visualPrompt,
-        visualSource: "stock",
-        visualProvider: "pexels",
-        transition: beat.transition,
-        narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
-      };
-    });
+    // Scene-level rebalancing (mirrors buildTechEducationalScenesEnglish
+    // exactly): allocate each beat's share of contentBudget proportional to
+    // its own required narration's real estimated length, dropping the
+    // least-essential beats first (problem, then solution) if even the
+    // essential ones alone would not fit. This is what makes scene count
+    // duration-aware for Arabic instead of a hardcoded four.
+    const allocations = allocateBeatDurations(
+      beats.map((b) => ({ id: b.id, units: b.units, essential: b.essential })),
+      contentBudget,
+      rate,
+    );
+    const allocationById = new Map(allocations.map((a) => [a.id, a]));
+
+    return beats
+      .filter((beat) => allocationById.get(beat.id)?.included)
+      .map((beat, sceneIndex) => {
+        const targetSeconds = allocationById.get(beat.id)!.targetSeconds;
+        const composed = composeNarrationForDuration(beat.units, targetSeconds, rate);
+        const nextUnits = beat.units.slice(composed.unitsUsed);
+        return {
+          sceneIndex,
+          purpose: beat.purpose,
+          durationSeconds: targetSeconds,
+          narration: composed.text,
+          onScreenText: beat.onScreenText,
+          stockSearchTerms: beat.stockSearchTerms,
+          visualPrompt: beat.visualPrompt,
+          visualSource: "stock",
+          visualProvider: "pexels",
+          transition: beat.transition,
+          narrationExpansionUnits: nextUnits.length > 0 ? nextUnits.map((u) => u.text) : undefined,
+        };
+      });
   }
 
   private buildCafeScenesEnglish(
