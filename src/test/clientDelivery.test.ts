@@ -417,6 +417,43 @@ describe("release automation cannot be triggered by a Git tag push", () => {
     return nextTop < 0 ? rest : rest.slice(0, nextTop);
   };
 
+  // Context: the 2.5 rebrand added PREVIOUS_PRODUCT_VERSION = "2.4.0" to
+  // src/version.ts, immediately above PRODUCT_VERSION. Both release workflows
+  // read the version with an unanchored `grep -oP 'PRODUCT_VERSION\s*=\s*"'`,
+  // which also matches inside PREVIOUS_PRODUCT_VERSION, so the greps returned
+  // two lines and the identity gate compared package.json against "2.4.0" and
+  // refused to build the 2.5.0 candidate. Anchoring to the exported constant is
+  // what keeps a future PREVIOUS_/LEGACY_ constant from shadowing the real one.
+  it("both workflows read the version constants unambiguously", () => {
+    const versionTs = readExecutable("src/version.ts");
+
+    for (const [name, yml] of [
+      ["release.yml", releaseYml],
+      ["ghcr-candidate.yml", candidateYml],
+    ] as const) {
+      for (const constant of ["PRODUCT_VERSION", "DATABASE_SCHEMA_VERSION"]) {
+        const pattern = new RegExp(`grep -oP '\\^export const ${constant}\\\\s\\*=`);
+        expect(yml, `${name} anchors its ${constant} grep`).toMatch(pattern);
+      }
+    }
+
+    // The anchored pattern must resolve to exactly one value against the real
+    // version file, which is the property the workflows actually depend on.
+    for (const constant of ["PRODUCT_VERSION", "DATABASE_SCHEMA_VERSION"]) {
+      const matches = versionTs
+        .split("\n")
+        .filter((line) => new RegExp(`^export const ${constant}\\s*=`).test(line));
+      expect(matches, `exactly one ${constant} declaration`).toHaveLength(1);
+    }
+
+    // And the unanchored form really is ambiguous, so this test would have
+    // caught the failure rather than passing vacuously.
+    const looseProductVersion = versionTs
+      .split("\n")
+      .filter((line) => /PRODUCT_VERSION\s*=\s*"/.test(line));
+    expect(looseProductVersion.length).toBeGreaterThan(1);
+  });
+
   it("release.yml runs only on manual workflow_dispatch", () => {
     const on = triggerBlock(releaseYml);
     expect(on).toMatch(/^\s{2}workflow_dispatch:/m);

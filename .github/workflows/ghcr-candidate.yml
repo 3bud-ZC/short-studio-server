@@ -79,8 +79,8 @@ jobs:
           fi
 
           VERSION="$(node -p "require('./package.json').version")"
-          SOURCE_VERSION="$(grep -oP 'PRODUCT_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
-          SCHEMA_VERSION="$(grep -oP 'DATABASE_SCHEMA_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
+          SOURCE_VERSION="$(grep -oP '^export const PRODUCT_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
+          SCHEMA_VERSION="$(grep -oP '^export const DATABASE_SCHEMA_VERSION\s*=\s*"\K[^"]+' src/version.ts)"
           if [ "$SOURCE_VERSION" != "$VERSION" ]; then
             echo "::error::package.json is $VERSION but src/version.ts is $SOURCE_VERSION."
             exit 1
