@@ -202,10 +202,13 @@ export function runCaptionQa(build: AssBuildResult, options: CaptionQaOptions): 
       }
     }
 
-    // The karaoke fill is drawn inside the shaped run, so it can only overflow
-    // if the run itself does; flag the case explicitly so a future highlight
-    // mode cannot regress silently.
-    if (style.highlight === "karaoke_fill" && phrase.estimatedWidthPx > maxWidth + 1) {
+    // Both karaoke highlight modes draw inline colour overrides inside the
+    // shaped run, so they can only overflow if the run itself does; flag the
+    // case explicitly so a future highlight mode cannot regress silently.
+    if (
+      (style.highlight === "karaoke_fill" || style.highlight === "karaoke_current_word") &&
+      phrase.estimatedWidthPx > maxWidth + 1
+    ) {
       issues.push({
         code: "highlight_overflow",
         severity: "error",

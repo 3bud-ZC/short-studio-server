@@ -293,8 +293,8 @@ describe("Arabic caption renderer V3", () => {
     expect(built.content).not.toMatch(/[‫‮]/);
   });
 
-  it("keeps the active word inside one shaped run using karaoke timing", () => {
-    const built = renderArabicCaptions(ARABIC_WORDS, "social_ad", FRAME);
+  it("keeps the active word inside one shaped run using karaoke timing (Karaoke preset)", () => {
+    const built = renderArabicCaptions(ARABIC_WORDS, "karaoke", FRAME);
     // \k markers mean libass fills the existing run; no duplicate positioned
     // word is drawn over the phrase, which is what broke shaping in V2.2.
     expect(built.content).toMatch(/\\k\d+/);
@@ -302,6 +302,16 @@ describe("Arabic caption renderer V3", () => {
     expect(dialogueLines.length).toBe(built.phrases.length);
     // One event per phrase - not one per word.
     expect(dialogueLines.length).toBeLessThan(ARABIC_WORDS.length);
+  });
+
+  it("Bold Social (social_ad) highlights one word at a time via colour overrides, never \\k", () => {
+    const built = renderArabicCaptions(ARABIC_WORDS, "social_ad", FRAME);
+    expect(built.content).not.toMatch(/\\k\d+/);
+    expect(built.content).toMatch(/\\c&H/);
+    // Every phrase's active-word text is still drawn as one shaped run per
+    // event - no duplicate positioned word over the phrase.
+    const dialogueLines = built.content.split("\n").filter((line) => line.startsWith("Dialogue:"));
+    expect(dialogueLines.length).toBeGreaterThanOrEqual(built.phrases.length);
   });
 
   it("emits no karaoke markers for a phrase-level style", () => {

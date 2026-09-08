@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildArabicAss,
+  buildCurrentWordSegments,
   captionFontForWords,
+  chunkIntoPhrases,
+  fitFontSize,
+  toAssColour,
   type CaptionWord,
 } from "./arabicCaptionRendererV3";
-import { CAPTION_FONTS, resolveCaptionStyle } from "./captionStyles";
+import { CAPTION_FONTS, CAPTION_STYLES, resolveCaptionStyle } from "./captionStyles";
 
 const FRAME = { width: 1080, height: 1920 };
 
@@ -46,13 +50,13 @@ describe("buildArabicAss - Arabic text integrity", () => {
     expect(built.content).not.toMatch(/[‫‮]/); // no explicit RTL override
   });
 
-  it("keeps every karaoke word inside ONE dialogue event per phrase, never a separate run", () => {
+  it("keeps every karaoke word inside ONE dialogue event per phrase, never a separate run (Karaoke preset)", () => {
     const words: CaptionWord[] = [
       { text: "hook", startMs: 0, endMs: 200 },
       { text: "line", startMs: 200, endMs: 400 },
       { text: "sinker", startMs: 400, endMs: 600 },
     ];
-    const style = resolveCaptionStyle("social_ad");
+    const style = resolveCaptionStyle("karaoke");
     expect(style.highlight).toBe("karaoke_fill");
     const built = buildArabicAss(words, { style, frame: FRAME });
     const dialogueLines = built.content
@@ -62,6 +66,49 @@ describe("buildArabicAss - Arabic text integrity", () => {
     // All three words' \k tags live inside that single dialogue event.
     const kTagCount = (dialogueLines[0].match(/\\k\d+/g) || []).length;
     expect(kTagCount).toBe(3);
+  });
+
+  it("Bold Social (social_ad) highlights exactly one word at a time, never accumulating", () => {
+    const words: CaptionWord[] = [
+      { text: "hook", startMs: 0, endMs: 200 },
+      { text: "line", startMs: 200, endMs: 400 },
+      { text: "sinker", startMs: 400, endMs: 600 },
+    ];
+    const style = resolveCaptionStyle("social_ad");
+    expect(style.highlight).toBe("karaoke_current_word");
+    expect(style.backgroundOpacity).toBe(0);
+    const built = buildArabicAss(words, { style, frame: FRAME });
+    const dialogueLines = built.content
+      .split("\n")
+      .filter((line) => line.startsWith("Dialogue:"));
+    // One dialogue event per active-word window, tiling the phrase duration.
+    expect(dialogueLines).toHaveLength(3);
+    const highlightHex = toAssColour(style.highlightColour);
+    dialogueLines.forEach((line) => {
+      // Exactly one word is coloured with the highlight colour per event.
+      const highlightCount = (line.match(new RegExp(`\\\\c${highlightHex}`, "g")) || []).length;
+      expect(highlightCount).toBe(1);
+    });
+    // No dialogue event should contain a hard-karaoke \k tag.
+    expect(built.content).not.toMatch(/\\k\d+/);
+  });
+
+  it("buildCurrentWordSegments tiles the phrase with no gaps and no overlaps", () => {
+    const words: CaptionWord[] = [
+      { text: "why", startMs: 0, endMs: 200 },
+      { text: "small", startMs: 200, endMs: 500 },
+      { text: "businesses", startMs: 500, endMs: 900 },
+    ];
+    const [phrase] = chunkIntoPhrases(words);
+    const style = CAPTION_STYLES.social_ad;
+    const { lines } = fitFontSize(["why", "small", "businesses"], style, FRAME);
+    const segments = buildCurrentWordSegments(phrase, style, lines);
+    expect(segments).toHaveLength(3);
+    expect(segments[0].startMs).toBe(0);
+    for (let i = 1; i < segments.length; i++) {
+      expect(segments[i].startMs).toBe(segments[i - 1].endMs);
+    }
+    expect(segments[segments.length - 1].endMs).toBe(phrase.endMs);
   });
 
   it("emits a font family the ASS Style block actually declares", () => {

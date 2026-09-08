@@ -275,6 +275,60 @@ export function buildPhraseText(phrase: CaptionPhrase, style: CaptionStyleSpec, 
   return lines.map(escapeAssText).join("\\N");
 }
 
+export type PhraseSegment = { startMs: number; endMs: number; body: string };
+
+/**
+ * `karaoke_current_word`: exactly one word highlighted at a time, the rest of
+ * the phrase in the primary colour. `\k` cannot express this - once a word is
+ * "sung" it stays in the secondary colour for the rest of the run - so this
+ * emits one Dialogue event per active-word window instead, each an inline
+ * `\c` colour override per token over the SAME shaped phrase text. Adjacent
+ * windows tile the phrase's full duration with no gap, so the text reads as
+ * continuous while only the active word's colour changes.
+ */
+export function buildCurrentWordSegments(
+  phrase: CaptionPhrase,
+  style: CaptionStyleSpec,
+  lines: string[],
+): PhraseSegment[] {
+  const highlight = toAssColour(style.highlightColour);
+  const primary = toAssColour(style.primaryColour);
+  const tokensPerLine = lines.map((line) => line.split(/\s+/).filter(Boolean));
+  const wordCount = phrase.words.length;
+
+  const segments: PhraseSegment[] = [];
+  for (let i = 0; i < wordCount; i++) {
+    const start = phrase.words[i].startMs;
+    const end = i < wordCount - 1 ? phrase.words[i + 1].startMs : phrase.endMs;
+    if (end <= start) continue;
+
+    let tokenIndex = 0;
+    const renderedLines = tokensPerLine.map((tokens) =>
+      tokens
+        .map((token) => {
+          const colour = tokenIndex === i ? highlight : primary;
+          tokenIndex += 1;
+          return `{\\c${colour}}${escapeAssText(token)}`;
+        })
+        .join(" "),
+    );
+    segments.push({ startMs: start, endMs: end, body: renderedLines.join("\\N") });
+  }
+
+  if (segments.length === 0) {
+    segments.push({ startMs: phrase.startMs, endMs: phrase.endMs, body: lines.map(escapeAssText).join("\\N") });
+  }
+  return segments;
+}
+
+/** Splits a phrase into the Dialogue-event timing/body pairs it should render as. */
+export function buildPhraseSegments(phrase: CaptionPhrase, style: CaptionStyleSpec, lines: string[]): PhraseSegment[] {
+  if (style.highlight === "karaoke_current_word") {
+    return buildCurrentWordSegments(phrase, style, lines);
+  }
+  return [{ startMs: phrase.startMs, endMs: phrase.endMs, body: buildPhraseText(phrase, style, lines) }];
+}
+
 export type AssBuildResult = {
   content: string;
   phrases: Array<{
@@ -375,11 +429,20 @@ export function buildArabicAss(words: CaptionWord[], options: AssRenderOptions):
       ].join(","),
     );
 
-    const fadeTag = style.animation === "none" ? "" : `{\\fad(${style.fadeInMs},${style.fadeOutMs})}`;
-    const body = buildPhraseText(phrase, style, lines);
-    dialogue.push(
-      `Dialogue: 0,${formatAssTime(phrase.startMs)},${formatAssTime(phrase.endMs)},${styleName},,0,0,0,,${fadeTag}${body}`,
-    );
+    const segments = buildPhraseSegments(phrase, style, lines);
+    segments.forEach((segment, segmentIndex) => {
+      const isFirst = segmentIndex === 0;
+      const isLast = segmentIndex === segments.length - 1;
+      let fadeTag = "";
+      if (style.animation !== "none") {
+        if (segments.length === 1) fadeTag = `{\\fad(${style.fadeInMs},${style.fadeOutMs})}`;
+        else if (isFirst) fadeTag = `{\\fad(${style.fadeInMs},0)}`;
+        else if (isLast) fadeTag = `{\\fad(0,${style.fadeOutMs})}`;
+      }
+      dialogue.push(
+        `Dialogue: 0,${formatAssTime(segment.startMs)},${formatAssTime(segment.endMs)},${styleName},,0,0,0,,${fadeTag}${segment.body}`,
+      );
+    });
 
     rendered.push({
       text: phrase.text,

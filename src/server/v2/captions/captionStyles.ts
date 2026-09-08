@@ -9,6 +9,15 @@
  * V3 replaces it with a small set of designed styles. Every style declares its
  * own typography, safe area and emphasis treatment, and the active word is
  * never a second text object drawn over the phrase.
+ *
+ * Bold Social / Social Ad correction: the original V3 `bold_social`/
+ * `social_ad` spec (unchanged since its v2.2 introduction) drew a translucent
+ * backdrop plate behind every phrase and used hard-karaoke `\k` fill, which
+ * reads as a subtitle/debug panel with the whole phrase turning yellow by the
+ * end. Direct owner review of real rendered output rejected both. Corrected
+ * to no backdrop (text + outline + shadow only) and single-active-word
+ * emphasis (`karaoke_current_word`) that never accumulates. The dedicated
+ * "Karaoke" preset keeps the stronger `karaoke_fill` effect on purpose.
  */
 
 export type CaptionStyleId =
@@ -32,8 +41,21 @@ export type CaptionFontId =
   | "inter";
 
 export type CaptionHighlightMode =
-  /** libass karaoke timing inside one shaped run - shaping is preserved. */
+  /**
+   * libass hard-karaoke `\k` timing inside one shaped run: each word's fill
+   * accumulates and stays once "sung." Correct, industry-standard `\k`
+   * semantics, but the wrong default emphasis for a two-line social caption -
+   * by the end of the phrase most of it has turned the highlight colour.
+   * Reserved for the dedicated "Karaoke" preset, which wants that effect.
+   */
   | "karaoke_fill"
+  /**
+   * Exactly one word highlighted at a time; every other word stays the
+   * primary colour. Implemented as successive Dialogue events over the same
+   * shaped phrase (one per active-word window) rather than a single
+   * accumulating `\k` run.
+   */
+  | "karaoke_current_word"
   /** A rounded plate behind the active logical token. */
   | "token_chip"
   /** Whole-phrase emphasis; no per-word treatment at all. */
@@ -192,14 +214,16 @@ export const CAPTION_STYLES: Record<CaptionStyleId, CaptionStyleSpec> = {
     maxSizeRatio: 0.052,
     lineHeight: 1.26,
     maxWidthRatio: 0.8,
-    bottomSafeRatio: 0.2,
+    // ~345px at 1920 tall - lower-middle, not attached to the bottom edge.
+    bottomSafeRatio: 0.18,
     maxLines: 2,
     primaryColour: "#FFFFFF",
     highlightColour: "#FACC15",
     outlinePx: 3,
     shadowPx: 3,
-    backgroundOpacity: 0.28,
-    highlight: "karaoke_fill",
+    // No backdrop plate by default - text + outline + shadow only.
+    backgroundOpacity: 0,
+    highlight: "karaoke_current_word",
     animation: "pop",
     fadeInMs: 80,
     fadeOutMs: 100,
@@ -213,14 +237,14 @@ export const CAPTION_STYLES: Record<CaptionStyleId, CaptionStyleSpec> = {
     maxSizeRatio: 0.052,
     lineHeight: 1.26,
     maxWidthRatio: 0.8,
-    bottomSafeRatio: 0.2,
+    bottomSafeRatio: 0.18,
     maxLines: 2,
     primaryColour: "#FFFFFF",
     highlightColour: "#FACC15",
     outlinePx: 3,
     shadowPx: 3,
-    backgroundOpacity: 0.28,
-    highlight: "karaoke_fill",
+    backgroundOpacity: 0,
+    highlight: "karaoke_current_word",
     animation: "pop",
     fadeInMs: 80,
     fadeOutMs: 100,
