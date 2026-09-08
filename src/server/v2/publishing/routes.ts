@@ -336,7 +336,9 @@ export function createPublishingRouter(
   // Publishing Providers
   router.get("/providers", async (_req, res) => {
     try {
-      const providers = publishingRegistry.listProviders();
+      const providers = publishingRegistry
+        .listProviders()
+        .filter((provider) => provider.id === "upload_post");
       const validations = await publishingRegistry.validateAll();
 
       const items = providers.map((p) => {

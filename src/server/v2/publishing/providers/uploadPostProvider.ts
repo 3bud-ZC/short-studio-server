@@ -2,6 +2,7 @@ import axios, { AxiosError } from "axios";
 import fs from "fs";
 import path from "path";
 import { logger } from "../../../../logger";
+import { resolveUploadPostApiKey } from "../../integrations/credentialResolver";
 import {
   DEFAULT_PLATFORM_CAPABILITIES,
   type PlatformCapabilities,
@@ -46,12 +47,16 @@ export class UploadPostProvider implements PublishingProvider {
   public readonly displayName = "Upload-Post (Multi-Platform)";
   public readonly category = "publishing" as const;
 
-  private apiKey?: string;
+  private explicitApiKey?: string;
   private baseUrl: string;
 
   constructor(options: { apiKey?: string; baseUrl?: string } = {}) {
-    this.apiKey = options.apiKey || process.env.UPLOAD_POST_API_KEY;
+    this.explicitApiKey = options.apiKey?.trim() || undefined;
     this.baseUrl = options.baseUrl || process.env.UPLOAD_POST_BASE_URL || "https://api.upload-post.com";
+  }
+
+  public async resolveApiKey(candidate?: unknown): Promise<string | undefined> {
+    return resolveUploadPostApiKey(candidate || this.explicitApiKey);
   }
 
   private endpoint(pathname: string): string {
@@ -79,7 +84,7 @@ export class UploadPostProvider implements PublishingProvider {
     credentials?: Record<string, unknown>,
     accountId?: string,
   ): Promise<PublishingValidationResult> {
-    const key = (credentials?.apiKey as string) || (credentials?.token as string) || this.apiKey;
+    const key = await this.resolveApiKey(credentials?.apiKey || credentials?.token);
     const checkedAt = new Date().toISOString();
     const started = Date.now();
 
@@ -176,9 +181,7 @@ export class UploadPostProvider implements PublishingProvider {
   }
 
   public async publishVideo(params: PublishVideoParams): Promise<PublishResult> {
-    const key =
-      (params.account?.encryptedCredentials as string) ||
-      this.apiKey;
+    const key = await this.resolveApiKey(params.account?.encryptedCredentials);
 
     if (!key) {
       return {
@@ -309,9 +312,7 @@ export class UploadPostProvider implements PublishingProvider {
   }
 
   public async scheduleVideo(params: ScheduleVideoParams): Promise<PublishResult> {
-    const key =
-      (params.account?.encryptedCredentials as string) ||
-      this.apiKey;
+    const key = await this.resolveApiKey(params.account?.encryptedCredentials);
 
     if (!key) {
       return {
@@ -399,7 +400,7 @@ export class UploadPostProvider implements PublishingProvider {
     providerPostId: string,
     context?: Record<string, unknown>,
   ): Promise<PublishStatusResult> {
-    const key = (context?.apiKey as string) || this.apiKey;
+    const key = await this.resolveApiKey(context?.apiKey);
     if (!key) {
       return {
         status: "failed",
@@ -456,7 +457,7 @@ export class UploadPostProvider implements PublishingProvider {
     providerPostId: string,
     context?: Record<string, unknown>,
   ): Promise<boolean> {
-    const key = (context?.apiKey as string) || this.apiKey;
+    const key = await this.resolveApiKey(context?.apiKey);
     if (!key) return false;
 
     try {

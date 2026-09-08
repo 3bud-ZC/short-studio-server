@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import axios from "axios";
 import {
   Alert,
@@ -18,11 +18,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBackOutlined";
-import YouTubeIcon from "@mui/icons-material/YouTube";
-import InstagramIcon from "@mui/icons-material/Instagram";
-import TelegramIcon from "@mui/icons-material/Telegram";
 import CloudUploadIcon from "@mui/icons-material/CloudUploadOutlined";
-import MusicNoteIcon from "@mui/icons-material/MusicNoteOutlined";
 import type { PublishingPlatform, SocialAccount } from "../../pages/v2Types";
 import { useI18n } from "../../i18n";
 
@@ -62,90 +58,11 @@ type Destination = {
   icon: React.ReactNode;
   platform: PublishingPlatform;
   provider: string;
-  connection: "oauth" | "token";
-  oauthProvider?: string;
-  oauthLabelKey?: string;
+  connection: "token";
   fields: DestinationField[];
 };
 
-type OAuthSetup = {
-  configured: boolean;
-  callbackUrl: string;
-  consoleUrl?: string;
-  scopes?: Array<{ scope: string; reason: string }>;
-};
-
 const DESTINATIONS: Destination[] = [
-  {
-    id: "youtube",
-    label: "YouTube",
-    blurbKey: "publishing.connect.dest.youtube.blurb",
-    icon: <YouTubeIcon />,
-    platform: "youtube",
-    provider: "youtube_direct",
-    connection: "oauth",
-    oauthProvider: "youtube",
-    oauthLabelKey: "publishing.connect.dest.youtube.oauth",
-    fields: [],
-  },
-  {
-    id: "meta",
-    label: "Instagram & Facebook",
-    labelKey: "publishing.connect.dest.meta.label",
-    blurbKey: "publishing.connect.dest.meta.blurb",
-    icon: <InstagramIcon />,
-    platform: "instagram",
-    provider: "meta_direct",
-    connection: "oauth",
-    oauthProvider: "meta",
-    oauthLabelKey: "publishing.connect.dest.meta.oauth",
-    fields: [],
-  },
-  {
-    id: "tiktok",
-    label: "TikTok",
-    blurbKey: "publishing.connect.dest.tiktok.blurb",
-    icon: <MusicNoteIcon />,
-    platform: "tiktok",
-    provider: "tiktok_direct",
-    connection: "oauth",
-    oauthProvider: "tiktok",
-    oauthLabelKey: "publishing.connect.dest.tiktok.oauth",
-    fields: [],
-  },
-  {
-    id: "telegram",
-    label: "Telegram",
-    blurbKey: "publishing.connect.dest.telegram.blurb",
-    icon: <TelegramIcon />,
-    platform: "telegram",
-    provider: "telegram_bot",
-    connection: "token",
-    fields: [
-      {
-        key: "accountName",
-        labelKey: "publishing.connect.field.displayName",
-        placeholderKey: "publishing.connect.field.displayNamePlaceholderTelegram",
-        required: true,
-        helperKey: "publishing.connect.field.displayNameHelp",
-      },
-      {
-        key: "accountId",
-        labelKey: "publishing.connect.field.channelChat",
-        placeholder: "@MyChannel",
-        required: true,
-        helperKey: "publishing.connect.field.channelChatHelp",
-      },
-      {
-        key: "token",
-        labelKey: "publishing.connect.field.botToken",
-        placeholderKey: "publishing.connect.field.botTokenPlaceholder",
-        secret: true,
-        required: true,
-        helperKey: "publishing.connect.field.secretHelp",
-      },
-    ],
-  },
   {
     id: "upload_post",
     label: "Upload-Post",
@@ -193,7 +110,6 @@ export const AccountConnectModal: React.FC<AccountConnectModalProps> = ({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [oauthSetup, setOauthSetup] = useState<OAuthSetup | null>(null);
 
   const destination = useMemo(
     () => DESTINATIONS.find((entry) => entry.id === selectedId) || null,
@@ -205,7 +121,6 @@ export const AccountConnectModal: React.FC<AccountConnectModalProps> = ({
   const reset = () => {
     setSelectedId(null);
     setValues({ accountName: "", accountId: "", token: "" });
-    setOauthSetup(null);
     setError(null);
     setTestResult(null);
   };
@@ -219,49 +134,6 @@ export const AccountConnectModal: React.FC<AccountConnectModalProps> = ({
   const missingField = destination?.fields.find(
     (field) => field.required && !values[field.key].trim(),
   );
-
-  useEffect(() => {
-    if (!open || !destination?.oauthProvider) {
-      setOauthSetup(null);
-      return;
-    }
-
-    let cancelled = false;
-    setOauthSetup(null);
-    axios
-      .get(`/api/v2/providers/${destination.oauthProvider}/oauth/config`)
-      .then((res) => {
-        if (!cancelled) setOauthSetup(res.data);
-      })
-      .catch(() => {
-        if (!cancelled) setError(tr("publishing.connect.oauthSetupFailed"));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [destination?.oauthProvider, open, tr]);
-
-  const startOauth = async () => {
-    if (!destination?.oauthProvider) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await axios.get(`/api/v2/providers/${destination.oauthProvider}/oauth/start`, {
-        params: { returnTo: "/publishing?connected=1" },
-      });
-      const authUrl = typeof res.data?.authUrl === "string" ? res.data.authUrl : "";
-      if (!authUrl) throw new Error("Missing OAuth authorization URL.");
-      window.location.href = authUrl;
-    } catch (err: unknown) {
-      const message =
-        axios.isAxiosError(err) && err.response?.data?.message
-          ? String(err.response.data.message)
-          : tr("publishing.connect.oauthStartFailed");
-      setError(message);
-      setLoading(false);
-    }
-  };
 
   const testConnection = async () => {
     if (!destination) return;
@@ -371,70 +243,6 @@ export const AccountConnectModal: React.FC<AccountConnectModalProps> = ({
             </>
           )}
 
-          {destination?.connection === "oauth" && (
-            <Stack spacing={2} alignItems="flex-start">
-              <Typography variant="body2" sx={{ color: t.textSecondary }}>
-                {tr("publishing.connect.oauthIntro", {
-                  blurb: tr(destination.blurbKey),
-                  destination: destinationLabel(destination),
-                })}
-              </Typography>
-
-              {oauthSetup && (
-                <Stack spacing={1.25} sx={{ width: "100%" }}>
-                  {!oauthSetup.configured && (
-                    <Alert severity="warning">
-                      {tr("publishing.connect.oauthConfigMissing", { destination: destinationLabel(destination) })}
-                    </Alert>
-                  )}
-                  <TextField
-                    size="small"
-                    fullWidth
-                    label={tr("publishing.connect.callbackUrl")}
-                    value={oauthSetup.callbackUrl}
-                    InputProps={{ readOnly: true }}
-                    dir="ltr"
-                  />
-                  {oauthSetup.scopes && oauthSetup.scopes.length > 0 && (
-                    <Typography variant="caption" sx={{ color: t.textSecondary }}>
-                      {tr("publishing.connect.requiredScopes", {
-                        scopes: oauthSetup.scopes.map((scope) => scope.scope).join(", "),
-                      })}
-                    </Typography>
-                  )}
-                  {oauthSetup.consoleUrl && (
-                    <Button
-                      component="a"
-                      href={oauthSetup.consoleUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      variant="outlined"
-                      size="small"
-                    >
-                      {tr("publishing.connect.openProviderConsole")}
-                    </Button>
-                  )}
-                </Stack>
-              )}
-
-              <Button
-                variant="contained"
-                size="large"
-                onClick={startOauth}
-                disabled={loading || oauthSetup?.configured === false}
-              >
-                {loading
-                  ? tr("publishing.connect.connecting")
-                  : destination.oauthLabelKey
-                    ? tr(destination.oauthLabelKey)
-                    : tr("publishing.connectAccount")}
-              </Button>
-              <Typography variant="caption" sx={{ color: t.muted }}>
-                {tr("publishing.connect.noPassword")}
-              </Typography>
-            </Stack>
-          )}
-
           {destination?.connection === "token" && (
             <Stack spacing={2}>
               <Typography variant="body2" sx={{ color: t.textSecondary }}>
@@ -479,9 +287,7 @@ export const AccountConnectModal: React.FC<AccountConnectModalProps> = ({
               disabled={testing || Boolean(missingField)}
               startIcon={testing ? <CircularProgress size={16} /> : undefined}
             >
-              {destination.id === "telegram"
-                ? tr("publishing.connect.testBot")
-                : tr("common.testConnection")}
+              {tr("common.testConnection")}
             </Button>
             <Button
               variant="contained"

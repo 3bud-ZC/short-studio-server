@@ -23,10 +23,11 @@ Version: 2.5.0
 Stage: GENERAL AVAILABILITY CANDIDATE — the code/CLI/installer/UI rebrand from
 ABUD Shorts Engine 2.4.0, isolated fresh install, isolated migration rehearsal,
 LOCAL_SINGLE_USER qualification, Docker consolidation, permanent primary cutover
-to port 3130 at %ProgramData%\ShortStudio, Pexels activation, and host-native
-Local Voice readiness are complete and verified. Remaining commercial closure
-gates: real Arabic/English video production with owner review, Upload-Post live
-publication test, and final GA promotion. Do not read this entry as GA yet.
+to port 3130 at %ProgramData%\ShortStudio, Pexels activation, host-native Local
+Voice readiness, and owner-approved final Arabic/English video candidates are
+complete and verified. Remaining commercial closure gates: Upload-Post live
+activation, owner-authorized test publication, release/package closure, and
+final GA promotion. Do not read this entry as GA yet.
 
 Legacy: Formerly ABUD Shorts Engine. Built from `main` at commit `be44afe3`
 ("V2.4 client delivery closure & operational freeze") on branch
@@ -53,10 +54,19 @@ messages, dashboard alerts) that had drifted back to a stale "Arabic requires
 ElevenLabs" framing predating VoiceTut; they now correctly report local-voice
 readiness first.
 
-Publishing: Upload-Post is the customer-supported publishing gateway per
-product decision; historical direct-provider adapters remain in the codebase
-as internal/legacy extension points, not in default routing. Not re-verified
-in this pass.
+Video Gate: CLOSED / PASS. Final Arabic Owner Review: APPROVED. Final English
+Owner Review: APPROVED. Arabic Content Planning: PASS. Arabic Duration: PASS.
+Arabic Caption Tofu: PASS.
+
+2.5 Renderer: FFMPEG/HYBRID - FINAL. Final Caption Renderer: LIBASS. Revideo:
+EXPERIMENTAL / DEFERRED POST-2.5.
+
+Publishing: Upload-Post is IN PROGRESS and remains the customer-supported
+publishing gateway per product decision; historical direct-provider adapters
+remain in the codebase as internal/legacy extension points, not in default
+routing.
+
+GA: BLOCKED pending publishing + final release closure.
 
 Schema: 2.13.0 (unchanged — this pass is a product/brand rebrand, not a schema
 migration; no database migration was added or required for branding alone).

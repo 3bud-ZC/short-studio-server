@@ -361,7 +361,7 @@ export async function getFastHealth(
           }
         : {
             status: "not_configured" as const,
-            message: "Optional. Connect a channel to publish directly from Short Studio.",
+            message: "Optional. Connect Upload-Post to publish from Short Studio after owner approval.",
             messageKey: "health.msg.publishingNotConfigured",
           },
     ),

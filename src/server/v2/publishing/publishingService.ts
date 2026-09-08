@@ -485,14 +485,14 @@ export class PublishingService {
 
     const id = cuid();
 
-    // Resolve Account first: which provider AUTO should choose depends on
-    // whether the customer actually connected a direct account for this
-    // platform.
+    // Resolve an account only when the caller explicitly selected one. The 2.5
+    // customer path is Upload-Post only; a historical direct account must not
+    // make AUTO publish through a legacy direct adapter.
     let accountId = input.accountId;
-    if (!accountId) {
+    if (!accountId && input.provider && input.provider !== "upload_post") {
       const accRows = await this.db.query<{ id: string }>(
-        `SELECT id FROM social_accounts WHERE platform = $1 AND connection_status = 'connected' LIMIT 1`,
-        [input.platform],
+        `SELECT id FROM social_accounts WHERE platform = $1 AND provider = $2 AND connection_status = 'connected' LIMIT 1`,
+        [input.platform, input.provider],
       );
       if (accRows.length) accountId = accRows[0].id;
     }
@@ -507,17 +507,14 @@ export class PublishingService {
     /**
      * Provider selection.
      *
-     * An explicit choice always wins - a customer who picked "Direct" must not
-     * be silently routed through the aggregator, and the reverse is equally
-     * true. AUTO prefers the direct adapter only when a direct account is really
-     * connected for the platform, and otherwise uses the aggregator. Whichever
-     * it lands on is persisted on the publication, so the record always says
-     * which route was taken.
+     * An explicit choice always wins for legacy/internal callers. AUTO is the
+     * customer path and persists Upload-Post so the record always says which
+     * route was taken.
      */
     const providerId: PublishingProviderId =
       (input.provider as PublishingProviderId) ||
       accountProvider ||
-      (input.platform === "telegram" ? "telegram_bot" : "upload_post");
+      "upload_post";
 
     // Determine initial status & schedule
     let scheduledDate: Date | undefined;

@@ -16,6 +16,7 @@ import { readMetadata } from "../videoMetadata";
 import { V2Database } from "./db";
 import { getV2Health, validatePexelsProvider } from "./health";
 import { getFastHealth, type ProviderConfigurationSnapshot } from "./system/fastHealth";
+import { resolveUploadPostStatus } from "./integrations/credentialResolver";
 import { JobService } from "./jobs";
 import { N8nOrchestrator } from "./orchestrator";
 import {
@@ -1685,6 +1686,7 @@ export function createV2PublicRouter(
       providerVault.readPlaintext(providerId, credentialType),
     );
     void providerSecrets.refreshElevenLabsApiKey();
+    void providerSecrets.refresh("upload_post", "api_key");
   }
 
   async function configuredProviderIds(): Promise<Set<string>> {
@@ -1703,6 +1705,7 @@ export function createV2PublicRouter(
       ids.add("local_voice");
       ids.add("voicetut");
     }
+    if (process.env.UPLOAD_POST_API_KEY) ids.add("upload_post");
     if (providerVault.isAvailable()) {
       const vaultCredentials = await providerVault.list().catch(() => []);
       vaultCredentials.forEach((credential) => {
@@ -3508,6 +3511,7 @@ export function createV2PublicRouter(
       ? await providerVault.list().catch(() => [])
       : [];
     const vaultByProvider = new Map(vaultCredentials.map((credential) => [credential.providerId, credential]));
+    const uploadPostStatus = await resolveUploadPostStatus();
     const localModelManager = new LocalModelManager();
     const voicetutRecord = localModelManager.read("voicetut");
     const kemetoneRecord = localModelManager.read("kemetone");
@@ -4010,12 +4014,12 @@ export function createV2PublicRouter(
         name: "Upload-Post (Multi-Platform)",
         category: "Publishing",
         tier: "cloud",
-        status: Boolean(process.env.UPLOAD_POST_API_KEY) ? "healthy" : "not_configured",
-        configured: Boolean(process.env.UPLOAD_POST_API_KEY) || vaultByProvider.has("upload_post"),
+        status: uploadPostStatus.configured ? "healthy" : "not_configured",
+        configured: uploadPostStatus.configured,
         isDefault: true,
-        message: Boolean(process.env.UPLOAD_POST_API_KEY)
+        message: uploadPostStatus.configured
           ? "Upload-Post multi-platform distribution connected."
-          : "UPLOAD_POST_API_KEY is not configured.",
+          : "Upload-Post API key is not configured.",
         checkedAt: new Date().toISOString(),
       },
       {
@@ -4344,6 +4348,9 @@ export function createV2PublicRouter(
         message: "Upload-Post not configured",
         checkedAt: new Date().toISOString(),
       });
+      if (providerVault.isAvailable() && val.configured) {
+        await providerVault.markTested("upload_post", val.status).catch(() => undefined);
+      }
       res.status(200).json(val);
       return;
     }
@@ -4412,6 +4419,7 @@ export function createV2PublicRouter(
 
   router.get("/settings", async (req, res) => {
     const settings = await readAppSettings(db);
+    const uploadPostSettingsStatus = await resolveUploadPostStatus();
     res.status(200).json({
       settings: {
         defaultCreationMode: "prompt",
@@ -4445,8 +4453,8 @@ export function createV2PublicRouter(
         redactedKey: redactConfiguredKey(process.env.ELEVENLABS_API_KEY),
       },
       uploadPost: {
-        configured: Boolean(process.env.UPLOAD_POST_API_KEY),
-        redactedKey: redactConfiguredKey(process.env.UPLOAD_POST_API_KEY),
+        configured: uploadPostSettingsStatus.configured,
+        redactedKey: uploadPostSettingsStatus.redactedKey,
       },
       telegram: {
         configured: Boolean(process.env.TELEGRAM_BOT_TOKEN),

@@ -1,4 +1,5 @@
 import type { CredentialType } from "../provider-vault/providerCredentialsVault";
+import { providerSecrets } from "../provider-vault/providerSecrets";
 
 /**
  * CREDENTIAL PRECEDENCE
@@ -121,3 +122,59 @@ export function publicCredentialSource(resolved: ResolvedCredential) {
     shadowedEnvironment: resolved.shadowedEnvironment,
   };
 }
+
+/**
+ * Resolves the active Upload-Post API key following canonical Short Studio precedence:
+ *   1. Per-call/per-account explicit candidate (if provided)
+ *   2. Customer Provider Vault (asynchronously refreshed)
+ *   3. Installation environment (UPLOAD_POST_API_KEY)
+ *   4. undefined (Not Configured)
+ *
+ * NEVER logs or returns the secret in any customer-facing response.
+ */
+export async function resolveUploadPostApiKey(
+  candidate?: unknown,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
+  const explicit = typeof candidate === "string" ? candidate.trim() : "";
+  if (explicit) return explicit;
+
+  const vaultValue = await providerSecrets.refresh("upload_post", "api_key");
+  const resolved = resolveCredential({
+    providerId: "upload_post",
+    credentialType: "api_key",
+    vaultValue,
+    env,
+  });
+  return resolved.value;
+}
+
+/**
+ * Resolves the active Upload-Post credential status metadata (safe for UI/health/routes).
+ * Plaintext secrets NEVER leave the server process.
+ */
+export async function resolveUploadPostStatus(
+  env?: NodeJS.ProcessEnv,
+): Promise<{
+  configured: boolean;
+  source: CredentialSource;
+  sourceLabel: ResolvedCredential["sourceLabel"];
+  shadowedEnvironment: boolean;
+  redactedKey: string | null;
+}> {
+  const vaultValue = await providerSecrets.refresh("upload_post", "api_key");
+  const resolved = resolveCredential({
+    providerId: "upload_post",
+    credentialType: "api_key",
+    vaultValue,
+    env,
+  });
+  return {
+    configured: resolved.source !== "none",
+    source: resolved.source,
+    sourceLabel: resolved.sourceLabel,
+    shadowedEnvironment: resolved.shadowedEnvironment,
+    redactedKey: resolved.value ? "••••••••" : null,
+  };
+}
+

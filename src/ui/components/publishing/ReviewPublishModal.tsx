@@ -37,7 +37,6 @@ import SendIcon from "@mui/icons-material/Send";
 import YouTubeIcon from "@mui/icons-material/YouTube";
 import InstagramIcon from "@mui/icons-material/Instagram";
 import FacebookIcon from "@mui/icons-material/Facebook";
-import TelegramIcon from "@mui/icons-material/Telegram";
 import TwitterIcon from "@mui/icons-material/Twitter";
 import type {
   PlatformCapabilities,
@@ -53,8 +52,9 @@ const AVAILABLE_PLATFORMS: { id: PublishingPlatform; label: string; icon: React.
   { id: "tiktok", label: "TikTok", icon: <span style={{ fontWeight: 900 }}>TT</span>, color: "#000000" },
   { id: "instagram", label: "Instagram Reels", icon: <InstagramIcon />, color: "#e1306c" },
   { id: "facebook", label: "Facebook Reels", icon: <FacebookIcon />, color: "#1877f2" },
-  { id: "telegram", label: "Telegram", icon: <TelegramIcon />, color: "#229ed9" },
+  { id: "linkedin", label: "LinkedIn", icon: <SendIcon />, color: "#0a66c2" },
   { id: "twitter", label: "X / Twitter", icon: <TwitterIcon />, color: "#1da1f2" },
+  { id: "threads", label: "Threads", icon: <SendIcon />, color: "#000000" },
 ];
 
 const TIMEZONES = [
@@ -691,39 +691,6 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                       setMetadataMap((prev) => ({
                         ...prev,
                         facebook: { ...prev.facebook, description: e.target.value },
-                      }))
-                    }
-                  />
-                </>
-              )}
-
-              {/* Telegram specific */}
-              {activeTab === "telegram" && (
-                <>
-                  <TextField
-                    label="Telegram Target (Chat ID / Channel @Username)"
-                    size="small"
-                    fullWidth
-                    placeholder="@MyChannel or -100123456789"
-                    value={currentMeta.telegramChatId || ""}
-                    onChange={(e) =>
-                      setMetadataMap((prev) => ({
-                        ...prev,
-                        telegram: { ...prev.telegram, telegramChatId: e.target.value },
-                      }))
-                    }
-                  />
-                  <TextField
-                    label="Telegram Caption (HTML Formatted)"
-                    size="small"
-                    multiline
-                    rows={5}
-                    fullWidth
-                    value={currentMeta.caption || ""}
-                    onChange={(e) =>
-                      setMetadataMap((prev) => ({
-                        ...prev,
-                        telegram: { ...prev.telegram, caption: e.target.value },
                       }))
                     }
                   />

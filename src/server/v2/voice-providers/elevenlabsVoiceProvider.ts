@@ -25,7 +25,7 @@ import { findUnresolvedLatinTokens } from "./arabicSpeechPreprocessor";
 export const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 
 export const ARABIC_NOT_CONFIGURED_MESSAGE =
-  "Arabic narration requires ElevenLabs. Configure ElevenLabs in Providers.";
+  "ElevenLabs is not configured. Local Voice remains the default Arabic route; configure ElevenLabs only for the optional premium voice path.";
 
 /**
  * Per-model API capabilities. Nothing here is assumed: eleven_multilingual_v2

@@ -103,7 +103,7 @@ describe("Integration catalog", () => {
     const knownProviderIds = [
       "local_ai", "gemini", "ollama", "pexels", "pixabay", "veo", "fal",
       "kokoro", "piper", "edge_tts", "google_cloud_tts", "elevenlabs",
-      "upload_post", "telegram", "youtube", "meta", "tiktok",
+      "upload_post",
     ];
     Object.keys(INTEGRATION_CATALOG).forEach((id) => {
       expect(knownProviderIds, `unknown integration ${id}`).toContain(id);
@@ -148,15 +148,13 @@ describe("Integration catalog", () => {
 
   it("lets the customer configure every key-based provider from the browser", () => {
     const configurable = customerConfigurableProviders();
-    ["pexels", "pixabay", "gemini", "elevenlabs", "google_cloud_tts", "telegram", "upload_post"].forEach(
+    ["pexels", "pixabay", "gemini", "elevenlabs", "google_cloud_tts", "upload_post"].forEach(
       (id) => expect(configurable).toContain(id),
     );
   });
 
-  it("uses OAuth rather than a pasted token where the engine supports it", () => {
-    ["youtube", "meta", "tiktok"].forEach((id) => {
-      expect(INTEGRATION_CATALOG[id].connectionType).toBe("oauth");
-    });
+  it("keeps Upload-Post as the only customer-facing publishing integration", () => {
+    expect(Object.values(INTEGRATION_CATALOG).filter((entry) => entry.category === "Publishing").map((entry) => entry.id)).toEqual(["upload_post"]);
   });
 
   it("marks built-in capabilities as needing no configuration", () => {

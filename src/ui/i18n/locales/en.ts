@@ -802,9 +802,7 @@ export const en: TranslationCatalog = {
   "settings.integrations.pexels": "Pexels API",
   "settings.integrations.gemini": "Google Gemini AI",
   "settings.integrations.uploadPost": "Upload-Post API",
-  "settings.integrations.telegram": "Telegram bot token",
   "settings.integrations.key": "Key: {value}",
-  "settings.integrations.token": "Token: {value}",
   "settings.integrations.notConfigured": "Not configured",
   "settings.integrations.notConfiguredLocalAi": "Not configured (local AI active)",
   "settings.integrations.localAiFallback": "Local AI fallback",
@@ -813,7 +811,6 @@ export const en: TranslationCatalog = {
   "settings.publishing.description": "Default publication mode, privacy and scheduling time zone.",
   "settings.field.publishingMode": "Default publishing mode",
   "settings.field.publishingModeDraft": "Draft (review before publishing)",
-  "settings.field.publishingModeDirect": "Publish automatically",
   "settings.field.publishingModeScheduled": "Schedule by default",
   "settings.field.youtubePrivacy": "Default YouTube privacy",
   "settings.field.youtubeUnlisted": "Unlisted (recommended)",
@@ -974,10 +971,11 @@ export const en: TranslationCatalog = {
   "health.msg.videoEngineUnavailable": "The rendering service did not respond.",
   "health.msg.automationHealthy": "The automation service is responding.",
   "health.msg.automationDegraded": "The automation service answered with an error.",
-  "health.msg.voiceReady":
-    "Local English narration is available, and ElevenLabs is configured for Arabic.",
+  "health.msg.voiceReady": "Local English and Local Voice Arabic narration are ready.",
+  "health.msg.voiceReadyElevenLabsOnly":
+    "Local English narration is available, and ElevenLabs is configured as an optional premium Arabic voice.",
   "health.msg.voiceEnglishOnly":
-    "Local English narration is available. Arabic narration requires ElevenLabs, which is not configured.",
+    "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone), or an optional ElevenLabs connection.",
   "health.msg.aiConfigured": "A script generation provider is configured.",
   "health.msg.aiNotConfigured": "Optional. Add a provider to generate scripts automatically.",
   "health.msg.mediaConfigured": "A stock footage provider is configured.",
@@ -985,7 +983,7 @@ export const en: TranslationCatalog = {
     "Optional. Add a stock footage provider to source visuals automatically.",
   "health.msg.publishingConnected": "Publishing channels are connected.",
   "health.msg.publishingNotConfigured":
-    "Optional. Connect a channel to publish directly from Short Studio.",
+    "Optional. Connect Upload-Post to publish from Short Studio after owner approval.",
   "health.msg.storageWritable": "Video storage is writable.",
   "health.msg.quickCheckTimedOut": "Did not respond within the quick check.",
   "health.msg.optionalUnreachable": "Optional. Not reachable within the quick check.",
@@ -1096,6 +1094,11 @@ export const en: TranslationCatalog = {
   "setup.stockFootage": "Stock footage",
   "setup.voiceAndAi": "Voice & AI",
   "setup.publishing": "Publishing",
+  "setup.publishingHeading": "Social Publishing & Distribution",
+  "setup.publishingBody":
+    "Connect Upload-Post when you are ready for approved scheduling and distribution.",
+  "setup.publishingUploadPostOnly":
+    "Upload-Post is the supported customer publishing gateway. Direct YouTube, Meta, TikTok and Telegram adapters are legacy internal routes.",
   "setup.videoDefaults": "Video defaults",
   "setup.review": "Review",
   "setup.ready": "Ready",

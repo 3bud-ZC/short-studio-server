@@ -17,6 +17,8 @@ import { TelegramPublishingProvider } from "./publishing/providers/telegramProvi
 import { YouTubeDirectProvider } from "./publishing/providers/youtubeDirectProvider";
 import { aiMetadataGenerator } from "./publishing/aiMetadataGenerator";
 import { DEFAULT_PLATFORM_CAPABILITIES } from "./publishing/publishingProvider";
+import { providerSecrets } from "./provider-vault/providerSecrets";
+import { resolveUploadPostStatus } from "./integrations/credentialResolver";
 
 class FakePublishingDb {
   public enabled = true;
@@ -422,6 +424,8 @@ describe("Milestone V2-04: Publishing, Scheduling & Distribution Engine", () => 
   afterEach(async () => {
     nock.cleanAll();
     nock.enableNetConnect();
+    providerSecrets.unregisterResolver();
+    providerSecrets.invalidate();
     if (fs.existsSync(config.videosDirPath)) {
       fs.rmSync(config.videosDirPath, { recursive: true, force: true });
     }
@@ -450,6 +454,110 @@ describe("Milestone V2-04: Publishing, Scheduling & Distribution Engine", () => 
   });
 
   describe("2. UploadPostProvider Multi-Platform Publisher", () => {
+    it("uses Provider Vault credentials for live Upload-Post validation when env is unset", async () => {
+      delete process.env.UPLOAD_POST_API_KEY;
+      providerSecrets.registerResolver(async (providerId, credentialType) =>
+        providerId === "upload_post" && credentialType === "api_key" ? "vault-upload-post-key" : null,
+      );
+
+      const provider = new UploadPostProvider();
+
+      nock("https://api.upload-post.com")
+        .matchHeader("x-api-key", "vault-upload-post-key")
+        .get("/api/uploadposts/me")
+        .reply(200, {
+          id: "safe-upload-post-user",
+          name: "Upload-Post User",
+        });
+
+      const result = await provider.validateConnection();
+
+      expect(result.configured).toBe(true);
+      expect(result.healthy).toBe(true);
+      expect(result.status).toBe("healthy");
+      expect(result.accountDetails?.accountId).toBe("safe-upload-post-user");
+    });
+
+    it("B. Provider Vault key wins when both vault and environment keys exist", async () => {
+      process.env.UPLOAD_POST_API_KEY = "stale-env-key";
+      providerSecrets.registerResolver(async (providerId, credentialType) =>
+        providerId === "upload_post" && credentialType === "api_key" ? "vault-upload-post-key" : null,
+      );
+
+      const provider = new UploadPostProvider();
+
+      nock("https://api.upload-post.com")
+        .matchHeader("x-api-key", "vault-upload-post-key")
+        .get("/api/uploadposts/me")
+        .reply(200, {
+          id: "vault-user",
+          name: "Vault User",
+        });
+
+      const result = await provider.validateConnection();
+
+      expect(result.configured).toBe(true);
+      expect(result.healthy).toBe(true);
+      expect(result.status).toBe("healthy");
+      expect(result.accountDetails?.accountId).toBe("vault-user");
+    });
+
+    it("C. reports not configured when neither vault nor environment key exists", async () => {
+      delete process.env.UPLOAD_POST_API_KEY;
+      providerSecrets.registerResolver(async () => null);
+
+      const provider = new UploadPostProvider();
+      const result = await provider.validateConnection();
+
+      expect(result.configured).toBe(false);
+      expect(result.healthy).toBe(false);
+      expect(result.status).toBe("not_configured");
+      expect(result.message).toContain("not configured");
+    });
+
+    it("D. never exposes plaintext credentials in provider or status responses", async () => {
+      const secret = "secret-vault-token-xyz-987";
+      providerSecrets.registerResolver(async (providerId, credentialType) =>
+        providerId === "upload_post" && credentialType === "api_key" ? secret : null,
+      );
+
+      const provider = new UploadPostProvider();
+      nock("https://api.upload-post.com")
+        .get("/api/uploadposts/me")
+        .reply(200, { id: "safe-id", name: "Safe Name" });
+
+      const result = await provider.validateConnection();
+      expect(JSON.stringify(result)).not.toContain(secret);
+
+      const status = await resolveUploadPostStatus();
+      expect(JSON.stringify(status)).not.toContain(secret);
+      expect(status.configured).toBe(true);
+      expect(status.redactedKey).toBe("••••••••");
+    });
+
+    it("E. automatic normal customer publishing resolves to Upload-Post", () => {
+      const registry = new PublishingProviderRegistry();
+      (["youtube", "tiktok", "instagram", "facebook", "linkedin", "twitter", "threads"] as const).forEach((platform) => {
+        expect(registry.getProviderForPlatform(platform).id).toBe("upload_post");
+      });
+    });
+
+    it("F. unsupported Upload-Post platform does not silently route to a legacy adapter", () => {
+      const registry = new PublishingProviderRegistry();
+      expect(() => registry.getProviderForPlatform("telegram")).toThrow(
+        /not supported by Upload-Post and no explicit legacy provider was requested/,
+      );
+    });
+
+    it("G. legacy direct provider remains explicitly addressable internally where required", () => {
+      const registry = new PublishingProviderRegistry();
+      expect(registry.getProviderForPlatform("telegram", "telegram_bot").id).toBe("telegram_bot");
+      expect(registry.getProviderForPlatform("youtube", "youtube_direct").id).toBe("youtube_direct");
+      expect(registry.getProviderForPlatform("tiktok", "tiktok_direct").id).toBe("tiktok_direct");
+      expect(registry.getProviderForPlatform("instagram", "meta_direct").id).toBe("meta_direct");
+      expect(registry.getProviderForPlatform("facebook", "meta_direct").id).toBe("meta_direct");
+    });
+
     it("publishes video successfully on 200 response", async () => {
       const provider = new UploadPostProvider({ apiKey: "test-api-key" });
 

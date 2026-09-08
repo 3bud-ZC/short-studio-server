@@ -68,7 +68,6 @@ export const SetupWizard: React.FC = () => {
   const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
   const [pexelsKey, setPexelsKey] = useState("");
   const [pixabayKey, setPixabayKey] = useState("");
-  const [telegramToken, setTelegramToken] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
   const [elevenLabsKey, setElevenLabsKey] = useState("");
   const [defaultLanguage, setDefaultLanguage] = useState("ar");
@@ -464,22 +463,13 @@ export const SetupWizard: React.FC = () => {
           {currentStepKey === "setup.publishing" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
-                Social Publishing & Distribution
+                {t("setup.publishingHeading")}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Connect your social publishing providers for automatic scheduling and distribution.
+                {t("setup.publishingBody")}
               </Typography>
-              <TextField
-                label="Telegram Bot Token (Optional)"
-                value={telegramToken}
-                onChange={(e) => setTelegramToken(e.target.value)}
-                type="password"
-                fullWidth
-                size="small"
-                helperText="Direct bot publishing to your Telegram channels and groups."
-              />
               <Alert severity="success">
-                Upload-Post, YouTube Direct, Meta Reels, and TikTok posting are fully supported and can be connected from the Publishing dashboard.
+                {t("setup.publishingUploadPostOnly")}
               </Alert>
             </Stack>
           )}

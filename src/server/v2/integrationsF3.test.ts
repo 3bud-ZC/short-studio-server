@@ -651,23 +651,23 @@ describe("Test provider isolation", () => {
 
   it("never falls back to the test provider when resolving a platform", () => {
     const registry = new PublishingProviderRegistry();
-    (["youtube", "tiktok", "instagram", "facebook", "telegram"] as const).forEach((platform) => {
+    (["youtube", "tiktok", "instagram", "facebook", "linkedin", "twitter", "threads"] as const).forEach((platform) => {
       expect(registry.getProviderForPlatform(platform).id).not.toBe("test_provider");
     });
+    expect(() => registry.getProviderForPlatform("telegram")).toThrow(/not supported by Upload-Post/);
+    expect(registry.getProviderForPlatform("telegram", "telegram_bot").id).toBe("telegram_bot");
   });
 
-  it("prefers the direct adapter over the aggregator for a platform that has one", () => {
+  it("uses Upload-Post as the automatic customer-facing publishing route", () => {
     const registry = new PublishingProviderRegistry();
-    expect(registry.getProviderForPlatform("youtube").id).toBe("youtube_direct");
-    expect(registry.getProviderForPlatform("tiktok").id).toBe("tiktok_direct");
-    expect(registry.getProviderForPlatform("instagram").id).toBe("meta_direct");
-    expect(registry.getProviderForPlatform("telegram").id).toBe("telegram_bot");
-    // A platform with no direct adapter still reaches the aggregator.
-    expect(registry.getProviderForPlatform("linkedin").id).toBe("upload_post");
+    (["youtube", "tiktok", "instagram", "facebook", "linkedin", "twitter", "threads"] as const).forEach((platform) => {
+      expect(registry.getProviderForPlatform(platform).id).toBe("upload_post");
+    });
   });
 
   it("honours an explicit provider choice instead of silently rerouting it", () => {
     const registry = new PublishingProviderRegistry();
     expect(registry.getProviderForPlatform("youtube", "upload_post").id).toBe("upload_post");
+    expect(registry.getProviderForPlatform("youtube", "youtube_direct").id).toBe("youtube_direct");
   });
 });

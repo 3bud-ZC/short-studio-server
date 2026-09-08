@@ -529,7 +529,7 @@ const VideoDetailsContent: React.FC = () => {
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  This video has not been distributed to any social platforms yet. Click "Publish / Schedule" to distribute it to YouTube, TikTok, Instagram, Facebook, or Telegram.
+                  This video has not been distributed yet. Use Upload-Post from the publishing flow for supported channels after owner approval.
                 </Typography>
               )}
             </SectionCard>

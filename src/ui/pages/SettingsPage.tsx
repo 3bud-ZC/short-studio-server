@@ -294,17 +294,6 @@ const SettingsPage: React.FC = () => {
                 })}
               </Typography>
 
-              <Divider />
-
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography>{tr("settings.integrations.telegram")}</Typography>
-                <StatusBadge status={integrationStatus(settings?.telegram?.configured)} />
-              </Stack>
-              <Typography variant="body2" color="text.secondary">
-                {tr("settings.integrations.token", {
-                  value: settings?.telegram?.redactedKey || tr("settings.integrations.notConfigured"),
-                })}
-              </Typography>
             </Stack>
           </SectionCard>
         </Grid>
@@ -325,7 +314,6 @@ const SettingsPage: React.FC = () => {
                     onChange={(e) => setDraft({ ...draft, defaultPublishingMode: e.target.value })}
                   >
                     <MenuItem value="draft">{tr("settings.field.publishingModeDraft")}</MenuItem>
-                    <MenuItem value="direct">{tr("settings.field.publishingModeDirect")}</MenuItem>
                     <MenuItem value="scheduled">{tr("settings.field.publishingModeScheduled")}</MenuItem>
                   </Select>
                 </FormControl>
