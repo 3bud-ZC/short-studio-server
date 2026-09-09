@@ -13,10 +13,11 @@
  */
 
 import type { JobRecord, JobStatus } from "./types";
-import type {
-  FinalQualityAssessment,
-  FinalQualityGateSeverity,
-  FinalQualityOutcome,
+import {
+  assessFinalQuality,
+  type FinalQualityAssessment,
+  type FinalQualityGateSeverity,
+  type FinalQualityOutcome,
 } from "./quality/finalQualityContract";
 
 /* --------------------------------------------------------------- status model */
@@ -376,7 +377,31 @@ export type CustomerQualityReview = {
  * older sanitized `failure` message is what the interface falls back to.
  */
 export function customerQualityReview(job: JobRecord): CustomerQualityReview | undefined {
-  const raw = (job.output as any)?.finalQuality as FinalQualityAssessment | undefined;
+  let raw = (job.output as any)?.finalQuality as FinalQualityAssessment | undefined;
+  if (!raw && (job.output as any)?.validationResult?.valid) {
+    const out = (job.output as any) || {};
+    const pvq = out.professionalVisualQuality || {};
+    const val = out.validationResult || {};
+    const aud = out.audioQa || (job.checkpoint as any)?.validation?.artifacts?.audioQa || {};
+    const sil = out.mixedSilenceGate || {};
+    raw = assessFinalQuality({
+      container: {
+        exists: Boolean(val.valid),
+        hasVideoStream: Boolean(val.hasVideoStream),
+        hasAudioStream: Boolean(val.hasAudioStream),
+        durationSeconds: Number(val.durationSeconds || 0),
+      },
+      narrationExpected: true,
+      audioMasteringPass: aud.pass !== false,
+      audioSilenceCriticalFailure: Boolean(sil.criticalFailure),
+      blackFramePercent: Number(out.blackFramePercent || 0),
+      visualIssues: Array.isArray(pvq.issues) ? pvq.issues : [],
+      realVisualCoveragePercent: Number(pvq.realVisualCoveragePercent ?? 100),
+      textOnlyTimelinePercent: Number(pvq.textOnlyTimelinePercent ?? 0),
+      repeatedAssetCount: Number(pvq.repeatedAssetCount ?? 0),
+      scriptQualityPass: out.scriptCompleteness !== false,
+    });
+  }
   if (!raw || !Array.isArray(raw.findings)) return undefined;
   return {
     outcome: raw.outcome,
@@ -397,6 +422,8 @@ export function customerQualityReview(job: JobRecord): CustomerQualityReview | u
 
 export function customerDisplayProgress(job: JobRecord): number {
   if (job.status === "ready" || job.status === "needs_review") return 100;
+  const review = customerQualityReview(job);
+  if (review?.outcome === "needs_review" && review.outputAvailable) return 100;
   if (job.status === "failed" || job.status === "canceled") return Math.min(99, Math.max(0, Math.round(job.progress || 0)));
   return Math.min(99, Math.max(0, Math.round(job.progress || 0)));
 }
@@ -534,18 +561,23 @@ function elapsedMs(job: JobRecord): number | undefined {
 export function serializeJobForCustomer(job: JobRecord, options: SerializeOptions = {}) {
   const spec = (job.productionSpec as any) || {};
   const meta = (spec.metadata || {}) as Record<string, any>;
-  const customerStatus = toCustomerStatus(job.status);
-  const hasOutput = job.status === "ready" || job.status === "needs_review";
+  const qualityReview = customerQualityReview(job);
+  const resolvedStatus =
+    job.status === "failed" && qualityReview?.outcome === "needs_review" && qualityReview.outputAvailable
+      ? "needs_review"
+      : job.status;
+  const customerStatus = toCustomerStatus(resolvedStatus);
+  const hasOutput = resolvedStatus === "ready" || resolvedStatus === "needs_review";
   const videoId = (job.output as any)?.videoId || (hasOutput ? job.id : undefined);
   const dto: Record<string, unknown> = {
     id: job.id,
     title: job.title || promptSummary(job),
     promptSummary: promptSummary(job),
     creationMode: job.creationMode || "template",
-    status: job.status,
+    status: resolvedStatus,
     customerStatus,
     progress: customerDisplayProgress(job),
-    currentStage: job.currentStage,
+    currentStage: resolvedStatus === "needs_review" && job.status === "failed" ? "Quality review" : job.currentStage,
     createdAt: job.createdAt,
     startedAt: job.startedAt,
     completedAt: job.completedAt,
@@ -572,9 +604,9 @@ export function serializeJobForCustomer(job: JobRecord, options: SerializeOption
     snapshots: readSnapshots(job),
     videoId,
     thumbnailUrl: videoId && hasOutput ? `/api/videos/${videoId}/thumbnail` : undefined,
-    timeline: buildCustomerTimeline(job),
-    failure: sanitizeJobFailure(job),
-    qualityReview: customerQualityReview(job),
+    timeline: buildCustomerTimeline({ ...job, status: resolvedStatus }),
+    failure: resolvedStatus === "failed" ? sanitizeJobFailure(job) : undefined,
+    qualityReview,
     isFree: spec.costEstimate?.isFree ?? (job.costEstimate as any)?.isFree ?? true,
     retryOf: (job.input as any)?.__retryOf || undefined,
     retryLineage: Array.isArray((job.input as any)?.__retryLineage)
