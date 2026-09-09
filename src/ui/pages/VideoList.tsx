@@ -38,15 +38,19 @@ import { ReviewPublishModal } from "../components/publishing/ReviewPublishModal"
 import { BatchPublishModal } from "../components/publishing/BatchPublishModal";
 import type { VideoItem } from "./v2Types";
 import { useI18n } from "../i18n";
+import { aspectLabelKey, languageLabelKey } from "./displayLabels";
 import { withMediaAccessToken } from "../utils/auth";
 
-function videoTitle(video: VideoItem): string {
+/**
+ * What the customer calls this video. The prompt they wrote is the most
+ * recognisable name they have for it, so it comes before any internal id.
+ */
+function videoTitle(video: VideoItem, untitled: string): string {
   return (
     (video as any).title ||
     video.templateName ||
-    video.brandName ||
     (video.originalPrompt ? video.originalPrompt.slice(0, 60) : "") ||
-    `Video ${video.videoId.slice(0, 8)}`
+    untitled
   );
 }
 
@@ -56,7 +60,6 @@ const VideoList: React.FC = () => {
 
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [counts, setCounts] = useState<{ total: number; ready: number; createdThisWeek: number } | null>(null);
-  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [templates, setTemplates] = useState<Array<{ id: string; displayName?: string; name?: string }>>([]);
 
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,10 @@ const VideoList: React.FC = () => {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [language, setLanguage] = useState("");
   const [aspectRatio, setAspectRatio] = useState("");
-  const [brandName, setBrandName] = useState("");
+  // V2.5.1: Brands is no longer a customer feature, so the library filters on
+  // what a customer actually recognises about a video - what it says, what
+  // language it speaks, what shape it is and whether it needs a look.
+  const [status, setStatus] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest" | "longest" | "shortest">("newest");
 
   const [nextCursor, setNextCursor] = useState<string | undefined>();
@@ -87,12 +93,9 @@ const VideoList: React.FC = () => {
   }, [query]);
 
   useEffect(() => {
-    Promise.allSettled([axios.get("/api/v2/brands"), axios.get("/api/v2/templates")]).then(
-      ([brandRes, templateRes]) => {
-        if (brandRes.status === "fulfilled") setBrands(brandRes.value.data.brands || []);
-        if (templateRes.status === "fulfilled") setTemplates(templateRes.value.data.templates || []);
-      },
-    );
+    Promise.allSettled([axios.get("/api/v2/templates")]).then(([templateRes]) => {
+      if (templateRes.status === "fulfilled") setTemplates(templateRes.value.data.templates || []);
+    });
   }, []);
 
   const params = useMemo(
@@ -100,11 +103,11 @@ const VideoList: React.FC = () => {
       search: debouncedQuery || undefined,
       language: language || undefined,
       aspectRatio: aspectRatio || undefined,
-      brandName: brandName || undefined,
+      status: status || undefined,
       sort,
       limit: 24,
     }),
-    [debouncedQuery, language, aspectRatio, brandName, sort],
+    [debouncedQuery, language, aspectRatio, status, sort],
   );
 
   const load = useCallback(
@@ -138,13 +141,13 @@ const VideoList: React.FC = () => {
   }, [load]);
 
   const filtersActive =
-    Boolean(debouncedQuery) || Boolean(language) || Boolean(aspectRatio) || Boolean(brandName) || sort !== "newest";
+    Boolean(debouncedQuery) || Boolean(language) || Boolean(aspectRatio) || Boolean(status) || sort !== "newest";
 
   const resetFilters = () => {
     setQuery("");
     setLanguage("");
     setAspectRatio("");
-    setBrandName("");
+    setStatus("");
     setSort("newest");
   };
 
@@ -250,9 +253,9 @@ const VideoList: React.FC = () => {
                   <FormControl size="small" fullWidth>
                     <InputLabel>{t("videos.language")}</InputLabel>
                     <Select label={t("videos.language")} value={language} onChange={(e) => setLanguage(e.target.value)}>
-                      <MenuItem value="">{t("common.all")}</MenuItem>
-                      <MenuItem value="en">EN</MenuItem>
-                      <MenuItem value="ar">AR</MenuItem>
+                      <MenuItem value="">{t("videos.filter.allLanguages")}</MenuItem>
+                      <MenuItem value="en">{t("create.language.english")}</MenuItem>
+                      <MenuItem value="ar">{t("create.language.arabic")}</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -260,23 +263,20 @@ const VideoList: React.FC = () => {
                   <FormControl size="small" fullWidth>
                     <InputLabel>{t("videos.aspect")}</InputLabel>
                     <Select label={t("videos.aspect")} value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
-                      <MenuItem value="">{t("common.all")}</MenuItem>
-                      <MenuItem value="9:16">9:16</MenuItem>
-                      <MenuItem value="16:9">16:9</MenuItem>
-                      <MenuItem value="1:1">1:1</MenuItem>
+                      <MenuItem value="">{t("videos.filter.allAspects")}</MenuItem>
+                      <MenuItem value="9:16">{t("create.aspect.vertical")}</MenuItem>
+                      <MenuItem value="16:9">{t("create.aspect.landscape")}</MenuItem>
+                      <MenuItem value="1:1">{t("create.aspect.square")}</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={6} md={3}>
                   <FormControl size="small" fullWidth>
-                    <InputLabel>{t("brands.title")}</InputLabel>
-                    <Select label={t("brands.title")} value={brandName} onChange={(e) => setBrandName(e.target.value)}>
-                      <MenuItem value="">{t("common.all")}</MenuItem>
-                      {brands.map((brand) => (
-                        <MenuItem key={brand.id} value={brand.name}>
-                          {brand.name}
-                        </MenuItem>
-                      ))}
+                    <InputLabel>{t("videos.filter.status")}</InputLabel>
+                    <Select label={t("videos.filter.status")} value={status} onChange={(e) => setStatus(e.target.value)}>
+                      <MenuItem value="">{t("videos.filter.allStatuses")}</MenuItem>
+                      <MenuItem value="ready">{t("statuses.ready")}</MenuItem>
+                      <MenuItem value="needs_review">{t("statuses.needsReview")}</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -343,7 +343,7 @@ const VideoList: React.FC = () => {
                         {isReady ? (
                           <img
                             src={withMediaAccessToken(video.thumbnailUrl || `/api/videos/${video.videoId}/thumbnail`)}
-                            alt={t("videos.thumbnailAlt", { title: videoTitle(video) })}
+                            alt={t("videos.thumbnailAlt", { title: videoTitle(video, t("videos.untitled")) })}
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = "none";
                             }}
@@ -358,13 +358,13 @@ const VideoList: React.FC = () => {
                       <Stack direction="row" justifyContent="space-between" spacing={1}>
                         <Stack minWidth={0}>
                           <Typography variant="h6" noWrap>
-                            {videoTitle(video)}
+                            {videoTitle(video, t("videos.untitled"))}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" noWrap>
                             {[
-                              video.brandName,
                               video.durationSeconds ? format.duration(video.durationSeconds) : null,
-                              video.language ? video.language.toUpperCase() : null,
+                              video.language ? t(languageLabelKey(video.language)) : null,
+                              video.aspectRatio ? t(aspectLabelKey(video.aspectRatio)) : null,
                             ]
                               .filter(Boolean)
                               .join(" · ")}
@@ -373,7 +373,7 @@ const VideoList: React.FC = () => {
                         <Checkbox
                           checked={checked}
                           onChange={() => toggleSelected(video.videoId)}
-                          inputProps={{ "aria-label": videoTitle(video) }}
+                          inputProps={{ "aria-label": videoTitle(video, t("videos.untitled")) }}
                         />
                       </Stack>
                       <Stack direction="row" spacing={1} flexWrap="wrap">

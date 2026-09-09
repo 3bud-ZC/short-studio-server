@@ -39,6 +39,8 @@ export type V2Job = {
     | "generating"
     | "rendering"
     | "ready"
+    /** A valid, playable output that did not meet a creative bar (V2.5.1). */
+    | "needs_review"
     | "needs_attention"
     | "cancelling"
     | "cancelled";
@@ -58,7 +60,28 @@ export type V2Job = {
   snapshots?: ProductionSnapshots;
   timeline?: CustomerTimelineStep[];
   failure?: CustomerFailure;
+  qualityReview?: CustomerQualityReview;
   advanced?: Record<string, unknown>;
+};
+
+/**
+ * The structured final-quality verdict (V2.5.1). Findings carry a message KEY,
+ * not a sentence, so an Arabic interface renders an Arabic reason instead of an
+ * English sentence translated at the edge.
+ */
+export type CustomerQualityReview = {
+  outcome: "ready" | "needs_review" | "failed";
+  outputAvailable: boolean;
+  retryable: boolean;
+  technicalCode: string;
+  findings: Array<{
+    gate: string;
+    severity: "hard" | "soft";
+    messageKey: string;
+    params?: Record<string, string | number>;
+    /** English engineering detail; belongs in the collapsed technical panel. */
+    technicalDetail: string;
+  }>;
 };
 
 export type ProductionSnapshots = {

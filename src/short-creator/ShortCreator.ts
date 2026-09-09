@@ -346,6 +346,13 @@ export class ShortCreator {
     if (sidecar?.status === "failed") {
       return "failed";
     }
+    // V2.5.1: a reviewable video is a delivered video. It keeps its own status
+    // so the library can show it truthfully instead of flattening it to
+    // "ready" (which would hide the notes) or "failed" (which would hide the
+    // video).
+    if (sidecar?.status === "needs_review" && fs.existsSync(videoPath)) {
+      return "needs_review";
+    }
     if (fs.existsSync(videoPath)) {
       return "ready";
     }

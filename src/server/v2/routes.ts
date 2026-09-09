@@ -2766,6 +2766,9 @@ export function createV2PublicRouter(
             : undefined,
         customerStatus: customer.customerStatus,
         snapshots: customer.snapshots,
+        // The structured final-quality verdict, carrying message KEYS the
+        // interface resolves in the active language (V2.5.1).
+        qualityReview: customer.qualityReview,
         advanced: customer.advanced,
       },
       timeline: buildCustomerTimeline(job),
