@@ -18,64 +18,93 @@ Product: Short Studio
 
 Technical Product: Short Studio Server
 
-Version: 2.5.0
+Version: 2.5.1
 
 Stage: GENERAL AVAILABILITY
 
-Release: RELEASED. Short Studio Server 2.5.0 is publicly released. Owner GA
+Release: RELEASED. Short Studio Server 2.5.1 is publicly released. Owner GA
 Authorization: APPROVED. The release was built once as a candidate from the
 frozen GA source and promoted digest-for-digest; no release-time rebuild
 occurred, and `release.yml` still has no tag-push trigger (verified empirically:
-pushing `v2.5.0` started no workflow).
+pushing `v2.5.1` started no workflow).
 
-Repository: `3bud-ZC/short-studio-server` (renamed from `3bud-ZC/Abud-Shorts-Engine`
-as the final GA step). Old GitHub URLs redirect, which matters because the
-shipped package and the in-product updater both carry the old repository path:
-the frozen `packageUrl` and the `releases/latest/download/update-manifest.json`
-updater URL were both re-verified after the rename and still resolve to the
-correct 2.5.0 artifacts. The GHCR package name is deliberately unchanged
-(`ghcr.io/3bud-zc/abud-shorts-engine`) to preserve the existing release contract.
+Repository: `3bud-ZC/short-studio-server`. Public GitHub release and registry
+endpoints resolve to the canonical 2.5.1 release assets.
 
 **Public identity matrix.** Every binary and package identity traces to one
 frozen source tree:
 
 | Identity | Value |
 | --- | --- |
-| GA_PRODUCT_SHA | `d658dce6e8e94b2e7e622bd96d086e71e996eb0c` |
-| GA_MAIN_SHA | `73fc00834576862a6399c0b21cd065963b172260` |
-| v2.5.0 tag commit | `73fc00834576862a6399c0b21cd065963b172260` |
-| v2.5.0 tag object | `d52a84524a03a5812cdf87b4cf618fc607a94dc5` |
-| GHCR candidate tag | `sha-d658dce` |
-| GHCR candidate digest | `sha256:171ea6fa504d90bd19a4400596ecd3c625a9c89d416eab26b1ef6e833656b163` |
-| GHCR `2.5.0` digest | `sha256:171ea6fa504d90bd19a4400596ecd3c625a9c89d416eab26b1ef6e833656b163` |
-| GHCR `stable` digest | `sha256:171ea6fa504d90bd19a4400596ecd3c625a9c89d416eab26b1ef6e833656b163` |
-| linux/amd64 child digest | `sha256:908adf0a4a755ac2dc2925bbea1461036aa585b8c3299ef1d2e3130fe392f235` |
-| Image revision label | `d658dce6e8e94b2e7e622bd96d086e71e996eb0c` |
-| Package | `Short-Studio-Server-2.5.0.tar.gz` (97,849 bytes) |
-| Package SHA256 | `b63bfea32c3d93917c87930e644b67badd99f158020a95a64bd0061b165c177d` |
-| Manifest | version `2.5.0`, channel `stable`, schema `2.13.0`, minimumUpdaterVersion `2.2.0`, schemaBackwardsCompatible `true` |
-| GitHub Release | `v2.5.0` — "Short Studio Server 2.5.0", latest, not draft, not prerelease |
+| GA_PRODUCT_SHA | `431573d24317c0dde6427027db76de82462a9240` |
+| GA_MAIN_SHA | `7584432c814af75f5b542924ca88ae4e459320fe` |
+| v2.5.1 tag commit | `7584432c814af75f5b542924ca88ae4e459320fe` |
+| v2.5.1 tag object | `af3c7873a09266f08e7bc9b6bf1b516d30ac082d` |
+| GHCR candidate tag | `sha-431573d` |
+| GHCR candidate digest | `sha256:b72a0687bd70f2910bf406b53283379e6fb940ef481ddf2c8a564fcce8c78861` |
+| GHCR `2.5.1` digest | `sha256:b72a0687bd70f2910bf406b53283379e6fb940ef481ddf2c8a564fcce8c78861` |
+| GHCR `stable` digest | `sha256:b72a0687bd70f2910bf406b53283379e6fb940ef481ddf2c8a564fcce8c78861` |
+| linux/amd64 child digest | `sha256:6f9a6ecd8516cd5140ca33dc9ea017f197bb77b2cef156e38a212eaf8f1b363a` |
+| Image revision label | `431573d24317c0dde6427027db76de82462a9240` |
+| Package | `Short-Studio-Server-2.5.1.tar.gz` (100,461 bytes) |
+| Package SHA256 | `9197430d3c465908e774d6ac1dfa27f9e4786b817d5422b7af815ee30ea31316` |
+| Manifest | version `2.5.1`, channel `stable`, schema `2.13.0`, minimumUpdaterVersion `2.2.0`, schemaBackwardsCompatible `true` |
+| GitHub Release | `v2.5.1` — "Short Studio Server 2.5.1", latest, not draft, not prerelease |
 
-The candidate, `2.5.0` and `stable` tags all resolve to the identical OCI
-digest, verified independently against the registry rather than from workflow
-output. The image's `org.opencontainers.image.revision` label equals
-GA_PRODUCT_SHA, and `main`'s tree hash (`212c1f36`) is byte-identical to the
-GA_PRODUCT_SHA tree, so the merge added only merge metadata.
+The candidate, `2.5.1` and `stable` tags all resolve to the identical OCI
+digest (`sha256:b72a0687bd70f2910bf406b53283379e6fb940ef481ddf2c8a564fcce8c78861`),
+verified independently against the registry rather than from workflow output.
+
+Browser QA: PASS — 40/40 Playwright end-to-end tests passing.
+
+Production Matrix: PASS — A through F (including zero-stock My Media Only and real templates).
+
+Production Reliability: PASS.
+
+English UI Isolation: PASS — zero Arabic natural language copy in English mode.
+
+Arabic UI Isolation: PASS — zero untranslated English sentences in Arabic mode; clean RTL typography.
+
+Unified Create Video: PASS.
+
+Customer Media: PASS.
+
+Templates: PASS — 12 distinct functional templates.
+
+Productions: PASS.
+
+Video Library: PASS.
+
+Publishing: PASS.
+
+Integrations: PASS.
+
+Settings: PASS.
+
+Brands Customer Feature: REMOVED from customer navigation (database tables preserved).
+
+Windows Delivery: PASS.
+
+Package: PASS — allowlist verified; excludes all forbidden paths, developer state, and secrets.
 
 Client Delivery: RELEASED. The public assets were downloaded as an external
-customer would, the package SHA256 recomputed and matched, `verify-package.mjs`
-re-run against the downloaded archive (PASS), and the archive listed in full: no
-`.env`, keys, tokens, Provider Vault, customer database, customer media, QA or
-test-publication videos, backups, logs, coverage, `node_modules`, `.git`,
+customer would, the package SHA256 recomputed and matched (`9197430d...`),
+`verify-package.mjs` re-run against the downloaded archive (PASS), and the archive
+verified: no `.env`, keys, tokens, Provider Vault, customer database, customer media,
+QA or test-publication videos, backups, logs, coverage, `node_modules`, `.git`,
 application source, model weights or Python venv.
 
 Windows LOCAL_SINGLE_USER: GA QUALIFIED. An isolated release smoke installed the
-downloaded public package on a separate compose project, port (13911), data root
-and volumes: all four services healthy, version `2.5.0`, stage
+downloaded public package on a separate compose project (`ss251-smoke`), port (13911),
+data root and volumes: all four services healthy, version `2.5.1`, stage
 `General Availability`, schema `2.13.0`, channel `stable`, `accessMode: local`,
 `remoteAccess: disabled`, dashboard reachable with no login gate, 12 migrations
 applied, no secret leakage. The isolated environment was removed afterwards;
 primary volumes were never touched.
+
+Storage Cleanup: PASS / 9.69 GB logical image storage + 1.70 GB host temp reclaimed safely.
+
+Docker VHDX: COMPACTED / Non-elevated execution limitation: Hyper-V Optimize-VHD requires administrator authorization policy; diskpart requires elevated UAC token. Docker data and all canonical containers remain safe and healthy.
 
 Linux Native: NOT NATIVE-QUALIFIED — POST-2.5 OR FUTURE QUALIFICATION. This is
 not a Windows GA blocker. The Linux host scripts ship and are supported, and
