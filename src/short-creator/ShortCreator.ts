@@ -2727,7 +2727,7 @@ export class ShortCreator {
     const predictedFinalSeconds = Math.round(
       (totalDurationSeconds + boundedGapSeconds + (timeline.outroDurationSeconds || 0)) * 100,
     ) / 100;
-    const durationToleranceSeconds = 1;
+    const durationToleranceSeconds = Math.max(2.5, Math.round(timeline.requestedDurationSeconds * 0.15 * 10) / 10);
     if (timeline.requestedDurationSeconds > 0) {
       const lowerBound = timeline.requestedDurationSeconds - durationToleranceSeconds;
       const upperBound = timeline.requestedDurationSeconds + durationToleranceSeconds;
