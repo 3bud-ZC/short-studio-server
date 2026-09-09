@@ -108,6 +108,23 @@ import { AudioMasteringService } from "./audioMasteringService";
 import { postProductionPipeline } from "../server/v2/post-production/postProductionPipeline";
 import { qualityEngine } from "../server/v2/quality/qualityEngine";
 import { calculateProfessionalVisualQualityReport } from "../server/v2/quality/professionalVisualQuality";
+import { assessFinalQuality } from "../server/v2/quality/finalQualityContract";
+import { MediaUploadService } from "../server/v2/media/mediaUploadService";
+import type { ResolvedSceneAsset } from "../server/v2/visual-providers/router";
+import {
+  planCustomerMedia,
+  resolveCustomerMediaMode,
+  type CustomerMediaCandidate,
+  type CustomerMediaPlan,
+  type CustomerSceneAssignment,
+} from "../server/v2/media/customerMediaPlanner";
+
+/**
+ * Provider id recorded for a visual that came from the customer's own Media
+ * Library. It is a real provenance value, persisted into output metadata and
+ * asserted by the customer-media regressions.
+ */
+const CUSTOMER_MEDIA_PROVIDER = "customer_media";
 import { evaluateVisualCoherence } from "../server/v2/quality/visualCoherence";
 import { motionEngine, type MotionTemplateType } from "../server/v2/motion/motionEngine";
 import { mediaUploadService } from "../server/v2/media/mediaUploadService";
@@ -518,8 +535,34 @@ export class ShortCreator {
     // it. Availability is reported honestly: a treatment whose runtime is not
     // configured is never planned, it falls back and records why.
     // ------------------------------------------------------------------
+    // V2.5.1: the customer's own Media Library selection, resolved into a real
+    // per-scene assignment. Before this, `metadata.selectedMediaIds` was
+    // written by Create Video and read by nothing - "My Media" changed the form
+    // and not the video. See media/customerMediaPlanner.ts.
+    const customerMediaPlan = await this.planCustomerMediaForSpec(spec);
+    if (customerMediaPlan.blockedReason === "no_usable_customer_media") {
+      throw new Error(
+        "This production was set to use only your own media, but none of the selected items can be used in a video. Choose usable media or switch the visual source.",
+      );
+    }
+    const customerMediaByScene = new Map(
+      customerMediaPlan.assignments.map((item) => [item.sceneIndex, item]),
+    );
+    if (customerMediaPlan.assignments.length > 0) {
+      logger.info(
+        {
+          mode: customerMediaPlan.mode,
+          assigned: customerMediaPlan.assignments.length,
+          stockProvidersBlocked: customerMediaPlan.stockProvidersBlocked,
+          unusable: customerMediaPlan.unusableIds,
+        },
+        "Customer media plan resolved",
+      );
+    }
+
     const hasUploadedMediaForProduction = Boolean(
       (spec.metadata as any)?.uploadedMediaId ||
+      customerMediaPlan.assignments.length > 0 ||
       spec.scenes.some((scene: any) => scene.uploadedMediaId || scene.visualProvider === "uploaded_media"),
     );
     const hasProductMediaForProduction = Boolean(
@@ -771,12 +814,17 @@ export class ShortCreator {
       const plannedSceneTreatment = creativePlan.sceneTreatments.find(
         (entry) => entry.sceneIndex === index,
       );
-      const sceneResolvedToMotion = sceneRendersAsMotion({
-        productionMode: spec.productionMode,
-        visualMode: spec.visualMode,
-        sceneVisualSource: (originalSceneSpec as any).visualSource,
-        plannedTreatmentRuntime: plannedSceneTreatment?.runtime,
-      });
+      // A scene the customer assigned their own media to is shown with that
+      // media. Rendering a generated motion card over an asset the customer
+      // deliberately picked is the substitution "My Media" exists to prevent.
+      const sceneResolvedToMotion =
+        !customerMediaByScene.has(index) &&
+        sceneRendersAsMotion({
+          productionMode: spec.productionMode,
+          visualMode: spec.visualMode,
+          sceneVisualSource: (originalSceneSpec as any).visualSource,
+          plannedTreatmentRuntime: plannedSceneTreatment?.runtime,
+        });
 
       const sceneProgressBase = 15 + Math.round((index / timeline.scenes.length) * 55);
 
@@ -1562,7 +1610,16 @@ export class ShortCreator {
             artifactStore.copyToTemp(reusableMediaArtifact, segVideoPath);
             artifactReuse.reusedArtifacts.push(reusableMediaArtifact);
           } else {
-            segAsset = reusedSeg || await this.visualRouter.resolveSceneVisual(
+            const segCustomerAssignment = customerMediaByScene.get(index);
+            const segCustomerAsset = segCustomerAssignment
+              ? await this.resolveCustomerSceneAsset(segCustomerAssignment, seg.durationSeconds, orientation)
+              : null;
+            if (!segCustomerAsset && customerMediaPlan.stockProvidersBlocked) {
+              throw new Error(
+                "This production was set to use only your own media, but a scene could not be prepared from the selected items.",
+              );
+            }
+            segAsset = reusedSeg || segCustomerAsset || await this.visualRouter.resolveSceneVisual(
               {
                 ...originalSceneSpec,
                 stockSearchTerms: sceneMediaPlan.searchCandidates || seg.searchTerms,
@@ -1929,7 +1986,16 @@ export class ShortCreator {
               substituted: intentPolicy.substituted,
             });
           }
-          visualAsset = reusedAsset || await this.visualRouter.resolveSceneVisual(
+          const sceneCustomerAssignment = customerMediaByScene.get(index);
+          const sceneCustomerAsset = sceneCustomerAssignment
+            ? await this.resolveCustomerSceneAsset(sceneCustomerAssignment, targetSceneDuration, orientation)
+            : null;
+          if (!sceneCustomerAsset && customerMediaPlan.stockProvidersBlocked) {
+            throw new Error(
+              "This production was set to use only your own media, but a scene could not be prepared from the selected items.",
+            );
+          }
+          visualAsset = reusedAsset || sceneCustomerAsset || await this.visualRouter.resolveSceneVisual(
             {
               ...originalSceneSpec,
               stockSearchTerms: intentPolicy.terms,
@@ -2119,6 +2185,17 @@ export class ShortCreator {
                 (entry) => entry.sceneIndex === index,
               );
 
+              // The scene's picture is the customer's own asset: it is recorded
+              // as an upload, with its real provenance, and never reclassified
+              // as stock or replaced by a generated card.
+              if (visualAsset.provider === CUSTOMER_MEDIA_PROVIDER) {
+                return {
+                  sourceType: "upload",
+                  provider: CUSTOMER_MEDIA_PROVIDER,
+                  routingReason: "customer_media_selected",
+                };
+              }
+
               if (
                 planned &&
                 !forceStockFootage &&
@@ -2286,7 +2363,20 @@ export class ShortCreator {
 
               if (shotIndex > 0) {
                 try {
-                  const shotAsset = await this.visualRouter.resolveSceneVisual(
+                  // A sub-shot inside a scene the customer assigned their own
+                  // media to must come from that media too: reaching for stock
+                  // here is the same silent substitution "My Media Only" exists
+                  // to forbid.
+                  const shotCustomerAssignment = customerMediaByScene.get(index);
+                  const shotCustomerAsset = shotCustomerAssignment
+                    ? await this.resolveCustomerSceneAsset(shotCustomerAssignment, shot.duration, orientation)
+                    : null;
+                  if (!shotCustomerAsset && customerMediaPlan.stockProvidersBlocked) {
+                    throw new Error(
+                      "This production was set to use only your own media, but a shot could not be prepared from the selected items.",
+                    );
+                  }
+                  const shotAsset = shotCustomerAsset || await this.visualRouter.resolveSceneVisual(
                     {
                       ...originalSceneSpec,
                       stockSearchTerms: shotIntentPolicy.terms,
@@ -3194,12 +3284,37 @@ export class ShortCreator {
       const technicalReady = finalAudioQa.pass && audioSilencePass && visualQualityPass;
       const contentReady = scriptQuality.pass;
       const professionalReady = technicalReady && contentReady;
-      const readinessFailureReasons: string[] = [
-        ...(finalAudioQa.pass ? [] : ["Audio mastering did not pass quality checks."]),
-        ...(audioSilencePass ? [] : ["Audio timing needs another pass; a section of the video was unexpectedly quiet."]),
-        ...(visualQualityPass ? [] : ["One or more sections need better footage; a scene fell back to a graphic instead of real video."]),
-        ...(contentReady ? [] : [scriptQuality.reason || "Script did not pass the content quality gate."]),
-      ];
+
+      // V2.5.1: the same signals, now separated by CONSEQUENCE rather than
+      // merged into one boolean. `professionalReady` above stays exactly as
+      // it was (it is what "this production met every bar" means and is still
+      // reported truthfully); what changes is that a production which only
+      // missed a *creative* bar keeps its valid render and lands in
+      // `needs_review` instead of throwing away a playable 1080p file.
+      // See `finalQualityContract.ts` for the incident this fixes.
+      const finalQuality = assessFinalQuality({
+        container: {
+          exists: validationResult.hasVideoStream || fs.existsSync(videoPath),
+          hasVideoStream: validationResult.hasVideoStream,
+          hasAudioStream: validationResult.hasAudioStream,
+          durationSeconds: validationResult.durationSeconds,
+        },
+        // Every production in this engine narrates; a container with no audio
+        // stream is a broken render rather than a stylistic choice.
+        narrationExpected: true,
+        audioMasteringPass: finalAudioQa.pass,
+        audioSilenceCriticalFailure: mixedSilenceGate.criticalFailure,
+        blackFramePercent: blackFrameReport.blackFramePercent,
+        visualIssues: isExplicitGraphicsMode ? [] : professionalVisualQuality.issues,
+        realVisualCoveragePercent: professionalVisualQuality.realVisualCoveragePercent,
+        textOnlyTimelinePercent: professionalVisualQuality.textOnlyTimelinePercent,
+        repeatedAssetCount: professionalVisualQuality.repeatedAssetCount,
+        scriptQualityPass: scriptQuality.pass,
+        scriptQualityReason: scriptQuality.reason,
+      });
+      const readinessFailureReasons: string[] = finalQuality.findings.map(
+        (item) => item.technicalDetail,
+      );
 
       // V2.4 Pass 5 wall-clock accounting: the OpenCLIP pool's init cost is
       // only paid once per render-worker process lifetime (it stays warm
@@ -3223,8 +3338,16 @@ export class ShortCreator {
         videoId,
         filename: `${videoId}.mp4`,
         thumbnailUrl: `/api/videos/${videoId}/thumbnail`,
-        status: professionalReady ? "ready" : "failed",
-        error: professionalReady ? undefined : readinessFailureReasons.join(" "),
+        // "failed" only when the file itself is unusable. A valid render that
+        // merely missed a creative bar is "needs_review" and keeps its output.
+        status:
+          finalQuality.outcome === "failed"
+            ? "failed"
+            : finalQuality.outcome === "needs_review"
+              ? "needs_review"
+              : "ready",
+        error: finalQuality.findings.length ? readinessFailureReasons.join(" ") : undefined,
+        finalQuality,
         professionalReady,
         mixedSilenceGate: mixedSilenceGate as unknown as Record<string, unknown>,
         // renderDecision.strategy is computed unconditionally before the
@@ -3290,6 +3413,24 @@ export class ShortCreator {
           contrastCorrections: brandStyle.contrastCorrections,
         },
         sourceTypeCounts: shotSourceCounts,
+        // Where the picture actually came from, recorded so "was my media used?"
+        // is answered by the finished video rather than by the form that
+        // requested it.
+        mediaProvenance: {
+          mode: customerMediaPlan.mode,
+          stockProvidersBlocked: customerMediaPlan.stockProvidersBlocked,
+          customerMediaIds: Array.from(
+            new Set(
+              selectedVisuals
+                .filter((item) => item.provider === CUSTOMER_MEDIA_PROVIDER)
+                .map((item) => String(item.metadata?.customerMediaId || "")),
+            ),
+          ).filter(Boolean),
+          customerMediaShotCount: shotSourceCounts.upload || 0,
+          stockShotCount: shotSourceCounts.stock || 0,
+          providers: Array.from(visualProvidersUsed),
+          unusableSelectedMediaIds: customerMediaPlan.unusableIds,
+        },
         captionFont: captionFontFamily,
         captionStyleId: captionStyleSpec.id,
         captionQa: captionQaResult || undefined,
@@ -3596,6 +3737,135 @@ export class ShortCreator {
     fs.writeFileSync(assPath, built.content, "utf8");
     input.tempFiles.push(assPath);
     return { path: assPath, fontFamily: built.fontFamily, qa };
+  }
+
+  /**
+   * Resolve the customer's Media Library selection into a per-scene plan.
+   *
+   * Reads the same `metadata.selectedMediaIds` Create Video writes and the same
+   * `visualSource` / `mediaPolicy` the request carried, so the plan reflects
+   * what the customer actually asked for rather than a re-derived guess.
+   */
+  private async planCustomerMediaForSpec(spec: ProductionSpec): Promise<CustomerMediaPlan> {
+    const metadata = (spec.metadata || {}) as any;
+    const contract = metadata.uiContract || {};
+    const selectedIds: string[] = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(metadata.selectedMediaIds) ? metadata.selectedMediaIds : []),
+          ...(Array.isArray(contract.selectedMediaIds) ? contract.selectedMediaIds : []),
+          metadata.uploadedMediaId,
+          metadata.productImageId,
+        ]
+          .filter((value) => typeof value === "string" && value.trim().length > 0)
+          .map((value) => String(value).trim()),
+      ),
+    );
+    const mode = resolveCustomerMediaMode({
+      visualSource: contract.visualSource || (spec as any).visualSource,
+      mediaPolicy: contract.mediaPolicy || metadata.mediaPolicy,
+      productionMode: spec.productionMode,
+    });
+    if (mode === "automatic" || selectedIds.length === 0) {
+      return planCustomerMedia({ mode: "automatic", selectedIds: [], candidates: [], sceneCount: 0 });
+    }
+
+    const mediaService = new MediaUploadService(this.config.dataDirPath);
+    const candidates: CustomerMediaCandidate[] = [];
+    for (const id of selectedIds) {
+      const asset = await mediaService.getAsset(id).catch(() => null);
+      if (!asset) continue;
+      candidates.push({
+        id: asset.id,
+        storagePath: asset.storagePath,
+        mediaType: asset.mediaType,
+        // The library's own usability verdict is authoritative: a 1x1 pixel PNG
+        // is a structurally valid image and still cannot carry a scene.
+        usable: asset.status === "ready" && asset.usable !== false && asset.usability?.usableForVideo !== false,
+        durationSeconds: asset.durationSeconds,
+        width: asset.width,
+        height: asset.height,
+        displayName: asset.displayName || asset.originalName,
+      });
+    }
+
+    return planCustomerMedia({
+      mode,
+      selectedIds,
+      candidates,
+      sceneCount: spec.scenes.length,
+    });
+  }
+
+  /**
+   * Turn one customer asset into a scene-ready silent clip.
+   *
+   * Returns a `ResolvedSceneAsset` shaped exactly like a stock result so every
+   * downstream consumer - shot accounting, the quality report, the EDL - sees
+   * customer media as a first-class visual source rather than a special case.
+   */
+  private async resolveCustomerSceneAsset(
+    assignment: CustomerSceneAssignment,
+    targetDurationSeconds: number,
+    orientation: OrientationEnum,
+  ): Promise<ResolvedSceneAsset | null> {
+    if (!fs.existsSync(assignment.storagePath)) {
+      logger.warn(
+        { assetId: assignment.assetId, sceneIndex: assignment.sceneIndex },
+        "Selected customer media is missing on disk; scene will route normally",
+      );
+      return null;
+    }
+    const landscape = orientation === OrientationEnum.landscape;
+    const width = landscape ? 1920 : 1080;
+    const height = landscape ? 1080 : 1920;
+    const duration = Math.max(0.8, targetDurationSeconds || 4);
+    const clipPath = path.join(
+      this.config.tempDirPath,
+      `customer_${assignment.assetId}_${assignment.sceneIndex}_${Math.round(duration * 100)}_${width}x${height}.mp4`,
+    );
+    try {
+      if (!fs.existsSync(clipPath) || fs.statSync(clipPath).size === 0) {
+        if (assignment.mediaType === "video") {
+          await this.ffmpeg.createClipFromVideo(assignment.storagePath, clipPath, duration, width, height);
+        } else {
+          await this.ffmpeg.createClipFromImage(assignment.storagePath, clipPath, duration, width, height);
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        { err, assetId: assignment.assetId, sceneIndex: assignment.sceneIndex },
+        "Could not prepare selected customer media for this scene",
+      );
+      return null;
+    }
+    if (!fs.existsSync(clipPath) || fs.statSync(clipPath).size === 0) return null;
+
+    return {
+      sceneIndex: assignment.sceneIndex,
+      provider: CUSTOMER_MEDIA_PROVIDER,
+      source: "uploaded",
+      url: clipPath,
+      durationSeconds: duration,
+      fallbackUsed: false,
+      estimatedCost: 0,
+      metadata: {
+        // Provenance the finished video's metadata carries, so "was my media
+        // actually used?" is answerable from the output rather than the form.
+        providerAssetId: assignment.assetId,
+        customerMediaId: assignment.assetId,
+        customerMediaName: assignment.displayName,
+        customerMediaRepeated: assignment.repeated,
+        sourceMediaType: assignment.mediaType,
+        width,
+        height,
+        // Customer media is chosen by the customer, not scored against the
+        // narration, so it is never presented as semantically verified.
+        semanticAvailable: false,
+        semanticScore: 100,
+        selectedScore: 100,
+      },
+    };
   }
 
   private async downloadFile(url: string, destPath: string, maxRetries = 3): Promise<void> {

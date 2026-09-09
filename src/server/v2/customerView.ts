@@ -13,6 +13,11 @@
  */
 
 import type { JobRecord, JobStatus } from "./types";
+import type {
+  FinalQualityAssessment,
+  FinalQualityGateSeverity,
+  FinalQualityOutcome,
+} from "./quality/finalQualityContract";
 
 /* --------------------------------------------------------------- status model */
 
@@ -22,6 +27,8 @@ export type CustomerProductionStatus =
   | "generating"
   | "rendering"
   | "ready"
+  /** Valid, playable output that did not meet a creative bar. Not a failure. */
+  | "needs_review"
   | "needs_attention"
   | "cancelling"
   | "cancelled";
@@ -41,6 +48,7 @@ const STATUS_TO_CUSTOMER: Record<JobStatus, CustomerProductionStatus> = {
   rendering: "rendering",
   finalizing: "rendering",
   ready: "ready",
+  needs_review: "needs_review",
   failed: "needs_attention",
   canceled: "cancelled",
 };
@@ -79,6 +87,9 @@ export const ACTIVE_JOB_STATUSES: JobStatus[] = [
 export const STATUS_GROUPS: Record<string, JobStatus[]> = {
   active: ACTIVE_JOB_STATUSES,
   ready: ["ready"],
+  // A reviewable production is a delivered video, so it filters on its own
+  // rather than being lumped in with failures.
+  needs_review: ["needs_review"],
   needs_attention: ["failed"],
   cancelled: ["canceled"],
 };
@@ -337,8 +348,55 @@ export function sanitizeJobFailure(job: JobRecord): CustomerFailure | undefined 
   };
 }
 
+/* ------------------------------------------------------- quality review model */
+
+export type CustomerQualityReview = {
+  outcome: FinalQualityOutcome;
+  outputAvailable: boolean;
+  retryable: boolean;
+  technicalCode: string;
+  findings: Array<{
+    gate: string;
+    severity: FinalQualityGateSeverity;
+    /** The interface resolves this against the active language catalogue. */
+    messageKey: string;
+    params?: Record<string, string | number>;
+    /** English engineering detail; belongs in the collapsed technical panel. */
+    technicalDetail: string;
+  }>;
+};
+
+/**
+ * The structured final-quality verdict, if the production produced one. Carries
+ * message KEYS rather than sentences: an Arabic interface must render Arabic
+ * reasons, not an English sentence translated at the edge (the exact defect the
+ * owner's screenshot showed - an English quality error inside the Arabic UI).
+ *
+ * Productions that predate V2.5.1 have no verdict and return `undefined`; their
+ * older sanitized `failure` message is what the interface falls back to.
+ */
+export function customerQualityReview(job: JobRecord): CustomerQualityReview | undefined {
+  const raw = (job.output as any)?.finalQuality as FinalQualityAssessment | undefined;
+  if (!raw || !Array.isArray(raw.findings)) return undefined;
+  return {
+    outcome: raw.outcome,
+    outputAvailable: Boolean(raw.outputAvailable),
+    retryable: Boolean(raw.retryable),
+    technicalCode: String(raw.technicalCode || ""),
+    findings: raw.findings.map((item) => ({
+      gate: item.gate,
+      severity: item.severity,
+      messageKey: item.messageKey,
+      params: item.params,
+      // Technical details still go through the standard path scrubber: an
+      // engineering sentence is not an excuse to leak a container path.
+      technicalDetail: scrubInternal(String(item.technicalDetail || "")),
+    })),
+  };
+}
+
 export function customerDisplayProgress(job: JobRecord): number {
-  if (job.status === "ready") return 100;
+  if (job.status === "ready" || job.status === "needs_review") return 100;
   if (job.status === "failed" || job.status === "canceled") return Math.min(99, Math.max(0, Math.round(job.progress || 0)));
   return Math.min(99, Math.max(0, Math.round(job.progress || 0)));
 }
@@ -369,7 +427,8 @@ const TIMELINE_STAGES: Array<{ key: string; checkpoint: string }> = [
  */
 export function buildCustomerTimeline(job: JobRecord): CustomerTimelineStep[] {
   const checkpoint = (job.checkpoint || {}) as Record<string, { status?: string; completedAt?: string; startedAt?: string }>;
-  const isReady = job.status === "ready";
+  // A reviewable production finished every pipeline stage - the render exists.
+  const isReady = job.status === "ready" || job.status === "needs_review";
   const isFailed = job.status === "failed";
   const isCancelled = job.status === "canceled";
 
@@ -476,7 +535,8 @@ export function serializeJobForCustomer(job: JobRecord, options: SerializeOption
   const spec = (job.productionSpec as any) || {};
   const meta = (spec.metadata || {}) as Record<string, any>;
   const customerStatus = toCustomerStatus(job.status);
-  const videoId = (job.output as any)?.videoId || (job.status === "ready" ? job.id : undefined);
+  const hasOutput = job.status === "ready" || job.status === "needs_review";
+  const videoId = (job.output as any)?.videoId || (hasOutput ? job.id : undefined);
   const dto: Record<string, unknown> = {
     id: job.id,
     title: job.title || promptSummary(job),
@@ -511,9 +571,10 @@ export function serializeJobForCustomer(job: JobRecord, options: SerializeOption
     characterProfileId: meta.characterProfileId || meta?.uiContract?.characterProfileId,
     snapshots: readSnapshots(job),
     videoId,
-    thumbnailUrl: videoId && job.status === "ready" ? `/api/videos/${videoId}/thumbnail` : undefined,
+    thumbnailUrl: videoId && hasOutput ? `/api/videos/${videoId}/thumbnail` : undefined,
     timeline: buildCustomerTimeline(job),
     failure: sanitizeJobFailure(job),
+    qualityReview: customerQualityReview(job),
     isFree: spec.costEstimate?.isFree ?? (job.costEstimate as any)?.isFree ?? true,
     retryOf: (job.input as any)?.__retryOf || undefined,
     retryLineage: Array.isArray((job.input as any)?.__retryLineage)

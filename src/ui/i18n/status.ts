@@ -40,6 +40,10 @@ const STATUS_MAP: Record<string, LocalizedStatus> = {
   generating_captions: { key: "statuses.stage.generatingCaptions", tone: "info" },
   rendering: { key: "statuses.stage.rendering", tone: "info" },
   validating: { key: "statuses.stage.validating", tone: "info" },
+  quality_review: { key: "statuses.qualityReview", tone: "info" },
+  // A valid, playable video that did not meet a creative bar. Warning tone,
+  // not danger: there is a deliverable, and it is offered to the customer.
+  needs_review: { key: "statuses.needsReview", tone: "warning" },
   finalizing: { key: "statuses.stage.finalizing", tone: "info" },
   failed: { key: "statuses.failed", tone: "danger" },
   error: { key: "statuses.failed", tone: "danger" },
@@ -123,6 +127,7 @@ export const CUSTOMER_PRODUCTION_STATUS: Record<string, LocalizedStatus> = {
   generating: { key: "statuses.generating", tone: "info" },
   rendering: { key: "statuses.stage.rendering", tone: "info" },
   ready: { key: "statuses.ready", tone: "success" },
+  needs_review: { key: "statuses.needsReview", tone: "warning" },
   needs_attention: { key: "statuses.needsAttention", tone: "warning" },
   cancelling: { key: "statuses.cancelling", tone: "neutral" },
   cancelled: { key: "statuses.cancelled", tone: "neutral" },

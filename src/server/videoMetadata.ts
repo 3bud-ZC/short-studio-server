@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import type { VideoStatus } from "../types/shorts";
+import type { FinalQualityAssessment } from "./v2/quality/finalQualityContract";
 import { PRODUCT_SLUG } from "../version";
 
 export interface VideoMetadata {
@@ -158,6 +159,28 @@ export interface VideoMetadata {
    * `mixedSilenceGate` for which check failed.
    */
   professionalReady?: boolean;
+  /**
+   * V2.5.1 structured final-quality verdict: which gates fired, each one's
+   * severity, its i18n message key and its English technical detail. The
+   * interface renders the reasons in the active language from this rather
+   * than from a pre-translated English sentence.
+   */
+  finalQuality?: FinalQualityAssessment;
+  /**
+   * V2.5.1 media provenance: which visual sources actually appear in the
+   * finished video, including the customer's own Media Library items by id.
+   * Read by the customer-media regressions, which assert against the rendered
+   * output rather than the request that asked for it.
+   */
+  mediaProvenance?: {
+    mode: string;
+    stockProvidersBlocked: boolean;
+    customerMediaIds: string[];
+    customerMediaShotCount: number;
+    stockShotCount: number;
+    providers: string[];
+    unusableSelectedMediaIds: string[];
+  };
   mixedSilenceGate?: Record<string, unknown>;
   renderStrategy?: string;
   rendererVersion?: string;

@@ -42,8 +42,11 @@ const allowedTransitions: Record<JobStatus, JobStatus[]> = {
   generating_voice: ["generating_captions", "searching_assets", "failed", "canceled"],
   generating_captions: ["searching_assets", "rendering", "failed", "canceled"],
   rendering: ["finalizing", "failed", "canceled"],
-  finalizing: ["ready", "failed", "canceled"],
+  finalizing: ["ready", "needs_review", "failed", "canceled"],
   ready: [],
+  // Terminal like "ready": the video exists and can be previewed, downloaded
+  // and published. Retrying starts a NEW job rather than reopening this one.
+  needs_review: [],
   failed: [],
   canceled: [],
 };

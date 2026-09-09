@@ -103,6 +103,24 @@ export const INTEGRATION_CATALOG: Record<string, IntegrationEntry> = {
     category: "Voice",
     connectionType: "builtin",
   },
+  // The two local Egyptian Arabic voices. They are the default Arabic route
+  // and were missing from this catalogue entirely, which made the Integrations
+  // page imply ElevenLabs was the only way to narrate Arabic - the opposite of
+  // how the engine actually routes. They install from Settings rather than
+  // taking a credential, so they are `builtin`.
+  voicetut: {
+    id: "voicetut",
+    shortName: "VoiceTut",
+    hasDefault: true,
+    category: "Voice",
+    connectionType: "builtin",
+  },
+  kemetone: {
+    id: "kemetone",
+    shortName: "KemeTone",
+    category: "Voice",
+    connectionType: "builtin",
+  },
   google_cloud_tts: {
     id: "google_cloud_tts",
     shortName: "Google TTS",
@@ -142,6 +160,21 @@ export const INTEGRATION_CATALOG: Record<string, IntegrationEntry> = {
     connectionType: "key",
     credentialType: "api_key",
     optional: true,
+  },
+  // Two visual sources that always work and never needed configuring, and were
+  // therefore invisible on a page whose job is to tell the customer what their
+  // videos can be made from. Both are real routes the engine takes.
+  customer_media: {
+    id: "customer_media",
+    shortName: "My Media",
+    category: "Visuals & Stock",
+    connectionType: "builtin",
+  },
+  motion_graphics: {
+    id: "motion_graphics",
+    shortName: "Motion Graphics",
+    category: "Visuals & Stock",
+    connectionType: "builtin",
   },
   veo: {
     id: "veo",
