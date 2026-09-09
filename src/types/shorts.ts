@@ -301,7 +301,12 @@ export const createShortInput = z
 export type CreateShortInput = z.infer<typeof createShortInput>;
 export type { BusinessTemplateId };
 
-export type VideoStatus = "processing" | "ready" | "failed";
+/**
+ * V2.5.1 adds `needs_review`: a technically valid, playable render that did
+ * not meet a creative or editorial preference. It is a delivered video the
+ * customer can preview and download, not a failure.
+ */
+export type VideoStatus = "processing" | "ready" | "needs_review" | "failed";
 
 export type Music = {
   file: string;

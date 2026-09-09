@@ -99,13 +99,28 @@ describe("Canonical status vocabulary", () => {
 
 describe("Integration catalog", () => {
   it("never invents an integration the engine does not implement", () => {
-    // Every id must be a provider the backend really reports.
+    // Every id must be a provider the backend really reports...
     const knownProviderIds = [
       "local_ai", "gemini", "ollama", "pexels", "pixabay", "veo", "fal",
       "kokoro", "piper", "edge_tts", "google_cloud_tts", "elevenlabs",
+      // The two local Egyptian Arabic voices. Real entries of the engine's
+      // `voiceProviderEnum`, reported by the providers API with their own
+      // install state, and the default Arabic route - not a decoration.
+      "voicetut", "kemetone",
       "upload_post",
     ];
-    Object.keys(INTEGRATION_CATALOG).forEach((id) => {
+    // ...or a built-in engine route that always works and never takes a
+    // credential. These are listed so the customer can see what their videos
+    // can be made from, and they are the only two entries allowed to exist
+    // without a provider record behind them.
+    const builtInEngineRoutes = ["customer_media", "motion_graphics"];
+    Object.entries(INTEGRATION_CATALOG).forEach(([id, entry]) => {
+      if (builtInEngineRoutes.includes(id)) {
+        // A built-in route has nothing to configure, so it must never claim to.
+        expect(entry.connectionType, `${id} must be built-in`).toBe("builtin");
+        expect(entry.credentialType, `${id} must take no credential`).toBeUndefined();
+        return;
+      }
       expect(knownProviderIds, `unknown integration ${id}`).toContain(id);
     });
   });

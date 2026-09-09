@@ -42,7 +42,17 @@ import { ReviewPublishModal } from "../components/publishing/ReviewPublishModal"
 import type { V2Job, VideoItem, VideoPublishingStatus, VideoRevisionItem } from "./v2Types";
 import { withMediaAccessToken } from "../utils/auth";
 import { isFreeCost, videoCostLabel } from "../../types/costDisplay";
-import { useT } from "../i18n";
+import { useI18n, useT } from "../i18n";
+import { localizedStatus } from "../i18n/status";
+import { QualityReviewPanel } from "../components/QualityReviewPanel";
+import {
+  aspectLabelKey,
+  dialectLabelKey,
+  languageLabelKey,
+  mediaStrategyLabelKey,
+  qualityLabelKey,
+  voiceProviderLabelKey,
+} from "./displayLabels";
 
 function formatFileSize(bytes?: number): string {
   if (!bytes) return "Unknown";
@@ -196,6 +206,7 @@ function formatDuration(seconds?: number): string {
 
 const VideoDetailsContent: React.FC = () => {
   const tt = useT();
+  const { format } = useI18n();
   const { videoId } = useParams<{ videoId: string }>();
   const navigate = useNavigate();
   const [video, setVideo] = useState<VideoItem | null>(null);
@@ -278,10 +289,10 @@ const VideoDetailsContent: React.FC = () => {
         searchTerms: terms,
         reason: `Scene ${mediaSceneIndex + 1} media replacement`,
       });
-      setFeedback(`Media revision queued: ${res.data.job.id}`);
+      setFeedback(tt("videos.detail.revisionQueued"));
       fetchDetails();
     } catch (err: any) {
-      setError(err?.response?.data?.error || "Media revision failed.");
+      setError(tt("videos.detail.actionFailed"));
     }
   };
 
@@ -292,10 +303,10 @@ const VideoDetailsContent: React.FC = () => {
         captionProfile,
         reason: `Caption style changed to ${captionProfile}`,
       });
-      setFeedback(`Caption-style revision queued: ${res.data.job.id}`);
+      setFeedback(tt("videos.detail.revisionQueued"));
       fetchDetails();
     } catch (err: any) {
-      setError(err?.response?.data?.error || "Caption-style revision failed.");
+      setError(tt("videos.detail.actionFailed"));
     }
   };
 
@@ -305,17 +316,17 @@ const VideoDetailsContent: React.FC = () => {
     fetchDetails();
   };
 
-  if (loading) return <LoadingState label="Loading video details..." />;
+  if (loading) return <LoadingState label={tt("videos.detail.loading")} />;
 
   if (!video && !loading) {
     return (
       <Box sx={{ py: 4 }}>
         <EmptyState
-          title="Video Not Found"
-          description="The requested video could not be found. It may have been deleted or the link may be out of date."
+          title={tt("videos.detail.notFound")}
+          description={tt("videos.detail.notFoundBody")}
           action={
             <Button variant="contained" onClick={() => navigate("/videos")}>
-              Back to Videos
+              {tt("videos.detail.backToLibrary")}
             </Button>
           }
         />
@@ -323,11 +334,7 @@ const VideoDetailsContent: React.FC = () => {
     );
   }
 
-  const title =
-    video?.templateName ||
-    video?.templateId ||
-    (video?.creationMode === "prompt" ? "AI Prompt Video" : video?.filename) ||
-    "Video details";
+  const title = video?.templateName || video?.originalPrompt?.slice(0, 80) || tt("videos.untitled");
 
   const previewUrl = video?.previewUrl || `/api/short-video/${videoId}`;
   const downloadUrl = video?.downloadUrl || `/api/videos/${videoId}/download`;
@@ -342,23 +349,19 @@ const VideoDetailsContent: React.FC = () => {
     <>
       <PageHeader
         title={title}
-        eyebrow={video?.creationMode === "prompt" ? "Prompt Studio" : "Template Production"}
-        description={
-          video?.brandName
-            ? `Brand: ${video.brandName}`
-            : "Generated MP4 details and delivery links."
-        }
+        eyebrow={tt(video?.creationMode === "prompt" ? "videos.detail.eyebrowPrompt" : "videos.detail.eyebrowTemplate")}
+        description={tt("videos.detail.description")}
         actions={
           <>
-            <Button onClick={() => navigate("/videos")}>Back to Videos</Button>
-            {job && <Button onClick={() => navigate(`/jobs/${job.id}`)}>View Job</Button>}
+            <Button onClick={() => navigate("/videos")}>{tt("videos.detail.backToLibrary")}</Button>
+            {job && <Button onClick={() => navigate(`/jobs/${job.id}`)}>{tt("videos.openProduction")}</Button>}
             <Button
               variant="contained"
               color="primary"
               startIcon={<SendIcon />}
               onClick={() => setReviewModalOpen(true)}
             >
-              Publish / Schedule
+              {tt("videos.publish")}
             </Button>
             <Button
               component="a"
@@ -366,14 +369,14 @@ const VideoDetailsContent: React.FC = () => {
               variant="outlined"
               startIcon={<DownloadIcon />}
             >
-              Download MP4
+              {tt("videos.download")}
             </Button>
             <Button
               color="error"
               startIcon={<DeleteIcon />}
               onClick={() => setConfirmDelete(true)}
             >
-              Delete
+              {tt("common.delete")}
             </Button>
           </>
         }
@@ -401,32 +404,32 @@ const VideoDetailsContent: React.FC = () => {
               <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2 }}>
                 <Button
                   startIcon={<ContentCopyIcon />}
-                  onClick={() => copy(previewUrl, "Preview link")}
+                  onClick={() => copy(previewUrl, tt("videos.detail.copied"))}
                 >
-                  Copy Preview Link
+                  {tt("videos.detail.copyPreviewLink")}
                 </Button>
                 <Button
                   startIcon={<ContentCopyIcon />}
-                  onClick={() => copy(downloadUrl, "Download link")}
+                  onClick={() => copy(downloadUrl, tt("videos.detail.copied"))}
                 >
-                  Copy Download Link
+                  {tt("videos.detail.copyDownloadLink")}
                 </Button>
                 <Button
                   variant="contained"
                   size="small"
                   startIcon={<SendIcon />}
                   onClick={() => setReviewModalOpen(true)}
-                  sx={{ ml: "auto" }}
+                  sx={{ marginInlineStart: "auto" }}
                 >
-                  Publish / Distribute
+                  {tt("videos.publish")}
                 </Button>
               </Stack>
             </SectionCard>
 
             {/* Publishing & Distribution Section */}
             <SectionCard
-              title="Social Publishing & Distribution"
-              description="Multi-platform distribution state, live URLs, and scheduling."
+              title={tt("videos.detail.publishing")}
+              description={tt("videos.detail.publishingDesc")}
               actions={
                 <Stack direction="row" spacing={1} alignItems="center">
                   <StatusBadge
@@ -529,14 +532,14 @@ const VideoDetailsContent: React.FC = () => {
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  This video has not been distributed yet. Use Upload-Post from the publishing flow for supported channels after owner approval.
+                  {tt("videos.notPublishedYet")}
                 </Typography>
               )}
             </SectionCard>
 
             {/* Original Prompt */}
             {video.originalPrompt && (
-              <SectionCard title="Creative Prompt">
+              <SectionCard title={tt("videos.detail.prompt")}>
                 <Typography variant="body1" sx={{ fontStyle: "italic", whiteSpace: "pre-wrap" }}>
                   "{video.originalPrompt}"
                 </Typography>
@@ -545,11 +548,11 @@ const VideoDetailsContent: React.FC = () => {
 
             {/* Narration Lines */}
             {video.narrationLines && video.narrationLines.length > 0 && (
-              <SectionCard title="Narration Script">
+              <SectionCard title={tt("videos.narrationScript")}>
                 <Stack spacing={1}>
                   {video.narrationLines.map((line, index) => (
                     <Typography key={`${line}-${index}`}>
-                      <strong>Scene {index + 1}:</strong> {line}
+                      <strong>{tt("videos.narrationScene", { index: format.number(index + 1) })}:</strong> {line}
                     </Typography>
                   ))}
                 </Stack>
@@ -558,17 +561,16 @@ const VideoDetailsContent: React.FC = () => {
 
             <SectionCard title={tt("videos.section.revisions")}>
               <Stack spacing={2}>
-                <Alert severity="info">
-                  Voice-only revisions reuse planning/media. Media-only revisions reuse planning, voice, and captions. Caption-style revisions reuse speech timings.
-                </Alert>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  <Chip size="small" label="Will reuse: Planning" />
-                  <Chip size="small" label={`Voice artifacts: ${durableArtifacts.filter((a: any) => a.type === "voice").length}`} />
-                  <Chip size="small" label={`Caption timings: ${durableArtifacts.filter((a: any) => a.type === "captions").length}`} />
-                  <Chip size="small" label={`Media scenes: ${durableArtifacts.filter((a: any) => a.type === "media").length}`} />
-                </Stack>
+                <Alert severity="info">{tt("videos.revise.help")}</Alert>
+                <Typography variant="caption" color="text.secondary">
+                  {tt("videos.revise.reuseSummary", {
+                    voice: format.number(durableArtifacts.filter((a: any) => a.type === "voice").length),
+                    captions: format.number(durableArtifacts.filter((a: any) => a.type === "captions").length),
+                    media: format.number(durableArtifacts.filter((a: any) => a.type === "media").length),
+                  })}
+                </Typography>
                 <TextField
-                  label="Replacement spoken narration"
+                  label={tt("videos.revise.narrationLabel")}
                   value={revisionText}
                   onChange={(e) => setRevisionText(e.target.value)}
                   multiline
@@ -577,63 +579,63 @@ const VideoDetailsContent: React.FC = () => {
                 />
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                   <Button variant="contained" startIcon={<RefreshIcon />} onClick={createVoiceRevision}>
-                    Regenerate Voice
+                    {tt("videos.revise.regenerateVoice")}
                   </Button>
                   <TextField
                     type="number"
                     size="small"
-                    label="Scene"
+                    label={tt("videos.revise.sceneNumber")}
                     value={mediaSceneIndex + 1}
                     onChange={(e) => setMediaSceneIndex(Math.max(0, Number(e.target.value || 1) - 1))}
                     sx={{ width: 120 }}
                   />
                   <Button variant="outlined" onClick={createMediaRevision}>
-                    Replace Scene Media
+                    {tt("videos.revise.replaceSceneMedia")}
                   </Button>
                   <TextField
                     select
                     size="small"
-                    label="Captions"
+                    label={tt("videos.revise.captionStyle")}
                     value={captionProfile}
                     onChange={(e) => setCaptionProfile(e.target.value as any)}
                     sx={{ width: 150 }}
                   >
                     {["bold", "clean", "minimal", "none"].map((profile) => (
-                      <MenuItem key={profile} value={profile}>{profile}</MenuItem>
+                      <MenuItem key={profile} value={profile}>{tt(`videos.captionStyle.${profile}`)}</MenuItem>
                     ))}
                   </TextField>
                   <Button variant="outlined" onClick={createCaptionStyleRevision}>
-                    Restyle Captions
+                    {tt("videos.revise.restyleCaptions")}
                   </Button>
                 </Stack>
                 {(lastReuse.reusedArtifacts?.length || lastReuse.regeneratedArtifacts?.length) && (
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                    <Chip color="success" size="small" label={`Reused artifacts: ${lastReuse.reusedArtifacts?.length || 0}`} />
-                    <Chip color="warning" size="small" label={`Regenerated artifacts: ${lastReuse.regeneratedArtifacts?.length || 0}`} />
+                    <Chip color="success" size="small" label={tt("videos.revise.reused", { count: format.number(lastReuse.reusedArtifacts?.length || 0) })} />
+                    <Chip color="warning" size="small" label={tt("videos.revise.regenerated", { count: format.number(lastReuse.regeneratedArtifacts?.length || 0) })} />
                   </Stack>
                 )}
                 <Divider />
-                <Typography variant="subtitle2" fontWeight={800}>Version History</Typography>
+                <Typography variant="subtitle2" fontWeight={800}>{tt("videos.detail.versions")}</Typography>
                 {revisions.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Legacy video / revision history unavailable.</Typography>
+                  <Typography variant="body2" color="text.secondary">{tt("videos.detail.noVersions")}</Typography>
                 ) : (
                   revisions.map((revision) => (
                     <Card key={revision.id} variant="outlined" sx={{ p: 1.25, borderRadius: 1 }}>
                       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
                         <Box>
                           <Typography variant="body2" fontWeight={800}>
-                            Revision {revision.revisionNumber} · {revision.changeType}
+                            {tt("videos.revisionLabel", { n: format.number(revision.revisionNumber) })}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {revision.reason || "No summary"} · {revision.status} · {new Date(revision.createdAt).toLocaleString()}
+                            {tt(localizedStatus(revision.status).key)} · {format.dateTime(revision.createdAt)}
                           </Typography>
                         </Box>
                         <Stack direction="row" spacing={1}>
                           {revision.outputVideoId && (
-                            <Button size="small" onClick={() => navigate(`/video/${revision.outputVideoId}`)}>Preview</Button>
+                            <Button size="small" onClick={() => navigate(`/video/${revision.outputVideoId}`)}>{tt("common.preview")}</Button>
                           )}
                           <Button size="small" variant={revision.isFinal ? "contained" : "outlined"} onClick={() => markFinal(revision.id)}>
-                            {revision.isFinal ? "Final" : "Mark Final"}
+                            {revision.isFinal ? tt("videos.detail.isFinal") : tt("videos.detail.markFinal")}
                           </Button>
                         </Stack>
                       </Stack>
@@ -646,6 +648,12 @@ const VideoDetailsContent: React.FC = () => {
 
           <Grid item xs={12} lg={4}>
             <Stack spacing={2}>
+              {/* The final-quality verdict, in the interface language. A video
+                  that only missed a creative bar says so here, and stays fully
+                  previewable and downloadable above. */}
+              {(video as any).finalQuality && (
+                <QualityReviewPanel review={(video as any).finalQuality} />
+              )}
               {/* Metadata */}
               <SectionCard title={tt("videos.section.production")}>
                 <Stack spacing={1.25}>
@@ -691,22 +699,30 @@ const VideoDetailsContent: React.FC = () => {
                     </Stack>
                   )}
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Mode</Typography>
+                    <Typography color="text.secondary">{tt("videos.detail.creationMode")}</Typography>
                     <Typography fontWeight={700}>
-                      {video.creationMode === "prompt" ? "Prompt Studio" : "Template"}
+                      {tt(video.creationMode === "prompt" ? "videos.detail.eyebrowPrompt" : "videos.detail.eyebrowTemplate")}
                     </Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Language / Dialect</Typography>
+                    <Typography color="text.secondary">{tt("videos.language")}</Typography>
                     <Typography fontWeight={700}>
-                      {video.language?.toUpperCase() || "AUTO"}{" "}
-                      {video.dialect && video.dialect !== "none" ? `(${video.dialect})` : ""}
+                      {tt(languageLabelKey(video.language))}
+                      {dialectLabelKey(video.dialect) ? ` · ${tt(dialectLabelKey(video.dialect)!)}` : ""}
                     </Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Quality & Resolution</Typography>
+                    <Typography color="text.secondary">{tt("create.quality.label")}</Typography>
+                    <Typography fontWeight={700}>{tt(qualityLabelKey(video.quality))}</Typography>
+                  </Stack>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography color="text.secondary">{tt("videos.aspect")}</Typography>
+                    <Typography fontWeight={700}>{tt(aspectLabelKey(video.aspectRatio))}</Typography>
+                  </Stack>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography color="text.secondary">{tt("videos.detail.mediaSource")}</Typography>
                     <Typography fontWeight={700}>
-                      {video.quality || "Standard"} · {video.resolution || "1080p"}
+                      {tt(mediaStrategyLabelKey((video as any).visualSource || video.visualMode))}
                     </Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between">
@@ -729,82 +745,22 @@ const VideoDetailsContent: React.FC = () => {
                       );
                     })()}
                   </Stack>
-                  {video.mediaPlanScore !== undefined && (
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography color="text.secondary">Media Plan Score</Typography>
-                      <Chip
-                        size="small"
-                        color={video.mediaPlanScore >= 90 ? "success" : "info"}
-                        label={`${video.mediaPlanScore} / 100`}
-                      />
-                    </Stack>
-                  )}
-                  {video.overallProductionScore !== undefined && (
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography color="text.secondary">Overall Score</Typography>
-                      <Typography fontWeight={800} color="primary.main">
-                        {video.overallProductionScore} / 100
-                      </Typography>
-                    </Stack>
-                  )}
                   <Divider />
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Final Duration</Typography>
-                    <Typography fontWeight={700}>{formatDuration(video.durationSeconds)}</Typography>
-                  </Stack>
-                  {video.requestedDurationSeconds && (
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography color="text.secondary">Requested Duration</Typography>
-                      <Typography fontWeight={700}>{video.requestedDurationSeconds}s</Typography>
-                    </Stack>
-                  )}
-                  {video.durationVarianceSeconds !== undefined && (
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography color="text.secondary">Duration Variance</Typography>
-                      <Typography
-                        fontWeight={700}
-                        color={video.durationVarianceSeconds <= 1.0 ? "success.main" : "warning.main"}
-                      >
-                        ±{video.durationVarianceSeconds}s
-                        {video.durationVariancePercent !== undefined
-                          ? ` (${video.durationVariancePercent}%)`
-                          : ""}
-                      </Typography>
-                    </Stack>
-                  )}
-                  <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">File Size</Typography>
-                    <Typography fontWeight={700}>{formatFileSize(video.sizeBytes)}</Typography>
+                    <Typography color="text.secondary">{tt("videos.detail.finalDuration")}</Typography>
+                    <Typography fontWeight={700}>{format.duration(video.durationSeconds)}</Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Voice Provider</Typography>
-                    <Typography fontWeight={700}>{video.voiceProvider || "Auto-selected local voice"}</Typography>
+                    <Typography color="text.secondary">{tt("videos.detail.fileSize")}</Typography>
+                    <Typography fontWeight={700}>{format.bytes(video.sizeBytes)}</Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Visual Provider</Typography>
-                    <Typography fontWeight={700}>
-                      {labelList(PROVIDER_LABELS, video.visualProvidersUsed) || "Pexels"}
-                    </Typography>
+                    <Typography color="text.secondary">{tt("create.review.voice")}</Typography>
+                    <Typography fontWeight={700}>{tt(voiceProviderLabelKey(video.voiceProvider))}</Typography>
                   </Stack>
-                  {postJobProviderReport && (
-                    <>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography color="text.secondary">Visual Sources</Typography>
-                        <Typography fontWeight={700}>{postJobProviderReport.visualSources}</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography color="text.secondary">Generated Shots</Typography>
-                        <Typography fontWeight={700}>{postJobProviderReport.generatedShots}</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography color="text.secondary">Voice</Typography>
-                        <Typography fontWeight={700}>{postJobProviderReport.voice}</Typography>
-                      </Stack>
-                    </>
-                  )}
                   <Divider />
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography color="text.secondary">Estimated Cost</Typography>
+                    <Typography color="text.secondary">{tt("videos.detail.cost")}</Typography>
                     <Chip
                       size="small"
                       color={isFreeCost(cost) ? "success" : "warning"}
@@ -814,7 +770,19 @@ const VideoDetailsContent: React.FC = () => {
                 </Stack>
               </SectionCard>
 
-              {/* Production Details */}
+              {/* V2.5.1: everything below is engineering evidence, not customer
+                  copy. It stays in the product because it is how a rejected or
+                  reviewable video gets explained rather than guessed at, and it
+                  is folded away and marked LTR so an Arabic screen never renders
+                  an English label as if it were part of the interface. */}
+              <Accordion variant="outlined" sx={{ borderRadius: 2 }} dir="ltr">
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle2" fontWeight={800} dir="auto">
+                    {tt("quality.technicalDetails")}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
               <SectionCard title="Production Details">
                 <Stack spacing={1.25}>
                   <Stack direction="row" justifyContent="space-between">
@@ -1034,6 +1002,9 @@ const VideoDetailsContent: React.FC = () => {
                     : "No stock search terms recorded."}
                 </Typography>
               </SectionCard>
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
 
               {/* Collapsible advanced plan — sanitized (no paths/tokens). */}
               {((video as any).advancedProductionSpec || video.productionSpec) && (
@@ -1064,9 +1035,9 @@ const VideoDetailsContent: React.FC = () => {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete video?"
-        description="This removes the generated video file and its metadata. The original production job remains in history."
-        confirmLabel="Delete"
+        title={tt("videos.detail.deleteTitle")}
+        description={tt("videos.detail.deleteBody")}
+        confirmLabel={tt("common.delete")}
         onClose={() => setConfirmDelete(false)}
         onConfirm={deleteVideo}
       />

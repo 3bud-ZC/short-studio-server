@@ -171,6 +171,110 @@ function buildEventPromoScenes(templateData?: TemplateData): GeneratedScene[] {
   ];
 }
 
+/* --------------------------------------------------------- V2.5.1 additions */
+
+function buildSaasPromoScenes(templateData?: TemplateData): GeneratedScene[] {
+  const product = pickValue(templateData, "productName", "this tool");
+  const problem = pickValue(templateData, "problem", "answering the same questions all day");
+  const benefit = pickValue(templateData, "mainBenefit", "hours back every week");
+  const audience = pickValue(templateData, "targetCustomer", "small teams");
+  const cta = pickValue(templateData, "callToAction", "Start free today");
+
+  return [
+    { text: ensureSentence(`Still ${problem}?`, "Still doing it the hard way?") },
+    { text: `${product} handles it for ${audience}, without a new process to learn.` },
+    { text: `That is ${benefit}, from the first week.` },
+    { text: ensureSentence(cta, "Start free today.") },
+  ];
+}
+
+function buildBusinessTipsScenes(templateData?: TemplateData): GeneratedScene[] {
+  const topic = pickValue(templateData, "topic", "running a small business");
+  const audience = pickValue(templateData, "audience", "owners");
+  const cta = pickValue(templateData, "callToAction", "Follow for more");
+  // One tip per line is what the field asks for, so that is what is honoured.
+  const tips = pickValue(templateData, "tips", "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return [
+    { text: `If you are one of the ${audience} figuring out ${topic}, start here.` },
+    ...(tips.length > 0
+      ? tips.map((tip) => ({ text: ensureSentence(tip, "") }))
+      : [
+          { text: "Write down the one task that eats your week." },
+          { text: "Give it a fixed slot instead of a free-floating intention." },
+          { text: "Review it once, at the end of the month, not every day." },
+        ]),
+    { text: ensureSentence(cta, "Follow for more.") },
+  ];
+}
+
+function buildStoryScenes(templateData?: TemplateData): GeneratedScene[] {
+  const subject = pickValue(templateData, "subject", "this");
+  const message = pickValue(templateData, "message", "Small things compound.");
+  const story = pickValue(templateData, "story", "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return [
+    { text: `This is about ${subject}.` },
+    ...(story.length > 0
+      ? story.map((line) => ({ text: ensureSentence(line, "") }))
+      : [
+          { text: "It started the way most things start: quietly." },
+          { text: "Then one decision changed what came next." },
+          { text: "Looking back, it was the smallest one that mattered." },
+        ]),
+    { text: ensureSentence(message, "Small things compound.") },
+  ];
+}
+
+function buildNewsUpdateScenes(templateData?: TemplateData): GeneratedScene[] {
+  const headline = pickValue(templateData, "headline", "Something has changed");
+  const details = pickValue(templateData, "details", "Here is what is different.");
+  const effective = pickValue(templateData, "effectiveDate", "");
+  const cta = pickValue(templateData, "callToAction", "");
+
+  return [
+    { text: ensureSentence(headline, "Something has changed.") },
+    { text: ensureSentence(details, "Here is what is different.") },
+    // A date and an action are only stated when they were actually supplied;
+    // inventing either is the defect the invented-claim gate exists to catch.
+    ...(effective ? [{ text: `This applies from ${effective}.` }] : []),
+    ...(cta ? [{ text: ensureSentence(cta, "") }] : [{ text: "Nothing is needed from you." }]),
+  ];
+}
+
+function buildSocialAdScenes(templateData?: TemplateData): GeneratedScene[] {
+  const offer = pickValue(templateData, "offer", "this");
+  const audience = pickValue(templateData, "audience", "you");
+  const cta = pickValue(templateData, "callToAction", "Order now");
+
+  return [
+    { text: `If you are ${audience}, stop scrolling.` },
+    { text: ensureSentence(offer, "") },
+    { text: ensureSentence(cta, "Order now.") },
+  ];
+}
+
+function buildMyMediaScenes(templateData?: TemplateData): GeneratedScene[] {
+  const subject = pickValue(templateData, "subject", "this");
+  const message = pickValue(templateData, "message", "See it for yourself.");
+  const cta = pickValue(templateData, "callToAction", "Get in touch");
+
+  return [
+    { text: `This is ${subject}.` },
+    { text: ensureSentence(message, "See it for yourself.") },
+    { text: "Every shot here is our own." },
+    { text: ensureSentence(cta, "Get in touch.") },
+  ];
+}
+
 export function generateScenesForTemplate(
   templateId: BusinessTemplateId,
   templateData?: TemplateData,
@@ -188,6 +292,18 @@ export function generateScenesForTemplate(
       return buildViralCuriosityScenes(templateData);
     case "event_promo":
       return buildEventPromoScenes(templateData);
+    case "saas_promo":
+      return buildSaasPromoScenes(templateData);
+    case "business_tips":
+      return buildBusinessTipsScenes(templateData);
+    case "story_narrative":
+      return buildStoryScenes(templateData);
+    case "news_update":
+      return buildNewsUpdateScenes(templateData);
+    case "social_ad":
+      return buildSocialAdScenes(templateData);
+    case "my_media_showcase":
+      return buildMyMediaScenes(templateData);
     default:
       return [];
   }

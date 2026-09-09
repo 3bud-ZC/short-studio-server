@@ -28,11 +28,16 @@ export const jobStatuses = [
   "rendering",
   "finalizing",
   "ready",
+  // V2.5.1: a finished production whose render is valid and playable but which
+  // did not meet a creative or editorial preference. It has an output the
+  // customer can preview and download; it is not a failure and it is not
+  // "still working". See quality/finalQualityContract.ts.
+  "needs_review",
   "failed",
   "canceled",
 ] as const;
 
-export const terminalJobStatuses = ["ready", "failed", "canceled"] as const;
+export const terminalJobStatuses = ["ready", "needs_review", "failed", "canceled"] as const;
 
 export type JobStatus = (typeof jobStatuses)[number];
 

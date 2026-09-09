@@ -862,6 +862,91 @@ export class FFMpeg {
     });
   }
 
+  /**
+   * Turns one of the customer's own stills into a clip of the requested
+   * length, framed to the output aspect rather than letterboxed.
+   *
+   * A very slow push keeps the still from reading as a frozen frame, matching
+   * how generated mockup shots are treated in `visualBedComposer`. The source
+   * is cropped to fill, never padded, so a customer's photo never arrives with
+   * black bars down the sides of a vertical Reel.
+   */
+  public async createClipFromImage(
+    imagePath: string,
+    outputPath: string,
+    durationSeconds: number,
+    width = 1080,
+    height = 1920,
+    fps = 25,
+  ): Promise<string> {
+    const duration = Math.max(0.5, durationSeconds);
+    const zoomFrames = Math.max(1, Math.round(duration * fps));
+    const filter = [
+      `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+      `crop=${width}:${height}`,
+      `zoompan=z='min(zoom+0.0004,1.06)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${zoomFrames}:s=${width}x${height}:fps=${fps}`,
+      "setsar=1",
+      "format=yuv420p",
+    ].join(",");
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(imagePath)
+        .inputOptions(["-loop 1"])
+        .outputOptions([
+          `-t ${duration}`,
+          "-vf " + filter,
+          "-c:v libx264",
+          "-preset veryfast",
+          "-crf 20",
+          "-an",
+        ])
+        .output(outputPath)
+        .on("end", () => resolve(outputPath))
+        .on("error", (err) => reject(err))
+        .run();
+    });
+  }
+
+  /**
+   * Normalizes one of the customer's own video files into a silent clip of the
+   * requested length and frame size. The customer's audio is dropped on
+   * purpose: the picture track is what was selected, and the production's own
+   * narration and music own the audio.
+   */
+  public async createClipFromVideo(
+    videoPath: string,
+    outputPath: string,
+    durationSeconds: number,
+    width = 1080,
+    height = 1920,
+    fps = 25,
+  ): Promise<string> {
+    const duration = Math.max(0.5, durationSeconds);
+    const filter = [
+      `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+      `crop=${width}:${height}`,
+      `fps=${fps}`,
+      "setsar=1",
+      "format=yuv420p",
+    ].join(",");
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(videoPath)
+        .outputOptions([
+          `-t ${duration}`,
+          "-vf " + filter,
+          "-c:v libx264",
+          "-preset veryfast",
+          "-crf 20",
+          "-an",
+        ])
+        .output(outputPath)
+        .on("end", () => resolve(outputPath))
+        .on("error", (err) => reject(err))
+        .run();
+    });
+  }
+
   public async createSolidVideo(
     outputPath: string,
     durationSeconds: number,

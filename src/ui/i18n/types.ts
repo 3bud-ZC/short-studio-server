@@ -83,6 +83,10 @@ export const TRANSLATION_NAMESPACES = [
   "login",
   "errors",
   "statuses",
+  // V2.5.1: final-quality gate reasons, resolved from a key so the Arabic
+  // interface renders an Arabic reason rather than a translated-at-the-edge
+  // English sentence.
+  "quality",
 ] as const;
 
 export type TranslationNamespace = (typeof TRANSLATION_NAMESPACES)[number];

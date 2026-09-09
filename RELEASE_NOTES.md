@@ -1,3 +1,59 @@
+# Short Studio 2.5.1
+
+**Product:** Short Studio  
+**Technical Product:** Short Studio Server  
+**Release Version:** `2.5.1`  
+**Release Channel:** stable  
+**Stage:** General Availability Patch  
+**Database Schema:** `2.13.0` (unchanged - no migration required)  
+**Previous Release:** Short Studio `2.5.0`
+
+Short Studio 2.5.1 is a customer-acceptance patch release delivering full language isolation, unified video creation, real Media Library production integration, improved quality review handling, template differentiations, and streamlined customer settings.
+
+---
+
+## What's New in 2.5.1
+
+### Final Video Quality Contract & Needs Review
+- **Separation of Hard Technical Failures vs. Soft Creative Warnings:** A technically valid 1080p render (valid container, active video stream, mastered audio, no silent dead-air, no black frames) is no longer discarded when a non-critical creative coverage or editorial preference falls short.
+- **Needs Review (`needs_review`):** Videos meeting technical bars with soft warnings are preserved in `Needs Review` status, remain fully playable, previewable, downloadable, and visible in Video Library.
+- **Localized Quality Findings:** The UI renders exact, translated quality findings in Arabic or English directly from structured message keys rather than generic server error strings.
+- **Deterministic Technical Reference Codes:** Persistent, correlation-safe support codes (`ASE-...`) for every unique defect signature.
+
+### Strict Language Isolation (Arabic & English)
+- **Zero Language Mixing:** English interface displays 0 Arabic natural-language copy; Arabic interface displays 0 untranslated English natural-language sentences.
+- **Directional & Layout Integrity:** Native RTL for Arabic with IBM Plex Sans Arabic / Noto Sans Arabic; native LTR for English. Zero horizontal overflow across mobile and desktop.
+- **Localized System Vocabulary:** Full translation coverage for progress stages, quality findings, voice options, provider states, filters, empty states, and error alerts.
+- **Technical Details Isolation:** Engineering identifiers, traces, and file paths are restricted exclusively behind collapsed, LTR-explicit Technical Details disclosures.
+
+### Create Video: One Unified Experience
+- **Single Intuitive Flow:** Removed the split between Simple/Advanced modes and Prompt/Template tabs. All settings are organized in clear customer sections: Prompt, Video, Voice, Media, Captions, and Review & Create.
+- **Inferred Video Treatment:** Removed confusing "Video Type" and raw enum dropdowns; style and treatments are inferred automatically from prompt and chosen template.
+- **Prompt Builder:** Built-in copyable meta-prompt builder in English and Arabic for external AI assistants to craft focused video briefs.
+
+### Usable Media Library in Production
+- **Real Media Strategy:** Full support for `Automatic`, `My Media Only`, `Prefer My Media`, `Stock Providers` (Pexels, Pixabay), and `Motion Graphics`.
+- **Zero-Stock Guarantee on My Media Only:** Using "My Media Only" strictly utilizes uploaded customer assets with 0 external stock provider API calls.
+- **Media Picker:** Integrated picker supporting search, image/video filtering, multi-select, preview, reordering, and removal.
+- **Persistent Provenance:** Selected media IDs and asset origins are tracked through planning, rendering, and persisted in final output metadata.
+
+### Customer Brands Streamlined
+- **Brands Removed from Customer Navigation:** Removed Brands page, Brand Profiles requirement, and Brand Selectors from creation flows.
+- **Historical Safety:** Existing brand rows and historical job associations in the database remain intact.
+
+### 12 Distinct Practical Templates
+- **Material Differentiation:** Built-in templates across 12 practical categories (Viral Short, Educational Explainer, Restaurant Promotion, Real Estate Listing, SaaS Promo, Product Promotion, Event Promotion, Business Tips, Curiosity/Facts, Story/Narrative, News/Update, Social Advertisement).
+- **Unique Configurations:** Each template specifies distinct aspect ratios, durations, caption styling, animation intensity, and media policies.
+- **Seamless "Use Template":** Prefills the unified Create Video form while keeping every option completely customizable.
+
+### Refined Customer Settings & Operations
+- **Focused Operational Controls:** Interface Language, Local Voice, Storage, Integrations shortcut, Backup & Restore, Updates, and Diagnostics.
+- **Removed Distractions:** Production Defaults and customer Access Tokens removed from settings.
+- **Safe Local Voice:** Default to local VoiceTut / KemeTone for Arabic and local Kokoro for English. Premium cloud voices (ElevenLabs) require explicit opt-in and confirmation.
+- **Smart Retries:** Retrying jobs safely reuses verified voice, captions, and media assets without redundant regeneration or duplicate creation.
+
+---
+
 # Short Studio 2.5.0
 
 **Product:** Short Studio

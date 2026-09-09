@@ -70,7 +70,6 @@ const navSections: Array<{
   {
     labelKey: "navigation.groupContent",
     items: [
-      { labelKey: "navigation.brands", path: "/brands", icon: <BusinessIcon /> },
       { labelKey: "navigation.templates", path: "/templates", icon: <ViewModuleIcon /> },
       { labelKey: "navigation.media", path: "/media", icon: <PermMediaIcon /> },
     ],
@@ -100,7 +99,6 @@ const pageTitleKeys: Record<string, string> = {
   "/videos": "navigation.videoLibrary",
   "/media": "navigation.media",
   "/publishing": "navigation.publishing",
-  "/brands": "navigation.brands",
   "/templates": "navigation.templates",
   "/integrations": "navigation.integrations",
   "/providers": "navigation.integrations",

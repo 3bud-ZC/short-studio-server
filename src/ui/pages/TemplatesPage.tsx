@@ -34,8 +34,18 @@ import SaveIcon from "@mui/icons-material/Save";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, LoadingState, PageHeader, SearchInput, SectionCard, StatusBadge } from "../components/v2";
 import { useI18n } from "../i18n";
-import type { BusinessTemplateOption, TemplateVariable, V2Brand } from "./v2Types";
+import type { BusinessTemplateOption, TemplateVariable } from "./v2Types";
 import { CAPTION_STYLE_LABELS, DURATION_OPTIONS, QUALITY_LABELS, VISUAL_MODE_LABELS } from "./videoTypes";
+import { aspectLabelKey, mediaStrategyLabelKey, qualityLabelKey } from "./displayLabels";
+
+/**
+ * A built-in template's customer-facing name and description live in the
+ * translation catalogue, not in the English record the backend serves. Custom
+ * templates keep the name their author typed.
+ */
+function builtInTemplateKey(id: string, field: "name" | "description"): string {
+  return `templates.catalog.${id}.${field}`;
+}
 
 type TemplateDraft = {
   id?: string;
@@ -204,10 +214,9 @@ function cleanPayload(draft: TemplateDraft) {
 
 const TemplatesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { locale, direction } = useI18n();
+  const { locale, direction, t, format } = useI18n();
   const strings = copy[locale === "ar" ? "ar" : "en"];
   const [templates, setTemplates] = useState<BusinessTemplateOption[]>([]);
-  const [brands, setBrands] = useState<V2Brand[]>([]);
   const [categories, setCategories] = useState<string[]>(fallbackCategories);
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "built_in" | "custom">("all");
@@ -222,13 +231,11 @@ const TemplatesPage: React.FC = () => {
 
   const load = async () => {
     try {
-      const [templateResponse, brandResponse] = await Promise.all([
-        axios.get("/api/v2/templates", { params: { includeArchived: showArchived } }),
-        axios.get("/api/v2/brands").catch(() => ({ data: { brands: [] } })),
-      ]);
+      const templateResponse = await axios.get("/api/v2/templates", {
+        params: { includeArchived: showArchived },
+      });
       setTemplates(templateResponse.data.templates || []);
       setCategories(templateResponse.data.categories || fallbackCategories);
-      setBrands(brandResponse.data.brands || []);
       setError(null);
     } catch {
       setError(locale === "ar" ? "تعذر تحميل القوالب." : "Failed to load templates.");
@@ -330,7 +337,37 @@ const TemplatesPage: React.FC = () => {
     }));
   }
 
-  if (loading) return <LoadingState label={locale === "ar" ? "جارٍ تحميل القوالب..." : "Loading templates..."} />;
+  /** The customer-facing name: catalogue for built-ins, author's own for custom. */
+  const templateName = (template: BusinessTemplateOption): string =>
+    template.builtIn ? t(builtInTemplateKey(template.id, "name")) : template.displayName;
+
+  const templateDescription = (template: BusinessTemplateOption): string =>
+    template.builtIn
+      ? t(builtInTemplateKey(template.id, "description"))
+      : template.description || template.targetUseCase;
+
+  /**
+   * One line saying what this template actually produces - shape, length,
+   * quality and where the pictures come from. Every value is resolved through
+   * the same display-label map the rest of the product uses, so it reads as a
+   * sentence rather than a row of engine enums.
+   */
+  const templateProduces = (template: BusinessTemplateOption): string => {
+    const config = template.config || {};
+    const seconds = Number(
+      config.durationSeconds || template.targetDurationSeconds || template.suggestedDurationSeconds || 0,
+    );
+    return [
+      t(aspectLabelKey(config.aspectRatio)),
+      seconds > 0 ? format.duration(seconds) : "",
+      t(qualityLabelKey(config.quality)),
+      t(mediaStrategyLabelKey(config.visualSource || config.productionMode)),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  };
+
+  if (loading) return <LoadingState label={t("templates.loading")} />;
 
   return (
     <>
@@ -346,16 +383,16 @@ const TemplatesPage: React.FC = () => {
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} dir={direction}>
           <SearchInput value={query} onChange={setQuery} placeholder={strings.search} />
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>{locale === "ar" ? "النوع" : "Source"}</InputLabel>
-            <Select label={locale === "ar" ? "النوع" : "Source"} value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as any)}>
+            <InputLabel>{t("templates.source")}</InputLabel>
+            <Select label={t("templates.source")} value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as any)}>
               <MenuItem value="all">{strings.all}</MenuItem>
               <MenuItem value="built_in">{strings.builtIn}</MenuItem>
               <MenuItem value="custom">{strings.custom}</MenuItem>
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>{locale === "ar" ? "الفئة" : "Category"}</InputLabel>
-            <Select label={locale === "ar" ? "الفئة" : "Category"} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+            <InputLabel>{t("templates.category")}</InputLabel>
+            <Select label={t("templates.category")} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
               <MenuItem value="all">{strings.all}</MenuItem>
               {categories.map((category) => <MenuItem key={category} value={category}>{humanCategory(category)}</MenuItem>)}
             </Select>
@@ -372,7 +409,7 @@ const TemplatesPage: React.FC = () => {
               <Stack spacing={1.25}>
                 <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="flex-start">
                   <Box>
-                    <Typography variant="h6">{template.displayName}</Typography>
+                    <Typography variant="h6">{templateName(template)}</Typography>
                     <Stack direction="row" spacing={0.75} flexWrap="wrap" sx={{ mt: 0.75 }}>
                       <StatusBadge status={template.builtIn ? "ready" : "default"} label={template.builtIn ? strings.builtIn : strings.custom} />
                       <StatusBadge status="default" label={humanCategory(template.category)} />
@@ -386,15 +423,14 @@ const TemplatesPage: React.FC = () => {
                     </IconButton>
                   </Tooltip>
                 </Stack>
-                <Typography color="text.secondary">{template.description || template.targetUseCase}</Typography>
-                <Typography variant="body2">{locale === "ar" ? "الافتتاح" : "Hook"}: {template.hookStyle}</Typography>
-                <Typography variant="body2">{locale === "ar" ? "الدعوة" : "CTA"}: {template.ctaStyle}</Typography>
-                <Typography variant="body2">
-                  {locale === "ar" ? "المدة" : "Duration"}: {template.config?.durationSeconds || template.targetDurationSeconds || template.suggestedDurationSeconds || "Auto"}s
+                <Typography color="text.secondary">{templateDescription(template)}</Typography>
+                {/* What this template really configures, rather than a row of
+                    English editorial notes the Arabic interface could not
+                    translate. */}
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {t("templates.produces")}
                 </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {(template.pexelsSearchHints || []).slice(0, 4).map((term) => <StatusBadge key={term} status="default" label={term} />)}
-                </Stack>
+                <Typography variant="body2" fontWeight={600}>{templateProduces(template)}</Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                   <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => navigate(`/create?template=${template.id}`)}>{strings.use}</Button>
                   {!template.builtIn && <Button startIcon={<EditIcon />} onClick={() => openEdit(template)}>{strings.edit}</Button>}
@@ -463,15 +499,6 @@ const TemplatesPage: React.FC = () => {
                   <InputLabel>{locale === "ar" ? "التعليقات" : "Captions"}</InputLabel>
                   <Select label={locale === "ar" ? "التعليقات" : "Captions"} value={draft.config.captionStyle || "social_ad"} onChange={(event) => setDraft({ ...draft, config: { ...draft.config, captionStyle: event.target.value } })}>
                     {captionStyles.map((style) => <MenuItem key={style} value={style}>{CAPTION_STYLE_LABELS[style] || style}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>{locale === "ar" ? "العلامة" : "Brand"}</InputLabel>
-                  <Select label={locale === "ar" ? "العلامة" : "Brand"} value={draft.config.brandId || ""} onChange={(event) => setDraft({ ...draft, config: { ...draft.config, brandId: event.target.value } })}>
-                    <MenuItem value="">{strings.all}</MenuItem>
-                    {brands.map((brand) => <MenuItem key={brand.id} value={brand.id}>{brand.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>

@@ -10,6 +10,7 @@ import path from "path";
 import { logger } from "../../logger";
 import { Config } from "../../config";
 import { listBusinessTemplates } from "../../short-creator/business-templates";
+import { templateProductionProfile } from "../../short-creator/templateProductionProfiles";
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { validateCreateShortInput } from "../validator";
 import { readMetadata } from "../videoMetadata";
@@ -306,6 +307,12 @@ const BUILT_IN_TEMPLATE_CATEGORY: Record<string, (typeof TEMPLATE_CATEGORIES)[nu
   educational_tip: "educational",
   viral_curiosity: "social",
   event_promo: "event",
+  saas_promo: "product",
+  business_tips: "educational",
+  story_narrative: "social",
+  news_update: "business",
+  social_ad: "promotional",
+  my_media_showcase: "social",
 };
 
 function compactStringArray(value: unknown): string[] {
@@ -460,13 +467,25 @@ function mapBuiltInTemplate(template: ReturnType<typeof listBusinessTemplates>[n
       example: field.placeholder,
       helpText: field.helperText,
     })),
-    config: {
-      durationSeconds: template.targetDurationSeconds || template.suggestedDurationSeconds,
-      visualSource: "auto_best",
-      captionStyle: "bold",
-      quality: "standard",
-      aspectRatio: "9:16",
-    },
+    // V2.5.1: what this template ACTUALLY produces. This block used to be four
+    // hard-coded values identical for every template, which meant a Real Estate
+    // Listing and a Viral Short resolved to the same vertical, standard-quality,
+    // auto-media plan and differed only in wording. See
+    // `templateProductionProfiles.ts`.
+    config: (() => {
+      const profile = templateProductionProfile(template.id);
+      return {
+        durationSeconds: template.targetDurationSeconds || profile.durationSeconds,
+        aspectRatio: profile.aspectRatio,
+        quality: profile.quality,
+        visualSource: profile.visualSource,
+        mediaPolicy: profile.mediaPolicy,
+        productionMode: profile.productionMode,
+        contentStyle: profile.contentStyle,
+        captionStyle: profile.captionStyle,
+        recommendedSceneCount: profile.recommendedSceneCount,
+      };
+    })(),
   };
 }
 
@@ -2766,6 +2785,9 @@ export function createV2PublicRouter(
             : undefined,
         customerStatus: customer.customerStatus,
         snapshots: customer.snapshots,
+        // The structured final-quality verdict, carrying message KEYS the
+        // interface resolves in the active language (V2.5.1).
+        qualityReview: customer.qualityReview,
         advanced: customer.advanced,
       },
       timeline: buildCustomerTimeline(job),
@@ -5725,16 +5747,29 @@ export function createV2InternalRouter(
       return;
     }
     const completedMetadata = readMetadata(config.videosDirPath, parsed.data.videoId);
-    const metadataRejected =
-      completedMetadata?.status === "failed" ||
-      completedMetadata?.professionalReady === false;
-    if (metadataRejected) {
+    // V2.5.1 severity split. Older renders (and any path that predates the
+    // structured contract) carry no `finalQuality`; they are read the way they
+    // always were, as a hard failure.
+    const finalQuality = completedMetadata?.finalQuality;
+    const legacyRejected =
+      !finalQuality &&
+      (completedMetadata?.status === "failed" || completedMetadata?.professionalReady === false);
+    const hardFailed = finalQuality ? finalQuality.outcome === "failed" : legacyRejected;
+    const needsReview = finalQuality?.outcome === "needs_review";
+
+    if (hardFailed || needsReview) {
       const rawMessage =
         typeof completedMetadata?.error === "string" && completedMetadata.error.trim()
           ? completedMetadata.error
           : "Video failed final quality readiness checks.";
       const { message } = classifyRenderFailure(rawMessage);
-      const job = await jobs.updateJob(req.params.id, "failed", 99, "Quality review failed", message, {
+      // A soft verdict keeps the render: the customer sees the exact reasons
+      // AND can still preview, download and publish the video that was
+      // actually produced. Throwing away a valid 1080p file over a creative
+      // preference is the defect this branch exists to prevent.
+      const status = hardFailed ? "failed" : "needs_review";
+      const stage = hardFailed ? "Quality review failed" : "Quality review";
+      const job = await jobs.updateJob(req.params.id, status, hardFailed ? 99 : 100, stage, message, {
         error: message,
         technicalError: rawMessage,
         output: {
@@ -5744,15 +5779,42 @@ export function createV2InternalRouter(
           downloadUrl: `/api/videos/${parsed.data.videoId}/download`,
           professionalReady: completedMetadata?.professionalReady,
           validationStatus: completedMetadata?.status,
+          finalQuality,
         },
       });
       if (db) {
         await new WorkerLeaseService(db).release(process.env.WORKER_ID || "render-worker");
-        await new WebhookService(db, { timeoutMs: config.webhookTimeoutMs }).dispatchEvent("job.failed", {
-          jobId: req.params.id,
-          videoId: parsed.data.videoId,
-          error: message,
-        } as any);
+        await new WebhookService(db, { timeoutMs: config.webhookTimeoutMs }).dispatchEvent(
+          hardFailed ? "job.failed" : "video.ready",
+          {
+            jobId: req.params.id,
+            videoId: parsed.data.videoId,
+            ...(hardFailed ? { error: message } : { output: parsed.data.output }),
+          } as any,
+        );
+        if (needsReview) {
+          // A reviewable production is still a delivered video: it gets the
+          // same revision/artifact bookkeeping a ready one gets, otherwise it
+          // would be missing from the Video Library and from retry reuse.
+          const revision = await new RevisionService(db).markRevisionReadyForJob(
+            req.params.id,
+            parsed.data.videoId,
+          );
+          if (!revision) {
+            await new RevisionService(db).ensureInitialRevision({
+              projectId: parsed.data.videoId,
+              sourceJobId: req.params.id,
+              outputVideoId: parsed.data.videoId,
+            });
+          }
+          if (completedMetadata?.durableArtifacts) {
+            await persistSceneArtifacts(
+              db,
+              revision?.projectId || parsed.data.videoId,
+              completedMetadata.durableArtifacts as DurableSceneArtifact[],
+            );
+          }
+        }
       }
       res.status(200).json({ job });
       return;

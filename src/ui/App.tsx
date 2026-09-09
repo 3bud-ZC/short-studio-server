@@ -11,7 +11,6 @@ import SystemPage from "./pages/SystemPage";
 import ProvidersPage from "./pages/ProvidersPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
 import MediaPage from "./pages/MediaPage";
-import BrandsPage from "./pages/BrandsPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import SettingsPage from "./pages/SettingsPage";
 import PublishingPage from "./pages/PublishingPage";
@@ -131,7 +130,11 @@ const App: React.FC = () => {
               <Route path="/videos" element={<ProtectedRoute><VideoList /></ProtectedRoute>} />
               <Route path="/video/:videoId" element={<ProtectedRoute><VideoDetails /></ProtectedRoute>} />
               <Route path="/publishing" element={<ProtectedRoute><PublishingPage /></ProtectedRoute>} />
-              <Route path="/brands" element={<ProtectedRoute><BrandsPage /></ProtectedRoute>} />
+              {/* V2.5.1: Brands is no longer a customer feature. Old links and
+                  bookmarks resolve to Templates, which is where a reusable
+                  production preset now lives. Historical brand records stay in
+                  the database and old jobs still read them. */}
+              <Route path="/brands" element={<Navigate to="/templates" replace />} />
               <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
               <Route path="/media" element={<ProtectedRoute><MediaPage /></ProtectedRoute>} />
               <Route path="/integrations" element={<ProtectedRoute><IntegrationsPage /></ProtectedRoute>} />

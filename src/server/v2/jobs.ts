@@ -42,8 +42,11 @@ const allowedTransitions: Record<JobStatus, JobStatus[]> = {
   generating_voice: ["generating_captions", "searching_assets", "failed", "canceled"],
   generating_captions: ["searching_assets", "rendering", "failed", "canceled"],
   rendering: ["finalizing", "failed", "canceled"],
-  finalizing: ["ready", "failed", "canceled"],
+  finalizing: ["ready", "needs_review", "failed", "canceled"],
   ready: [],
+  // Terminal like "ready": the video exists and can be previewed, downloaded
+  // and published. Retrying starts a NEW job rather than reopening this one.
+  needs_review: [],
   failed: [],
   canceled: [],
 };
@@ -283,6 +286,8 @@ export class JobService {
     total: number;
     active: number;
     ready: number;
+    /** Delivered videos carrying quality notes (V2.5.1). Not failures. */
+    needsReview: number;
     needsAttention: number;
     cancelled: number;
     createdThisWeek: number;
@@ -308,6 +313,7 @@ export class JobService {
       total: Array.from(byStatus.values()).reduce((sum, count) => sum + count, 0),
       active,
       ready: byStatus.get("ready") || 0,
+      needsReview: byStatus.get("needs_review") || 0,
       needsAttention: byStatus.get("failed") || 0,
       cancelled: byStatus.get("canceled") || 0,
       createdThisWeek: Number(week[0]?.count || 0),

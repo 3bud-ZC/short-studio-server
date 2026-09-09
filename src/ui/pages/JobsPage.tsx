@@ -28,14 +28,17 @@ import {
   StatCard,
 } from "../components/v2";
 import { useI18n } from "../i18n";
-import type { V2Brand, V2Job } from "./v2Types";
+import type { V2Job } from "./v2Types";
 
-const GROUPS = ["all", "active", "ready", "needs_attention", "cancelled"];
+// V2.5.1: a reviewable production is a delivered video, so it gets its own tab
+// rather than sitting under "Needs Attention" beside real failures.
+const GROUPS = ["all", "active", "ready", "needs_review", "needs_attention", "cancelled"];
 
 type Counts = {
   total: number;
   active: number;
   ready: number;
+  needsReview: number;
   needsAttention: number;
   cancelled: number;
   createdThisWeek: number;
@@ -47,14 +50,13 @@ const JobsPageContent: React.FC = () => {
 
   const [jobs, setJobs] = useState<V2Job[]>([]);
   const [counts, setCounts] = useState<Counts | null>(null);
-  const [brands, setBrands] = useState<V2Brand[]>([]);
   const [templates, setTemplates] = useState<Array<{ id: string; displayName?: string; name?: string }>>([]);
 
   const [group, setGroup] = useState("all");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [language, setLanguage] = useState("");
-  const [brandName, setBrandName] = useState("");
+  const [aspectRatio, setAspectRatio] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
 
@@ -71,9 +73,8 @@ const JobsPageContent: React.FC = () => {
   }, [query]);
 
   useEffect(() => {
-    Promise.allSettled([axios.get("/api/v2/brands"), axios.get("/api/v2/templates")]).then(
-      ([brandRes, templateRes]) => {
-        if (brandRes.status === "fulfilled") setBrands(brandRes.value.data.brands || []);
+    Promise.allSettled([axios.get("/api/v2/templates")]).then(
+      ([templateRes]) => {
         if (templateRes.status === "fulfilled") setTemplates(templateRes.value.data.templates || []);
       },
     );
@@ -84,12 +85,12 @@ const JobsPageContent: React.FC = () => {
       group: group === "all" ? undefined : group,
       search: debouncedQuery || undefined,
       language: language || undefined,
-      brandName: brandName || undefined,
+      aspectRatio: aspectRatio || undefined,
       templateId: templateId || undefined,
       sort,
       limit: 24,
     }),
-    [group, debouncedQuery, language, brandName, templateId, sort],
+    [group, debouncedQuery, language, aspectRatio, templateId, sort],
   );
 
   const load = useCallback(
@@ -137,13 +138,13 @@ const JobsPageContent: React.FC = () => {
     setGroup("all");
     setQuery("");
     setLanguage("");
-    setBrandName("");
+    setAspectRatio("");
     setTemplateId("");
     setSort("newest");
   };
 
   const filtersActive =
-    group !== "all" || debouncedQuery || language || brandName || templateId || sort !== "newest";
+    group !== "all" || debouncedQuery || language || aspectRatio || templateId || sort !== "newest";
 
   if (loading && jobs.length === 0) {
     return <JobsListSkeleton />;
@@ -182,10 +183,10 @@ const JobsPageContent: React.FC = () => {
             <StatCard label={t("productions.count.ready")} value={String(counts.ready)} />
           </Grid>
           <Grid item xs={6} md={3}>
-            <StatCard label={t("productions.count.needsAttention")} value={String(counts.needsAttention)} />
+            <StatCard label={t("productions.filter.needsReview")} value={String(counts.needsReview ?? 0)} />
           </Grid>
           <Grid item xs={6} md={3}>
-            <StatCard label={t("productions.count.thisWeek")} value={String(counts.createdThisWeek)} />
+            <StatCard label={t("productions.count.needsAttention")} value={String(counts.needsAttention)} />
           </Grid>
         </Grid>
       )}
@@ -203,26 +204,24 @@ const JobsPageContent: React.FC = () => {
                   value={language}
                   onChange={(event) => setLanguage(event.target.value)}
                 >
-                  <MenuItem value="">{t("common.all")}</MenuItem>
-                  <MenuItem value="en">EN</MenuItem>
-                  <MenuItem value="ar">AR</MenuItem>
+                  <MenuItem value="">{t("videos.filter.allLanguages")}</MenuItem>
+                  <MenuItem value="en">{t("create.language.english")}</MenuItem>
+                  <MenuItem value="ar">{t("create.language.arabic")}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={4}>
               <FormControl size="small" fullWidth>
-                <InputLabel>{t("brands.title")}</InputLabel>
+                <InputLabel>{t("videos.filter.aspect")}</InputLabel>
                 <Select
-                  label={t("brands.title")}
-                  value={brandName}
-                  onChange={(event) => setBrandName(event.target.value)}
+                  label={t("videos.filter.aspect")}
+                  value={aspectRatio}
+                  onChange={(event) => setAspectRatio(event.target.value)}
                 >
-                  <MenuItem value="">{t("common.all")}</MenuItem>
-                  {brands.map((brand) => (
-                    <MenuItem key={brand.id} value={brand.name}>
-                      {brand.name}
-                    </MenuItem>
-                  ))}
+                  <MenuItem value="">{t("videos.filter.allAspects")}</MenuItem>
+                  <MenuItem value="9:16">{t("create.aspect.vertical")}</MenuItem>
+                  <MenuItem value="16:9">{t("create.aspect.landscape")}</MenuItem>
+                  <MenuItem value="1:1">{t("create.aspect.square")}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

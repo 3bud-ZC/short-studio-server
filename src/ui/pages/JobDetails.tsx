@@ -43,17 +43,19 @@ import { localizedStatus } from "../i18n/status";
 import type { CustomerFailure, CustomerTimelineStep, V2Job, V2JobEvent } from "./v2Types";
 import { withMediaAccessToken } from "../utils/auth";
 import { isFreeCost, isUsageBasedCost, videoCostLabel } from "../../types/costDisplay";
-
-function formatDuration(startedAt?: string, completedAt?: string) {
-  if (!startedAt) return "Not started";
-  const start = new Date(startedAt).getTime();
-  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
-  const seconds = Math.max(0, Math.round((end - start) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
-}
+import { QualityReviewPanel } from "../components/QualityReviewPanel";
+import {
+  PIPELINE_STAGES,
+  RETRYABLE_STAGES,
+  aspectLabelKey,
+  artifactStateLabelKey,
+  dialectLabelKey,
+  languageLabelKey,
+  mediaStrategyLabelKey,
+  qualityLabelKey,
+  stageLabelKey,
+  voiceProviderLabelKey,
+} from "./displayLabels";
 
 const JobDetailsContent: React.FC = () => {
   const tt = useT();
@@ -61,7 +63,7 @@ const JobDetailsContent: React.FC = () => {
   const effectiveId = jobId || id;
   const navigate = useNavigate();
 
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const [job, setJob] = useState<V2Job | null>(null);
   const [events, setEvents] = useState<V2JobEvent[]>([]);
   const [timeline, setTimeline] = useState<CustomerTimelineStep[]>([]);
@@ -96,7 +98,7 @@ const JobDetailsContent: React.FC = () => {
       if (err?.response?.status === 404) {
         setNotFound(true);
       } else {
-        setError(err?.response?.data?.error || err?.message || "Failed to load job details.");
+        setError(t("productions.detail.loadErrorTitle"));
       }
     } finally {
       setLoading(false);
@@ -154,7 +156,10 @@ const JobDetailsContent: React.FC = () => {
   };
 
   const latestEvent = useMemo(() => events[events.length - 1], [events]);
-  const videoId = job?.output?.videoId || (job?.status === "ready" ? job?.id : undefined);
+  // A reviewable production has a real, playable output. Treating it like a
+  // failure here is what used to hide a finished 1080p video from its owner.
+  const hasOutput = job?.status === "ready" || job?.status === "needs_review";
+  const videoId = job?.output?.videoId || (hasOutput ? job?.id : undefined);
   const isPromptMode = job?.creationMode === "prompt";
   const cost = job?.costEstimate || job?.productionSpec?.costEstimate;
   const costIsFree = isFreeCost(cost as any);
@@ -163,8 +168,12 @@ const JobDetailsContent: React.FC = () => {
   const failureMessage = failure?.category ? t(`productions.failure.${failure.category}`) : failure?.message;
   const stageKeys = ["planning", "media", "voice", "captions", "render", "mastering", "validation"];
 
-  const isActive = job ? !["ready", "failed", "canceled"].includes(job.status) : false;
-  const canRetry = job ? ["failed", "canceled"].includes(job.status) : false;
+  const isActive = job
+    ? !["ready", "needs_review", "failed", "canceled"].includes(job.status)
+    : false;
+  // A reviewable production can be retried too: the customer may want a better
+  // take, and the retry reuses everything already produced.
+  const canRetry = job ? ["needs_review", "failed", "canceled"].includes(job.status) : false;
 
   const retryProduction = async () => {
     if (!job) return;
@@ -200,7 +209,7 @@ const JobDetailsContent: React.FC = () => {
       setJob(res.data.job);
       setError(null);
     } catch (err: any) {
-      setError(err?.response?.data?.error || "Stage retry failed.");
+      setError(err?.response?.data?.error || t("productions.detail.retryStageFailed"));
     } finally {
       setRetryingStage(null);
     }
@@ -216,11 +225,11 @@ const JobDetailsContent: React.FC = () => {
     return (
       <Box sx={{ py: 4 }}>
         <EmptyState
-          title="Job Not Found"
-          description="The requested production job could not be found. It may have been deleted or the link may be out of date."
+          title={t("productions.detail.notFoundTitle")}
+          description={t("productions.detail.notFoundBody")}
           action={
             <Button variant="contained" startIcon={<ArrowBackIcon />} onClick={() => navigate("/jobs")}>
-              Back to Jobs
+              {t("common.back")}
             </Button>
           }
         />
@@ -236,17 +245,17 @@ const JobDetailsContent: React.FC = () => {
           <CardContent sx={{ p: 3 }}>
             <Stack spacing={2} alignItems="flex-start">
               <Typography variant="h6" color="error.main" fontWeight={800}>
-                Unable to Load Job Details
+                {t("productions.detail.loadErrorTitle")}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {error}
               </Typography>
               <Stack direction="row" spacing={1.5}>
                 <Button variant="contained" startIcon={<RefreshIcon />} onClick={load}>
-                  Retry
+                  {t("common.retry")}
                 </Button>
                 <Button variant="outlined" onClick={() => navigate("/jobs")}>
-                  Back to Jobs
+                  {t("common.back")}
                 </Button>
               </Stack>
             </Stack>
@@ -259,7 +268,7 @@ const JobDetailsContent: React.FC = () => {
   if (!job) return null;
 
   const isArabicTitle = isArabicText(job.title);
-  const displayTitle = job.title || job.templateId || "Video Job";
+  const displayTitle = job.title || job.templateId || t("productions.detail.untitled");
 
   return (
     <>
@@ -267,9 +276,8 @@ const JobDetailsContent: React.FC = () => {
         title={displayTitle}
         eyebrow={t("productions.title")}
         description={
-          `${isPromptMode ? t("productions.typePrompt") : (job.templateId || t("productions.typeTemplate"))}` +
-          `${job.brandName ? ` · ${job.brandName}` : ""}` +
-          ` · ${new Date(job.createdAt).toLocaleString()}`
+          `${isPromptMode ? t("productions.typePrompt") : t("productions.typeTemplate")}` +
+          ` · ${format.dateTime(job.createdAt)}`
         }
         actions={
           <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -292,7 +300,7 @@ const JobDetailsContent: React.FC = () => {
                 {t("productions.cancel")}
               </Button>
             )}
-            {job.status === "ready" && videoId && (
+            {hasOutput && videoId && (
               <>
                 <Button
                   variant="contained"
@@ -368,7 +376,12 @@ const JobDetailsContent: React.FC = () => {
                       {t("productions.detail.durationLabel")}
                     </Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {formatDuration(job.startedAt, job.completedAt)}
+                      {job.startedAt
+                        ? format.durationMs(
+                            (job.completedAt ? new Date(job.completedAt).getTime() : Date.now()) -
+                              new Date(job.startedAt).getTime(),
+                          )
+                        : t("productions.detail.notStarted")}
                     </Typography>
                   </Grid>
                   <Grid item xs={6} sm={3}>
@@ -381,7 +394,7 @@ const JobDetailsContent: React.FC = () => {
                   </Grid>
                 </Grid>
 
-                {job.error && (
+                {job.status === "failed" && job.error && !job.qualityReview && (
                   <Alert severity="error" icon={<ErrorIcon />} sx={{ mt: 1 }}>
                     <Typography fontWeight={700}>{t("productions.detail.executionError")}</Typography>
                     <Typography variant="body2" sx={{ wordBreak: "break-word" }}>{job.error}</Typography>
@@ -390,7 +403,15 @@ const JobDetailsContent: React.FC = () => {
               </Stack>
             </SectionCard>
 
-            {failure && (
+            {job.qualityReview && (
+              <QualityReviewPanel
+                review={job.qualityReview}
+                onRetry={canRetry ? retryProduction : undefined}
+                retrying={busyAction}
+              />
+            )}
+
+            {failure && !job.qualityReview && (
               <SectionCard title={t("productions.failureTitle")}>
                 <Stack spacing={1.5}>
                   <Alert severity="warning" icon={<ErrorIcon />}>
@@ -465,12 +486,10 @@ const JobDetailsContent: React.FC = () => {
               </SectionCard>
             )}
 
-            <SectionCard title="Production Timing & Checkpoints">
+            <SectionCard title={t("productions.detail.checkpoints")}>
               <Stack spacing={1}>
-                <Alert severity="info">
-                  Reused means existing output was kept, so that stage did not run again. Generated means the stage produced new output for this job.
-                </Alert>
-                {stageKeys.map((stage) => {
+                <Alert severity="info">{t("productions.detail.checkpointsHelp")}</Alert>
+                {PIPELINE_STAGES.map((stage) => {
                   const checkpoint = (job.checkpoint as any)?.[stage];
                   const timing = job.stageTimings?.[`${stage}Ms`];
                   const artifactState = checkpoint?.status === "failed"
@@ -487,27 +506,26 @@ const JobDetailsContent: React.FC = () => {
                     <Card key={stage} variant="outlined" sx={{ p: 1.25, borderRadius: 1 }}>
                       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
                         <Box>
-                          <Typography variant="body2" fontWeight={800} sx={{ textTransform: "capitalize" }}>
-                            {stage}
+                          <Typography variant="body2" fontWeight={800}>
+                            {t(stageLabelKey(stage))}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {checkpoint?.status || "pending"} · attempt {checkpoint?.attempt || 0}
-                            {checkpoint?.provider ? ` · ${checkpoint.provider}` : ""}
-                            {timing ? ` · ${Math.round(timing / 1000)}s` : ""}
-                            {checkpoint?.artifacts?.sourceRevisionId ? ` · source revision ${checkpoint.artifacts.sourceRevisionId}` : ""}
-                            {artifactType ? ` · ${artifactType}` : ""}
+                            {t(localizedStatus(checkpoint?.status || "pending").key)}
+                            {" · "}
+                            {t("productions.detail.attempt", { count: format.number(checkpoint?.attempt || 0) })}
+                            {timing ? ` · ${format.durationMs(timing)}` : ""}
                           </Typography>
                         </Box>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <Chip size="small" label={artifactState} color={artifactState === "FAILED" ? "error" : artifactState === "REUSED" ? "success" : artifactState === "INVALIDATED" ? "warning" : "default"} />
-                          {["media", "voice", "captions", "render"].includes(stage) && (
+                          <Chip size="small" label={t(artifactStateLabelKey(artifactState))} color={artifactState === "FAILED" ? "error" : artifactState === "REUSED" ? "success" : artifactState === "INVALIDATED" ? "warning" : "default"} />
+                          {(RETRYABLE_STAGES as readonly string[]).includes(stage) && (
                           <Button
                             size="small"
                             variant="outlined"
                             disabled={Boolean(retryingStage)}
                             onClick={() => retryStage(stage)}
                           >
-                            {retryingStage === stage ? "Retrying..." : "Retry Stage"}
+                            {retryingStage === stage ? t("productions.detail.retryingStage") : t("productions.detail.retryStage")}
                           </Button>
                           )}
                         </Stack>
@@ -519,10 +537,10 @@ const JobDetailsContent: React.FC = () => {
             </SectionCard>
 
             {/* 2. Ready Video Card (When Ready) */}
-            {job.status === "ready" && videoId && (
+            {hasOutput && videoId && (
               <SectionCard
-                title="Rendered Video Output"
-                actions={<Chip size="small" color="success" icon={<CheckCircleIcon />} label="Ready" />}
+                title={t("productions.detail.videoOutput")}
+                actions={<StatusBadge status={job.status} />}
               >
                 <Stack spacing={2}>
                   <Box
@@ -552,7 +570,7 @@ const JobDetailsContent: React.FC = () => {
 
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} justifyContent="space-between" alignItems="center">
                     <Typography variant="body2" color="text.secondary">
-                      MP4 video generated and stored in local media library.
+                      {t("productions.detail.videoOutputNote")}
                     </Typography>
                     <Stack direction="row" spacing={1}>
                       <Button
@@ -561,16 +579,16 @@ const JobDetailsContent: React.FC = () => {
                         startIcon={<MovieIcon />}
                         onClick={() => navigate(`/video/${videoId}`)}
                       >
-                        Full Details
+                        {t("productions.detail.fullDetails")}
                       </Button>
                       <Button
                         component="a"
-                        href={`/api/videos/${videoId}/download`}
+                        href={withMediaAccessToken(`/api/videos/${videoId}/download`)}
                         variant="outlined"
                         size="small"
                         startIcon={<DownloadIcon />}
                       >
-                        Download
+                        {t("videos.download")}
                       </Button>
                     </Stack>
                   </Stack>
@@ -581,8 +599,8 @@ const JobDetailsContent: React.FC = () => {
             {/* 3. Original Creative Prompt / Script */}
             {(job.originalPrompt || job.productionSpec?.userPrompt) && (
               <SectionCard
-                title="Creative Script & Prompt"
-                actions={<Chip size="small" label={isPromptMode ? "Prompt Studio" : "Template"} color="primary" variant="outlined" />}
+                title={t("productions.detail.creativePrompt")}
+                actions={<Chip size="small" label={isPromptMode ? t("productions.detail.sourcePrompt") : t("productions.detail.sourceTemplate")} color="primary" variant="outlined" />}
               >
                 <Box
                   {...bidiProps(job.originalPrompt || job.productionSpec?.userPrompt)}
@@ -604,7 +622,7 @@ const JobDetailsContent: React.FC = () => {
                 {job.productionSpec?.scenes && job.productionSpec.scenes.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
-                      Timeline Scenes ({job.productionSpec.scenes.length} Scenes)
+                      {t("productions.detail.scenes", { count: format.number(job.productionSpec.scenes.length) })}
                     </Typography>
                     <Stack spacing={1}>
                       {job.productionSpec.scenes.map((scene: any, idx: number) => {
@@ -614,9 +632,10 @@ const JobDetailsContent: React.FC = () => {
                             <Stack spacing={0.5}>
                               <Stack direction="row" justifyContent="space-between" alignItems="center">
                                 <Typography variant="caption" fontWeight={800} color="primary.main">
-                                  Scene {idx + 1} · {scene.purpose?.toUpperCase() || "CONTENT"} ({scene.durationSeconds || 6}s)
+                                  {t("productions.detail.sceneLabel", { index: format.number(idx + 1) })}
+                                  {" · "}
+                                  {format.duration(scene.durationSeconds || 6)}
                                 </Typography>
-                                <Chip size="small" label={scene.transition || "cut"} variant="outlined" sx={{ fontSize: 10, height: 18 }} />
                               </Stack>
                               <Typography
                                 variant="body2"
@@ -627,7 +646,7 @@ const JobDetailsContent: React.FC = () => {
                               </Typography>
                               {scene.onScreenText && (
                                 <Typography variant="caption" color="text.secondary">
-                                  Text Overlay: <strong>{scene.onScreenText}</strong>
+                                  {t("productions.detail.sceneOverlay")}: <strong>{scene.onScreenText}</strong>
                                 </Typography>
                               )}
                             </Stack>
@@ -642,8 +661,8 @@ const JobDetailsContent: React.FC = () => {
 
             {/* 4. Live Progress Timeline */}
             <SectionCard
-              title="Orchestration Timeline"
-              description="Historical and real-time execution events."
+              title={t("productions.detail.orchestration")}
+              description={t("productions.detail.orchestrationDesc")}
             >
               <Stack spacing={1}>
                 {events.map((event) => {
@@ -674,7 +693,7 @@ const JobDetailsContent: React.FC = () => {
                 })}
                 {events.length === 0 && (
                   <Typography variant="body2" color="text.secondary">
-                    No timeline events recorded yet.
+                    {t("productions.detail.noEvents")}
                   </Typography>
                 )}
               </Stack>
@@ -693,7 +712,7 @@ const JobDetailsContent: React.FC = () => {
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">{t("productions.detail.creationMode")}</Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {isPromptMode ? t("productions.typePrompt") : (job.templateId || t("productions.typeTemplate"))}
+                    {isPromptMode ? t("productions.typePrompt") : t("productions.typeTemplate")}
                   </Typography>
                 </Stack>
                 <Divider />
@@ -701,21 +720,22 @@ const JobDetailsContent: React.FC = () => {
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">{t("productions.detail.languageDialect")}</Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {job.language?.toUpperCase() || "AR"}{job.dialect && job.dialect !== "none" ? ` (${job.dialect})` : ""}
+                    {t(languageLabelKey(job.language))}
+                    {dialectLabelKey(job.dialect) ? ` · ${t(dialectLabelKey(job.dialect)!)}` : ""}
                   </Typography>
                 </Stack>
                 <Divider />
 
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">{t("productions.detail.aspectRatio")}</Typography>
-                  <Typography variant="body2" fontWeight={700}>{job.aspectRatio || "9:16"}</Typography>
+                  <Typography variant="body2" fontWeight={700}>{t(aspectLabelKey(job.aspectRatio))}</Typography>
                 </Stack>
                 <Divider />
 
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">{t("productions.detail.targetDuration")}</Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {job.productionSpec?.durationSeconds ? `${job.productionSpec.durationSeconds}s` : "30s"}
+                    {format.duration(job.productionSpec?.durationSeconds || job.durationSeconds)}
                   </Typography>
                 </Stack>
                 <Divider />
@@ -723,15 +743,15 @@ const JobDetailsContent: React.FC = () => {
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">{t("productions.detail.qualityProfile")}</Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {job.qualityProfile || "Standard"} · {job.resolution || "1080p"}
+                    {t(qualityLabelKey(job.qualityProfile))}
                   </Typography>
                 </Stack>
                 <Divider />
 
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2" color="text.secondary">{t("productions.detail.visualProvider")}</Typography>
+                  <Typography variant="body2" color="text.secondary">{t("productions.detail.mediaStrategy")}</Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {job.visualMode || "auto"}
+                    {t(mediaStrategyLabelKey(job.visualSource || job.visualMode))}
                   </Typography>
                 </Stack>
                 <Divider />
@@ -739,7 +759,7 @@ const JobDetailsContent: React.FC = () => {
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">{t("productions.detail.voiceSynth")}</Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {job.voiceProvider || "kokoro"}
+                    {t(voiceProviderLabelKey(job.voiceProvider))}
                   </Typography>
                 </Stack>
                 <Divider />
@@ -814,11 +834,11 @@ const JobDetailsContent: React.FC = () => {
                 <Stack spacing={1.5}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Job ID: <code>{job.id}</code>
-                      {videoId ? <> · Video ID: <code>{videoId}</code></> : null}
+                      {t("productions.detail.jobId")}: <code>{format.technical(job.id)}</code>
+                      {videoId ? <> · {t("productions.detail.videoIdLabel")}: <code>{format.technical(videoId)}</code></> : null}
                     </Typography>
                     <Button size="small" variant="text" startIcon={<ContentCopyIcon fontSize="small" />} onClick={copyId}>
-                      {copied ? "Copied!" : "Copy ID"}
+                      {copied ? t("productions.detail.copied") : t("productions.detail.copyId")}
                     </Button>
                   </Stack>
 
@@ -830,13 +850,13 @@ const JobDetailsContent: React.FC = () => {
 
                   {job.technicalError && (
                     <Alert severity="warning" sx={{ fontSize: "0.8rem" }}>
-                      <AlertTitle fontWeight={700}>Technical detail</AlertTitle>
+                      <AlertTitle fontWeight={700}>{t("productions.detail.technicalDetail")}</AlertTitle>
                       {job.technicalError}
                     </Alert>
                   )}
 
                   <Typography variant="caption" fontWeight={700} color="text.secondary">
-                    Diagnostics
+                    {t("productions.detail.diagnostics")}
                   </Typography>
                   <pre
                     style={{
@@ -873,7 +893,7 @@ const JobDetailsContent: React.FC = () => {
 
 export const JobDetails: React.FC = () => {
   return (
-    <ErrorBoundary fallbackTitle="Job Details Error">
+    <ErrorBoundary fallbackTitle="">
       <JobDetailsContent />
     </ErrorBoundary>
   );
