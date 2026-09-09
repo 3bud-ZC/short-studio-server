@@ -1597,6 +1597,11 @@ export const ar: TranslationCatalog = {
   "templates.source": "النوع",
   "templates.category": "الفئة",
   "templates.loading": "جارٍ تحميل القوالب…",
+
+  // -------------------------------------------------- V2.5.1 عزل اللغة النهائي
+  "setup.readyHeading": "جاهز لإنشاء أول فيديو",
+  "setup.readyBody": "اكتمل الإعداد. اوصف الفيديو الذي تريده وسيقوم شورت ستوديو بإنتاجه.",
+  "videos.notPublishedYet": "لم يُنشَر هذا الفيديو في أي مكان بعد.",
 };
 
 export default ar;

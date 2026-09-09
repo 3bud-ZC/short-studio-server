@@ -532,7 +532,7 @@ const VideoDetailsContent: React.FC = () => {
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  This video has not been distributed yet. Use Upload-Post from the publishing flow for supported channels after owner approval.
+                  {tt("videos.notPublishedYet")}
                 </Typography>
               )}
             </SectionCard>

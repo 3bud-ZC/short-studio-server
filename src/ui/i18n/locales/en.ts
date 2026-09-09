@@ -1621,6 +1621,11 @@ export const en: TranslationCatalog = {
   "templates.source": "Source",
   "templates.category": "Category",
   "templates.loading": "Loading templates…",
+
+  // -------------------------------------------------- V2.5.1 final isolation
+  "setup.readyHeading": "Ready to make your first video",
+  "setup.readyBody": "Everything is set up. Describe the video you want and Short Studio will produce it.",
+  "videos.notPublishedYet": "This video has not been published anywhere yet.",
 };
 
 export default en;

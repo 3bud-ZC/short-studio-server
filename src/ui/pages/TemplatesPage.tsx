@@ -34,7 +34,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, LoadingState, PageHeader, SearchInput, SectionCard, StatusBadge } from "../components/v2";
 import { useI18n } from "../i18n";
-import type { BusinessTemplateOption, TemplateVariable, V2Brand } from "./v2Types";
+import type { BusinessTemplateOption, TemplateVariable } from "./v2Types";
 import { CAPTION_STYLE_LABELS, DURATION_OPTIONS, QUALITY_LABELS, VISUAL_MODE_LABELS } from "./videoTypes";
 import { aspectLabelKey, mediaStrategyLabelKey, qualityLabelKey } from "./displayLabels";
 
@@ -217,7 +217,6 @@ const TemplatesPage: React.FC = () => {
   const { locale, direction, t, format } = useI18n();
   const strings = copy[locale === "ar" ? "ar" : "en"];
   const [templates, setTemplates] = useState<BusinessTemplateOption[]>([]);
-  const [brands, setBrands] = useState<V2Brand[]>([]);
   const [categories, setCategories] = useState<string[]>(fallbackCategories);
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "built_in" | "custom">("all");
@@ -232,13 +231,11 @@ const TemplatesPage: React.FC = () => {
 
   const load = async () => {
     try {
-      const [templateResponse, brandResponse] = await Promise.all([
-        axios.get("/api/v2/templates", { params: { includeArchived: showArchived } }),
-        axios.get("/api/v2/brands").catch(() => ({ data: { brands: [] } })),
-      ]);
+      const templateResponse = await axios.get("/api/v2/templates", {
+        params: { includeArchived: showArchived },
+      });
       setTemplates(templateResponse.data.templates || []);
       setCategories(templateResponse.data.categories || fallbackCategories);
-      setBrands(brandResponse.data.brands || []);
       setError(null);
     } catch {
       setError(locale === "ar" ? "تعذر تحميل القوالب." : "Failed to load templates.");
@@ -502,15 +499,6 @@ const TemplatesPage: React.FC = () => {
                   <InputLabel>{locale === "ar" ? "التعليقات" : "Captions"}</InputLabel>
                   <Select label={locale === "ar" ? "التعليقات" : "Captions"} value={draft.config.captionStyle || "social_ad"} onChange={(event) => setDraft({ ...draft, config: { ...draft.config, captionStyle: event.target.value } })}>
                     {captionStyles.map((style) => <MenuItem key={style} value={style}>{CAPTION_STYLE_LABELS[style] || style}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>{locale === "ar" ? "العلامة" : "Brand"}</InputLabel>
-                  <Select label={locale === "ar" ? "العلامة" : "Brand"} value={draft.config.brandId || ""} onChange={(event) => setDraft({ ...draft, config: { ...draft.config, brandId: event.target.value } })}>
-                    <MenuItem value="">{strings.all}</MenuItem>
-                    {brands.map((brand) => <MenuItem key={brand.id} value={brand.id}>{brand.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>

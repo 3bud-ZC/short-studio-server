@@ -470,43 +470,10 @@ export const SetupWizard: React.FC = () => {
             </Stack>
           )}
 
-          {/* Step 7: Defaults */}
-          {currentStepKey === "setup.videoDefaults" && (
-            <Stack spacing={2.5}>
-              <Typography variant="h6">{t("setup.videoDefaults")}</Typography>
-              {/* Narration language is a production setting. It is deliberately
-                  not the interface language, and the hint says so. */}
-              <Typography variant="body2" color="text.secondary">
-                {t("setup.defaultNarrationLanguageHint")}
-              </Typography>
-              <FormControl fullWidth size="small">
-                <InputLabel>{t("setup.defaultNarrationLanguage")}</InputLabel>
-                <Select
-                  value={defaultLanguage}
-                  label={t("setup.defaultNarrationLanguage")}
-                  onChange={(e) => setDefaultLanguage(e.target.value)}
-                >
-                  <MenuItem value="ar">Arabic (العربية)</MenuItem>
-                  <MenuItem value="en">English</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl fullWidth size="small">
-                <InputLabel>Default Arabic Dialect</InputLabel>
-                <Select value={defaultDialect} label="Default Arabic Dialect" onChange={(e) => setDefaultDialect(e.target.value)}>
-                  <MenuItem value="egyptian">Egyptian (مصرى - Recommended)</MenuItem>
-                  <MenuItem value="gulf">Gulf (خليجي)</MenuItem>
-                  <MenuItem value="msa">Modern Standard Arabic (فصحى)</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl fullWidth size="small">
-                <InputLabel>Default Aspect Ratio</InputLabel>
-                <Select value={defaultAspectRatio} label="Default Aspect Ratio" onChange={(e) => setDefaultAspectRatio(e.target.value)}>
-                  <MenuItem value="9:16">9:16 Portrait (Shorts, Reels, TikTok)</MenuItem>
-                  <MenuItem value="16:9">16:9 Landscape (YouTube)</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          )}
+          {/* V2.5.1: the video-defaults step is gone with Production Defaults.
+              Every production chooses its own language, dialect and shape on
+              one page, so a default set here would be a second opinion the
+              customer never sees applied. */}
 
           {/* Step 8: Verification */}
           {currentStepKey === "setup.review" && (
@@ -526,13 +493,13 @@ export const SetupWizard: React.FC = () => {
             <Stack spacing={3} textAlign="center" alignItems="center">
               <RocketLaunchIcon sx={{ fontSize: 70, color: "primary.main" }} />
               <Typography variant="h4" fontWeight={700} color="primary.main">
-                Ready to Create Your First Video
+                {t("setup.readyHeading")}
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600 }}>
-                Everything is set up. Describe the video you want and Short Studio will produce it.
+                {t("setup.readyBody")}
               </Typography>
               <Button variant="contained" size="large" onClick={() => navigate("/create")} sx={{ px: 4, py: 1.5 }}>
-                Create your first video
+                {t("videos.createFirst")}
               </Button>
             </Stack>
           )}
