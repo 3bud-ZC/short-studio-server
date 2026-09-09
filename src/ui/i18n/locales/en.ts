@@ -1476,6 +1476,151 @@ export const en: TranslationCatalog = {
   "videos.captionStyle.none": "No captions",
   "videos.narrationScript": "Narration",
   "videos.narrationScene": "Scene {index}",
+
+  // ------------------------------------------------ V2.5.1 simplified settings
+  "settings.language.title": "Interface language",
+  "settings.language.description":
+    "The language of this interface. It is separate from the language your videos are narrated in.",
+  "settings.localVoice.title": "Local voice",
+  "settings.localVoice.description":
+    "Arabic narration is produced on this machine. Nothing is sent to a paid service unless you choose one for a production.",
+  "settings.localVoice.noneInstalled":
+    "No local Arabic voice is installed yet, so Arabic productions cannot run. Install one, then check again here.",
+  "settings.localVoice.check": "Check again",
+  "settings.localVoice.lastChecked": "Last checked {when}",
+  "settings.localVoice.loadFailed": "Local voice status could not be read.",
+  "settings.localVoice.verifyFailed": "That voice could not be verified.",
+  "settings.storage.title": "Storage",
+  "settings.storage.description": "Where your videos and uploaded media live on this machine.",
+  "settings.storage.videos": "Videos",
+  "settings.storage.media": "Uploaded media",
+  "settings.storage.open": "Open Media",
+  "settings.integrationsShortcut.title": "Providers",
+  "settings.integrationsShortcut.description":
+    "Stock libraries, voices and publishing. Nothing here is required to make a video.",
+  "settings.integrationsShortcut.open": "Open Integrations",
+  "settings.diagnostics.title": "Diagnostics",
+  "settings.diagnostics.description": "A health check of everything this product needs to make videos.",
+  "settings.diagnostics.open": "Open System Health",
+  "settings.about.title": "About",
+  "settings.about.version": "Version",
+  "settings.about.product": "Product",
+
+  // ------------------------------------------------ V2.5.1 publishing dialogs
+  "publishing.review.title": "Publish this video",
+  "publishing.review.timing": "When to publish",
+  "publishing.review.now": "Publish now",
+  "publishing.review.nowHint": "Sent to the destinations you pick, straight away.",
+  "publishing.review.schedule": "Schedule",
+  "publishing.review.scheduleHint": "Sent automatically at the date and time you set.",
+  "publishing.review.date": "Date",
+  "publishing.review.time": "Time",
+  "publishing.review.timezone": "Time zone",
+  "publishing.review.destinations": "Destinations ({count})",
+  "publishing.review.connected": "Connected",
+  "publishing.review.autoRoute": "Automatic",
+  "publishing.review.account": "Account",
+  "publishing.review.defaultAccount": "Use the default account",
+  "publishing.review.optimize": "Write this for me",
+  "publishing.review.titleField": "Title",
+  "publishing.review.descriptionField": "Description",
+  "publishing.review.captionField": "Caption",
+  "publishing.review.hashtagsField": "Hashtags",
+  "publishing.review.tagsField": "Tags",
+  "publishing.review.privacy": "Who can see it",
+  "publishing.review.privacyUnlisted": "Unlisted",
+  "publishing.review.privacyPrivate": "Private",
+  "publishing.review.privacyPublic": "Public",
+  "publishing.review.shareToFeed": "Also share to the main profile feed",
+  "publishing.review.submitNow": "Publish to {count} destination(s)",
+  "publishing.review.submitSchedule": "Schedule for {count} destination(s)",
+  "publishing.review.submitting": "Sending…",
+  "publishing.review.pickDestination": "Choose at least one destination.",
+  "publishing.batch.title": "Publish {count} videos",
+  "publishing.batch.destination": "Destination",
+  "publishing.batch.submit": "Publish all",
+  "publishing.batch.submitting": "Sending…",
+
+  // ------------------------------------------------------ V2.5.1 setup wizard
+  "setup.adminHeading": "Administrator account",
+  "setup.adminBody":
+    "Credentials for managing settings, backups and publishing on this installation.",
+  "setup.adminUsername": "Username",
+  "setup.adminPassword": "Password (at least 8 characters)",
+  "setup.adminPasswordConfirm": "Confirm password",
+  "setup.storageHeading": "Where everything is kept",
+  "setup.storageBody": "Everything this product makes stays on this machine, in its own data area.",
+  "setup.storageVideos": "Finished videos",
+  "setup.storageVideosBody": "Kept so you can preview, download, revise and publish them.",
+  "setup.storageArtifacts": "Reusable work",
+  "setup.storageArtifactsBody":
+    "Narration, captions and visuals are kept so a new version does not redo work that was already done.",
+  "setup.storageCache": "Temporary files",
+  "setup.storageCacheBody": "Cleaned up automatically once they are no longer needed.",
+  "setup.storageBackups": "Backups and logs",
+  "setup.storageBackupsBody": "Available from System Health, with secrets removed.",
+  "setup.stockHeading": "Stock footage",
+  "setup.stockBody":
+    "A stock library gives your videos real footage to work with. Both are free, and you can add a key later from Integrations.",
+  "setup.pexelsKey": "Pexels key (recommended)",
+  "setup.pexelsHelp": "Optional. You can add this any time from Integrations.",
+  "setup.pixabayKey": "Pixabay key (optional)",
+  "setup.pixabayHelp": "An optional second free library.",
+  "setup.stockLocalNote":
+    "Narration, captions and video rendering all run on this machine. None of this costs money.",
+  "setup.voiceHeading": "Voice",
+  "setup.voiceBody":
+    "Arabic narration runs on this machine by default. Everything on this step is optional and can be added later.",
+  "setup.elevenLabsKey": "ElevenLabs key (optional premium voice)",
+  "setup.elevenLabsHelp": "Stored encrypted. Skip it to use the local voice instead.",
+  "setup.geminiKey": "Google Gemini key (optional)",
+  "setup.geminiHelp": "Optional. Adds more variety to written scripts.",
+  "setup.optionalProvidersNote":
+    "Optional paid video providers can be connected later. They stay skippable, and paid generation always needs an explicit choice.",
+  "setup.reviewHeading": "Everything checks out",
+  "setup.reviewBody": "Your choices are ready to save.",
+
+  // ------------------------------------------------- V2.5.1 template library
+  "templates.catalog.product_ad.name": "Product Promotion",
+  "templates.catalog.product_ad.description":
+    "Built around your product photos: the product, the reason to buy, the offer, the order.",
+  "templates.catalog.restaurant_offer.name": "Restaurant Promotion",
+  "templates.catalog.restaurant_offer.description":
+    "A fast, appetising offer video: the dish, the deal, where to find it.",
+  "templates.catalog.real_estate_listing.name": "Real Estate Listing",
+  "templates.catalog.real_estate_listing.description":
+    "A wide, unhurried tour of a property, with the details a buyer actually asks about.",
+  "templates.catalog.educational_tip.name": "Educational Explainer",
+  "templates.catalog.educational_tip.description":
+    "One idea explained clearly, at a pace someone can follow.",
+  "templates.catalog.viral_curiosity.name": "Viral Short",
+  "templates.catalog.viral_curiosity.description":
+    "A surprising fact, told fast, built to be finished and shared.",
+  "templates.catalog.event_promo.name": "Event Promotion",
+  "templates.catalog.event_promo.description":
+    "What is happening, when, where, and how to get in before it fills.",
+  "templates.catalog.saas_promo.name": "SaaS / AI Product Promo",
+  "templates.catalog.saas_promo.description":
+    "The problem, the product that removes it, one real benefit, one next step.",
+  "templates.catalog.business_tips.name": "Business Tips",
+  "templates.catalog.business_tips.description":
+    "Practical advice as clean on-screen points, with no filler footage.",
+  "templates.catalog.story_narrative.name": "Story",
+  "templates.catalog.story_narrative.description":
+    "A longer, slower piece that carries one story to its point.",
+  "templates.catalog.news_update.name": "News / Update",
+  "templates.catalog.news_update.description":
+    "What changed, when it applies, and what to do about it.",
+  "templates.catalog.social_ad.name": "Social Advertisement",
+  "templates.catalog.social_ad.description":
+    "The shortest format: one hook, one offer, one action.",
+  "templates.catalog.my_media_showcase.name": "My Media Showcase",
+  "templates.catalog.my_media_showcase.description":
+    "Built entirely from footage you upload. No stock library is contacted.",
+  "templates.produces": "What it produces",
+  "templates.source": "Source",
+  "templates.category": "Category",
+  "templates.loading": "Loading templates…",
 };
 
 export default en;

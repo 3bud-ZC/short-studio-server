@@ -26,6 +26,7 @@ import {
 import SendIcon from "@mui/icons-material/Send";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import type { PublishingPlatform } from "../../pages/v2Types";
+import { useI18n } from "../../i18n";
 
 const AVAILABLE_PLATFORMS: { id: PublishingPlatform; label: string }[] = [
   { id: "youtube", label: "YouTube Shorts" },
@@ -50,6 +51,7 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { t, format } = useI18n();
   const [selectedPlatforms, setSelectedPlatforms] = useState<PublishingPlatform[]>(["youtube"]);
   const [publishMode, setPublishMode] = useState<"now" | "schedule">("now");
   const [scheduleDate, setScheduleDate] = useState(() => {
@@ -100,7 +102,9 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
 
       setFeedback({
         type: "success",
-        message: `Batch distribution launched! Created ${res.data.count} publications across ${selectedPlatforms.length} platform(s).`,
+        message: t("publishing.review.submitNow", {
+          count: format.number(Number(res.data.count) || videoIds.length),
+        }),
       });
 
       setTimeout(() => {
@@ -110,7 +114,7 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
     } catch (err: any) {
       setFeedback({
         type: "error",
-        message: err.response?.data?.message || err.message || "Batch publication failed.",
+        message: t("publishing.loadFailed"),
       });
     } finally {
       setLoading(false);
@@ -121,10 +125,7 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Typography variant="h6" fontWeight={800}>
-          Batch Distribute {videoIds.length} Videos
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Publish or schedule multiple videos simultaneously across social channels.
+          {t("publishing.batch.title", { count: format.number(videoIds.length) })}
         </Typography>
       </DialogTitle>
       <DialogContent dividers>
@@ -133,7 +134,7 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
 
           <Box>
             <Typography variant="subtitle2" fontWeight={800} gutterBottom>
-              Select Target Platforms
+              {t("publishing.batch.destination")}
             </Typography>
             <Grid container spacing={1}>
               {AVAILABLE_PLATFORMS.map((p) => (
@@ -157,21 +158,21 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
 
           <Box>
             <Typography variant="subtitle2" fontWeight={800} gutterBottom>
-              Timing
+              {t("publishing.review.timing")}
             </Typography>
             <RadioGroup
               row
               value={publishMode}
               onChange={(e) => setPublishMode(e.target.value as any)}
             >
-              <FormControlLabel value="now" control={<Radio size="small" />} label="Publish Now" />
-              <FormControlLabel value="schedule" control={<Radio size="small" />} label="Schedule Later" />
+              <FormControlLabel value="now" control={<Radio size="small" />} label={t("publishing.review.now")} />
+              <FormControlLabel value="schedule" control={<Radio size="small" />} label={t("publishing.review.schedule")} />
             </RadioGroup>
 
             {publishMode === "schedule" && (
               <Stack direction="row" spacing={1.5} sx={{ mt: 1.5 }}>
                 <TextField
-                  label="Date"
+                  label={t("publishing.review.date")}
                   type="date"
                   size="small"
                   fullWidth
@@ -180,7 +181,7 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
                   InputLabelProps={{ shrink: true }}
                 />
                 <TextField
-                  label="Time"
+                  label={t("publishing.review.time")}
                   type="time"
                   size="small"
                   fullWidth
@@ -193,22 +194,22 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
           </Box>
 
           <FormControl size="small" fullWidth>
-            <InputLabel>Default Privacy</InputLabel>
+            <InputLabel>{t("publishing.review.privacy")}</InputLabel>
             <Select
-              label="Default Privacy"
+              label={t("publishing.review.privacy")}
               value={privacy}
               onChange={(e) => setPrivacy(e.target.value as any)}
             >
-              <MenuItem value="unlisted">Unlisted (Safe Recommended)</MenuItem>
-              <MenuItem value="private">Private</MenuItem>
-              <MenuItem value="public">Public</MenuItem>
+              <MenuItem value="unlisted">{t("publishing.review.privacyUnlisted")}</MenuItem>
+              <MenuItem value="private">{t("publishing.review.privacyPrivate")}</MenuItem>
+              <MenuItem value="public">{t("publishing.review.privacyPublic")}</MenuItem>
             </Select>
           </FormControl>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={onClose} disabled={loading}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           variant="contained"
@@ -225,10 +226,13 @@ export const BatchPublishModal: React.FC<BatchPublishModalProps> = ({
           onClick={handleBatchSubmit}
         >
           {loading
-            ? "Processing..."
-            : publishMode === "schedule"
-              ? `Schedule ${videoIds.length} Videos`
-              : `Publish ${videoIds.length} Videos Now`}
+            ? t("publishing.batch.submitting")
+            : t(
+                publishMode === "schedule"
+                  ? "publishing.review.submitSchedule"
+                  : "publishing.review.submitNow",
+                { count: format.number(videoIds.length) },
+              )}
         </Button>
       </DialogActions>
     </Dialog>

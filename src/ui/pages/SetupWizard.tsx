@@ -42,7 +42,9 @@ const stepKeys = [
   "setup.stockFootage",
   "setup.voiceAndAi",
   "setup.publishing",
-  "setup.videoDefaults",
+  // V2.5.1: the "video defaults" step is gone. Every production now chooses
+  // its own language, dialect and shape on one page, so a default set here
+  // could only ever be a second opinion the customer never sees applied.
   "setup.review",
   "setup.ready",
 ];
@@ -336,21 +338,21 @@ export const SetupWizard: React.FC = () => {
             <Stack spacing={2.5}>
               <Box>
                 <Typography variant="h6" fontWeight={700}>
-                  Admin Account Setup
+                  {t("setup.adminHeading")}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Create your local administrator credentials for managing settings, backups, and publishing channels.
+                  {t("setup.adminBody")}
                 </Typography>
               </Box>
               <TextField
-                label="Administrator Username"
+                label={t("setup.adminUsername")}
                 value={adminUsername}
                 onChange={(e) => setAdminUsername(e.target.value)}
                 fullWidth
                 size="small"
               />
               <TextField
-                label="Admin Password (min 8 characters)"
+                label={t("setup.adminPassword")}
                 type="password"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
@@ -358,7 +360,7 @@ export const SetupWizard: React.FC = () => {
                 size="small"
               />
               <TextField
-                label="Confirm Password"
+                label={t("setup.adminPasswordConfirm")}
                 type="password"
                 value={adminPasswordConfirm}
                 onChange={(e) => setAdminPasswordConfirm(e.target.value)}
@@ -372,19 +374,19 @@ export const SetupWizard: React.FC = () => {
           {currentStepKey === "setup.storage" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
-                Persistent Storage Locations
+                {t("setup.storageHeading")}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Videos, reusable artifacts, cache, logs, and backups are stored in the private application data volume.
+                {t("setup.storageBody")}
               </Typography>
               {/* The literal near-white background here was a light-theme leak
                   into a dark product; the card now uses the themed surface. */}
               <Card variant="outlined" sx={{ p: 2, bgcolor: "background.default" }}>
                 <Stack spacing={1}>
-                  <Typography variant="body2"><strong>Rendered videos:</strong> kept for preview, download, revisions, and publishing.</Typography>
-                  <Typography variant="body2"><strong>Reusable artifacts:</strong> retained so revisions can reuse voice, captions, and media.</Typography>
-                  <Typography variant="body2"><strong>Temporary cache:</strong> cleaned by retention policy when no longer needed.</Typography>
-                  <Typography variant="body2"><strong>Backups and logs:</strong> available through System diagnostics with secret redaction.</Typography>
+                  <Typography variant="body2"><strong>{t("setup.storageVideos")}:</strong> {t("setup.storageVideosBody")}</Typography>
+                  <Typography variant="body2"><strong>{t("setup.storageArtifacts")}:</strong> {t("setup.storageArtifactsBody")}</Typography>
+                  <Typography variant="body2"><strong>{t("setup.storageCache")}:</strong> {t("setup.storageCacheBody")}</Typography>
+                  <Typography variant="body2"><strong>{t("setup.storageBackups")}:</strong> {t("setup.storageBackupsBody")}</Typography>
                 </Stack>
               </Card>
             </Stack>
@@ -394,33 +396,29 @@ export const SetupWizard: React.FC = () => {
           {currentStepKey === "setup.stockFootage" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
-                Stock footage
+                {t("setup.stockHeading")}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Pexels gives your videos real footage to work with. It is free — creating a key takes about a minute.
-                You can skip this and add it later on the Providers page.
+                {t("setup.stockBody")}
               </Typography>
               <TextField
-                label="Pexels API key (recommended)"
+                label={t("setup.pexelsKey")}
                 value={pexelsKey}
                 onChange={(e) => setPexelsKey(e.target.value)}
-                placeholder="e.g. 563492ad6f91700001000001..."
                 fullWidth
                 size="small"
-                helperText="Skip this if you prefer — you can add it any time from Integrations."
+                helperText={t("setup.pexelsHelp")}
               />
               <TextField
-                label="Pixabay API key (optional)"
+                label={t("setup.pixabayKey")}
                 value={pixabayKey}
                 onChange={(e) => setPixabayKey(e.target.value)}
                 type="password"
                 fullWidth
                 size="small"
-                helperText="Optional second free stock library."
+                helperText={t("setup.pixabayHelp")}
               />
-              <Alert severity="info">
-                English narration, captions and video rendering all run on this machine. Nothing here costs money.
-              </Alert>
+              <Alert severity="info">{t("setup.stockLocalNote")}</Alert>
             </Stack>
           )}
 
@@ -428,33 +426,31 @@ export const SetupWizard: React.FC = () => {
           {currentStepKey === "setup.voiceAndAi" && (
             <Stack spacing={2}>
               <Typography variant="h6" fontWeight={700}>
-                Voice &amp; AI
+                {t("setup.voiceHeading")}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Arabic, Egyptian Arabic and MSA narration runs locally by default (VoiceTut or KemeTone, set up
-                after this wizard from Providers). ElevenLabs is an optional premium alternative. Everything on
-                this step is optional and can be added later from Integrations.
+                {t("setup.voiceBody")}
               </Typography>
               <TextField
-                label="ElevenLabs API key (optional premium Arabic/multilingual voice)"
+                label={t("setup.elevenLabsKey")}
                 value={elevenLabsKey}
                 onChange={(e) => setElevenLabsKey(e.target.value)}
                 type="password"
                 fullWidth
                 size="small"
-                helperText="Stored encrypted. Skip to use the local voice route instead."
+                helperText={t("setup.elevenLabsHelp")}
               />
               <TextField
-                label="Google Gemini API key (optional)"
+                label={t("setup.geminiKey")}
                 value={geminiKey}
                 onChange={(e) => setGeminiKey(e.target.value)}
                 type="password"
                 fullWidth
                 size="small"
-                helperText="Optional. Adds more variety to generated scripts."
+                helperText={t("setup.geminiHelp")}
               />
               <Typography variant="caption" color="text.secondary">
-                Optional premium video providers such as Veo, Runway, fal.ai, Replicate, Luma and local ComfyUI can be connected later from Providers. They stay skippable, and paid generation still requires an explicit budget choice.
+                {t("setup.optionalProvidersNote")}
               </Typography>
             </Stack>
           )}
@@ -517,10 +513,10 @@ export const SetupWizard: React.FC = () => {
             <Stack spacing={2} textAlign="center" alignItems="center">
               <CheckCircleIcon sx={{ fontSize: 60, color: "success.main" }} />
               <Typography variant="h5" fontWeight={700}>
-Everything checks out
+                {t("setup.reviewHeading")}
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 500 }}>
-                Your choices are ready. Select <strong>Finish setup</strong> to save them.
+                {t("setup.reviewBody")}
               </Typography>
             </Stack>
           )}

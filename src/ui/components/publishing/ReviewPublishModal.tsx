@@ -46,6 +46,7 @@ import type {
   VideoItem,
 } from "../../pages/v2Types";
 import { withMediaAccessToken } from "../../utils/auth";
+import { useI18n } from "../../i18n";
 
 const AVAILABLE_PLATFORMS: { id: PublishingPlatform; label: string; icon: React.ReactNode; color: string }[] = [
   { id: "youtube", label: "YouTube Shorts", icon: <YouTubeIcon />, color: "#ff0000" },
@@ -89,6 +90,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { t, format } = useI18n();
   const [selectedPlatforms, setSelectedPlatforms] = useState<PublishingPlatform[]>(["youtube"]);
   const [activeTab, setActiveTab] = useState<PublishingPlatform>("youtube");
   const [publishMode, setPublishMode] = useState<"now" | "schedule">("now");
@@ -360,7 +362,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {/* Distribution Timing Choice */}
               <Card variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2" fontWeight={800} gutterBottom>
-                  Distribution Timing
+                  {t("publishing.review.timing")}
                 </Typography>
                 <RadioGroup
                   value={publishMode}
@@ -372,10 +374,10 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                     label={
                       <Box>
                         <Typography variant="body2" fontWeight={700}>
-                          Publish Now
+                          {t("publishing.review.now")}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Upload immediately to selected platforms
+                          {t("publishing.review.nowHint")}
                         </Typography>
                       </Box>
                     }
@@ -386,10 +388,10 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                     label={
                       <Box>
                         <Typography variant="body2" fontWeight={700}>
-                          Schedule for Later
+                          {t("publishing.review.schedule")}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Post automatically at exact local date & time
+                          {t("publishing.review.scheduleHint")}
                         </Typography>
                       </Box>
                     }
@@ -399,7 +401,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                 {publishMode === "schedule" && (
                   <Stack spacing={1.5} sx={{ mt: 2, pt: 1.5, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
                     <TextField
-                      label="Date"
+                      label={t("publishing.review.date")}
                       type="date"
                       size="small"
                       value={scheduleDate}
@@ -407,7 +409,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                       InputLabelProps={{ shrink: true }}
                     />
                     <TextField
-                      label="Time"
+                      label={t("publishing.review.time")}
                       type="time"
                       size="small"
                       value={scheduleTime}
@@ -415,9 +417,9 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                       InputLabelProps={{ shrink: true }}
                     />
                     <FormControl size="small" fullWidth>
-                      <InputLabel>Timezone</InputLabel>
+                      <InputLabel>{t("publishing.review.timezone")}</InputLabel>
                       <Select
-                        label="Timezone"
+                        label={t("publishing.review.timezone")}
                         value={timezone}
                         onChange={(e) => setTimezone(e.target.value)}
                       >
@@ -435,7 +437,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {/* Platform Selector Chips */}
               <Card variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2" fontWeight={800} gutterBottom>
-                  Target Channels ({selectedPlatforms.length})
+                  {t("publishing.review.destinations", { count: format.number(selectedPlatforms.length) })}
                 </Typography>
                 <Stack spacing={1}>
                   {AVAILABLE_PLATFORMS.map((p) => {
@@ -468,7 +470,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                         </Stack>
                         <Chip
                           size="small"
-                          label={connected ? "Connected" : "Auto route"}
+                          label={connected ? t("publishing.review.connected") : t("publishing.review.autoRoute")}
                           color={connected ? "success" : "default"}
                           sx={{ fontSize: 10, height: 20 }}
                         />
@@ -499,9 +501,9 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {/* Account Selector for this platform */}
               <Stack direction="row" spacing={2} alignItems="center">
                 <FormControl size="small" fullWidth>
-                  <InputLabel>Publishing Account</InputLabel>
+                  <InputLabel>{t("publishing.review.account")}</InputLabel>
                   <Select
-                    label="Publishing Account"
+                    label={t("publishing.review.account")}
                     value={selectedAccountIds[activeTab] || ""}
                     onChange={(e) =>
                       setSelectedAccountIds((prev) => ({
@@ -510,7 +512,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                       }))
                     }
                   >
-                    <MenuItem value="">Default / Auto Provider Account</MenuItem>
+                    <MenuItem value="">{t("publishing.review.defaultAccount")}</MenuItem>
                     {accounts
                       .filter((a) => a.platform === activeTab)
                       .map((acc) => (
@@ -528,7 +530,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                   onClick={() => handleAiOptimize(activeTab)}
                   sx={{ minWidth: 160 }}
                 >
-                  AI Optimize {activeTab.toUpperCase()}
+                  {t("publishing.review.optimize")}
                 </Button>
               </Stack>
 
@@ -536,7 +538,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {activeTab === "youtube" && (
                 <>
                   <TextField
-                    label="YouTube Title (max 100 chars)"
+                    label={t("publishing.review.titleField")}
                     size="small"
                     fullWidth
                     value={currentMeta.title || ""}
@@ -548,7 +550,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                     }
                   />
                   <TextField
-                    label="YouTube Description"
+                    label={t("publishing.review.descriptionField")}
                     size="small"
                     multiline
                     rows={4}
@@ -564,9 +566,9 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <FormControl size="small" fullWidth>
-                        <InputLabel>Privacy</InputLabel>
+                        <InputLabel>{t("publishing.review.privacy")}</InputLabel>
                         <Select
-                          label="Privacy"
+                          label={t("publishing.review.privacy")}
                           value={currentMeta.privacy || "unlisted"}
                           onChange={(e) =>
                             setMetadataMap((prev) => ({
@@ -575,15 +577,15 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                             }))
                           }
                         >
-                          <MenuItem value="unlisted">Unlisted (Safe Recommended)</MenuItem>
-                          <MenuItem value="private">Private</MenuItem>
-                          <MenuItem value="public">Public</MenuItem>
+                          <MenuItem value="unlisted">{t("publishing.review.privacyUnlisted")}</MenuItem>
+                          <MenuItem value="private">{t("publishing.review.privacyPrivate")}</MenuItem>
+                          <MenuItem value="public">{t("publishing.review.privacyPublic")}</MenuItem>
                         </Select>
                       </FormControl>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <TextField
-                        label="Tags (comma separated)"
+                        label={t("publishing.review.tagsField")}
                         size="small"
                         fullWidth
                         value={currentMeta.tags?.join(", ") || ""}
@@ -606,7 +608,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {activeTab === "tiktok" && (
                 <>
                   <TextField
-                    label="TikTok Caption (Hook & Call to action)"
+                    label={t("publishing.review.captionField")}
                     size="small"
                     multiline
                     rows={4}
@@ -620,7 +622,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                     }
                   />
                   <TextField
-                    label="Hashtags (space separated, e.g. #fyp #viral)"
+                    label={t("publishing.review.hashtagsField")}
                     size="small"
                     fullWidth
                     value={currentMeta.hashtags?.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ") || ""}
@@ -644,7 +646,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {activeTab === "instagram" && (
                 <>
                   <TextField
-                    label="Instagram Reel Caption"
+                    label={t("publishing.review.captionField")}
                     size="small"
                     multiline
                     rows={5}
@@ -672,7 +674,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
                         }
                       />
                     }
-                    label="Share Reel to Main Instagram Profile Feed"
+                    label={t("publishing.review.shareToFeed")}
                   />
                 </>
               )}
@@ -681,7 +683,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {activeTab === "facebook" && (
                 <>
                   <TextField
-                    label="Facebook Post Description"
+                    label={t("publishing.review.descriptionField")}
                     size="small"
                     multiline
                     rows={4}
@@ -700,7 +702,7 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
               {/* X / Twitter */}
               {activeTab === "twitter" && (
                 <TextField
-                  label="Tweet Text (max 280 chars)"
+                  label={t("publishing.review.captionField")}
                   size="small"
                   multiline
                   rows={3}
@@ -724,12 +726,12 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
           component="a"
           href={withMediaAccessToken(video.downloadUrl || `/api/videos/${video.videoId}/download`)}
           startIcon={<DownloadIcon />}
-          sx={{ mr: "auto" }}
+          sx={{ marginInlineEnd: "auto" }}
         >
-          Download MP4
+          {t("videos.download")}
         </Button>
         <Button onClick={onClose} disabled={submitting}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           variant="contained"
@@ -747,10 +749,13 @@ export const ReviewPublishModal: React.FC<ReviewPublishModalProps> = ({
           onClick={handlePublishOrSchedule}
         >
           {submitting
-            ? "Submitting..."
-            : publishMode === "schedule"
-              ? `Schedule to ${selectedPlatforms.length} Platform(s)`
-              : `Publish to ${selectedPlatforms.length} Platform(s) Now`}
+            ? t("publishing.review.submitting")
+            : t(
+                publishMode === "schedule"
+                  ? "publishing.review.submitSchedule"
+                  : "publishing.review.submitNow",
+                { count: format.number(selectedPlatforms.length) },
+              )}
         </Button>
       </DialogActions>
     </Dialog>

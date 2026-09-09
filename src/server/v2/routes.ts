@@ -10,6 +10,7 @@ import path from "path";
 import { logger } from "../../logger";
 import { Config } from "../../config";
 import { listBusinessTemplates } from "../../short-creator/business-templates";
+import { templateProductionProfile } from "../../short-creator/templateProductionProfiles";
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { validateCreateShortInput } from "../validator";
 import { readMetadata } from "../videoMetadata";
@@ -306,6 +307,12 @@ const BUILT_IN_TEMPLATE_CATEGORY: Record<string, (typeof TEMPLATE_CATEGORIES)[nu
   educational_tip: "educational",
   viral_curiosity: "social",
   event_promo: "event",
+  saas_promo: "product",
+  business_tips: "educational",
+  story_narrative: "social",
+  news_update: "business",
+  social_ad: "promotional",
+  my_media_showcase: "social",
 };
 
 function compactStringArray(value: unknown): string[] {
@@ -460,13 +467,25 @@ function mapBuiltInTemplate(template: ReturnType<typeof listBusinessTemplates>[n
       example: field.placeholder,
       helpText: field.helperText,
     })),
-    config: {
-      durationSeconds: template.targetDurationSeconds || template.suggestedDurationSeconds,
-      visualSource: "auto_best",
-      captionStyle: "bold",
-      quality: "standard",
-      aspectRatio: "9:16",
-    },
+    // V2.5.1: what this template ACTUALLY produces. This block used to be four
+    // hard-coded values identical for every template, which meant a Real Estate
+    // Listing and a Viral Short resolved to the same vertical, standard-quality,
+    // auto-media plan and differed only in wording. See
+    // `templateProductionProfiles.ts`.
+    config: (() => {
+      const profile = templateProductionProfile(template.id);
+      return {
+        durationSeconds: template.targetDurationSeconds || profile.durationSeconds,
+        aspectRatio: profile.aspectRatio,
+        quality: profile.quality,
+        visualSource: profile.visualSource,
+        mediaPolicy: profile.mediaPolicy,
+        productionMode: profile.productionMode,
+        contentStyle: profile.contentStyle,
+        captionStyle: profile.captionStyle,
+        recommendedSceneCount: profile.recommendedSceneCount,
+      };
+    })(),
   };
 }
 

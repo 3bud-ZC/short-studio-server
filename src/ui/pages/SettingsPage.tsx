@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -26,41 +27,25 @@ import {
 } from "../components/v2";
 import UpdateCenter from "../components/UpdateCenter";
 import PublicAddressPanel from "../components/PublicAddressPanel";
-import type { ApiTokenItem, BusinessTemplateOption, V2Brand } from "./v2Types";
-import { DURATION_OPTIONS } from "./videoTypes";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import { LocalVoicePanel } from "../components/LocalVoicePanel";
 import { useI18n } from "../i18n";
-
-/** Keeps a duration saved under an older option list selectable. */
-function durationChoicesFor(saved: number): number[] {
-  return DURATION_OPTIONS.includes(saved)
-    ? DURATION_OPTIONS
-    : [...DURATION_OPTIONS, saved].sort((a, b) => a - b);
-}
 
 const SettingsPage: React.FC = () => {
   const { t: tr, format } = useI18n();
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<any>(null);
-  const [brands, setBrands] = useState<V2Brand[]>([]);
-  const [, setTemplates] = useState<BusinessTemplateOption[]>([]);
   const [draft, setDraft] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const savedDuration = Number(draft?.defaultDuration) || 30;
-  const durationChoices = durationChoicesFor(savedDuration);
 
   useEffect(() => {
-    Promise.all([
-      axios.get("/api/v2/settings"),
-      axios.get("/api/v2/brands"),
-      axios.get("/api/v2/templates"),
-    ])
-      .then(([settingsResponse, brandsResponse, templatesResponse]) => {
+    Promise.all([axios.get("/api/v2/settings")])
+      .then(([settingsResponse]) => {
         setSettings(settingsResponse.data);
         setDraft(settingsResponse.data.settings || {});
-        setBrands(brandsResponse.data.brands || []);
-        setTemplates(templatesResponse.data.templates || []);
       })
       .catch(() => setError(tr("settings.loadFailed")))
       .finally(() => setLoading(false));
@@ -110,142 +95,24 @@ const SettingsPage: React.FC = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={2}>
-        {/* Production Defaults */}
-        <Grid item xs={12} lg={7}>
+        {/* V2.5.1: Production Defaults is gone. Every production picks its own
+            language, length, shape, quality, voice and media on one page, so a
+            second copy of those controls here could only ever disagree with it.
+            What replaces it is what a customer actually operates: the language
+            they read the product in, and the local voice their Arabic
+            productions depend on. */}
+        <Grid item xs={12} lg={6}>
           <SectionCard
-            title={tr("settings.defaults.title")}
-            description={tr("settings.defaults.description")}
+            title={tr("settings.language.title")}
+            description={tr("settings.language.description")}
           >
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.creationMode")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.creationMode")}
-                    value={draft.defaultCreationMode || "prompt"}
-                    onChange={(e) => setDraft({ ...draft, defaultCreationMode: e.target.value })}
-                  >
-                    <MenuItem value="prompt">{tr("settings.field.creationModePrompt")}</MenuItem>
-                    <MenuItem value="template">{tr("settings.field.creationModeTemplate")}</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
+            <LanguageSwitcher />
+          </SectionCard>
+        </Grid>
 
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.language")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.language")}
-                    value={draft.defaultLanguage || "ar"}
-                    onChange={(e) => setDraft({ ...draft, defaultLanguage: e.target.value })}
-                  >
-                    <MenuItem value="auto">{tr("settings.field.languageAuto")}</MenuItem>
-                    <MenuItem value="ar">{tr("settings.field.languageArabic")}</MenuItem>
-                    <MenuItem value="en">{tr("settings.field.languageEnglish")}</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.arabicDialect")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.arabicDialect")}
-                    value={draft.defaultArabicDialect || "egyptian"}
-                    onChange={(e) => setDraft({ ...draft, defaultArabicDialect: e.target.value })}
-                  >
-                    <MenuItem value="egyptian">{tr("settings.field.dialectEgyptian")}</MenuItem>
-                    <MenuItem value="msa">{tr("settings.field.dialectMsa")}</MenuItem>
-                    <MenuItem value="saudi">{tr("settings.field.dialectSaudi")}</MenuItem>
-                    <MenuItem value="gulf">{tr("settings.field.dialectGulf")}</MenuItem>
-                    <MenuItem value="levantine">{tr("settings.field.dialectLevantine")}</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.duration")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.duration")}
-                    value={savedDuration}
-                    onChange={(e) => setDraft({ ...draft, defaultDuration: Number(e.target.value) })}
-                  >
-                    {durationChoices.map((seconds) => (
-                      <MenuItem key={seconds} value={seconds}>
-                        {tr("settings.field.durationSeconds", { count: seconds })}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.aspectRatio")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.aspectRatio")}
-                    value={draft.defaultAspectRatio || "9:16"}
-                    onChange={(e) => setDraft({ ...draft, defaultAspectRatio: e.target.value })}
-                  >
-                    <MenuItem value="9:16">{tr("settings.field.aspectVertical")}</MenuItem>
-                    <MenuItem value="16:9">{tr("settings.field.aspectLandscape")}</MenuItem>
-                    <MenuItem value="1:1">{tr("settings.field.aspectSquare")}</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.quality")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.quality")}
-                    value={draft.defaultQuality || "standard"}
-                    onChange={(e) => setDraft({ ...draft, defaultQuality: e.target.value })}
-                  >
-                    <MenuItem value="draft">{tr("settings.field.qualityDraft")}</MenuItem>
-                    <MenuItem value="standard">{tr("settings.field.qualityStandard")}</MenuItem>
-                    <MenuItem value="high">{tr("settings.field.qualityHigh")}</MenuItem>
-                    <MenuItem value="premium">{tr("settings.field.qualityPremium")}</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.visualMode")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.visualMode")}
-                    value={draft.defaultVisualMode || "auto"}
-                    onChange={(e) => setDraft({ ...draft, defaultVisualMode: e.target.value })}
-                  >
-                    <MenuItem value="auto">{tr("settings.field.visualAuto")}</MenuItem>
-                    <MenuItem value="stock">{tr("settings.field.visualStock")}</MenuItem>
-                    <MenuItem value="ai">{tr("settings.field.visualAi")}</MenuItem>
-                    <MenuItem value="hybrid">{tr("settings.field.visualHybrid")}</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>{tr("settings.field.brand")}</InputLabel>
-                  <Select
-                    label={tr("settings.field.brand")}
-                    value={draft.defaultBrandId || ""}
-                    onChange={(e) => setDraft({ ...draft, defaultBrandId: e.target.value || null })}
-                  >
-                    <MenuItem value="">{tr("settings.field.brandNone")}</MenuItem>
-                    {brands.map((brand) => (
-                      <MenuItem key={brand.id} value={brand.id}>
-                        {brand.name}
-                        {brand.isDefault ? ` ${tr("settings.field.brandDefaultSuffix")}` : ""}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+        <Grid item xs={12} lg={6}>
+          <SectionCard title={tr("settings.localVoice.title")}>
+            <LocalVoicePanel />
           </SectionCard>
         </Grid>
 
@@ -355,15 +222,13 @@ const SettingsPage: React.FC = () => {
           </SectionCard>
         </Grid>
 
-        {/* Access tokens */}
-        <Grid item xs={12}>
-          <SectionCard
-            title={tr("settings.security.title")}
-            description={tr("settings.security.description")}
-          >
-            <ApiTokenManager />
-          </SectionCard>
-        </Grid>
+        {/* V2.5.1: Access tokens are not a customer concern. This product runs
+            as LOCAL_SINGLE_USER on the owner's own machine; an application
+            token is something a developer wiring an external system needs, not
+            something the person making videos should have to understand. The
+            manager still exists and still works - it lives on the technical
+            surface at /providers/technical. Internal service authentication is
+            unchanged. */}
 
         <Grid item xs={12}>
           <SectionCard
@@ -425,6 +290,29 @@ const SettingsPage: React.FC = () => {
           </SectionCard>
         </Grid>
 
+        {/* Two shortcuts rather than two more copies of a control. Providers and
+            System Health are whole pages; Settings points at them. */}
+        <Grid item xs={12} md={6}>
+          <SectionCard
+            title={tr("settings.integrationsShortcut.title")}
+            description={tr("settings.integrationsShortcut.description")}
+          >
+            <Button variant="outlined" onClick={() => navigate("/integrations")}>
+              {tr("settings.integrationsShortcut.open")}
+            </Button>
+          </SectionCard>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <SectionCard
+            title={tr("settings.diagnostics.title")}
+            description={tr("settings.diagnostics.description")}
+          >
+            <Button variant="outlined" onClick={() => navigate("/system")}>
+              {tr("settings.diagnostics.open")}
+            </Button>
+          </SectionCard>
+        </Grid>
+
         {/* System & Storage Stats */}
         <Grid item xs={12} md={4}>
           <StatCard
@@ -453,106 +341,6 @@ const SettingsPage: React.FC = () => {
   );
 };
 
-const API_SCOPES = ["production:create", "production:read", "videos:read", "publishing:write"];
-
-const ApiTokenManager: React.FC = () => {
-  const { t: tr, format } = useI18n();
-  const [tokens, setTokens] = useState<ApiTokenItem[]>([]);
-  const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<string[]>(["production:create", "production:read"]);
-  const [shownToken, setShownToken] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = async () => {
-    const res = await axios.get("/api/v2/api-tokens");
-    setTokens(res.data.tokens || []);
-  };
-
-  useEffect(() => {
-    load().catch(() => setError(tr("settings.token.loadFailed")));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const toggleScope = (scope: string) => {
-    setScopes((current) =>
-      current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope],
-    );
-  };
-
-  const createToken = async () => {
-    setError(null);
-    try {
-      const res = await axios.post("/api/v2/api-tokens", { name, scopes });
-      setShownToken(res.data.token?.token || null);
-      setName("");
-      await load();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || tr("settings.token.createFailed"));
-    }
-  };
-
-  const revoke = async (id: string) => {
-    await axios.post(`/api/v2/api-tokens/${id}/revoke`);
-    await load();
-  };
-
-  return (
-    <Stack spacing={2}>
-      {error && <Alert severity="error">{error}</Alert>}
-      {shownToken && (
-        <Alert severity="warning" onClose={() => setShownToken(null)}>
-          {tr("settings.token.newOnce")}{" "}
-          <Box component="code" dir="ltr" sx={{ display: "inline-block" }}>{shownToken}</Box>
-        </Alert>
-      )}
-      <Grid container spacing={1.5}>
-        <Grid item xs={12} md={4}>
-          <TextField
-            fullWidth
-            label={tr("settings.token.name")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            {API_SCOPES.map((scope) => (
-              <FormControlLabel
-                key={scope}
-                control={<Checkbox checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} />}
-                label={<Box component="span" dir="ltr">{scope}</Box>}
-              />
-            ))}
-          </Stack>
-        </Grid>
-        <Grid item xs={12} md={2}>
-          <Button fullWidth variant="contained" disabled={!name || scopes.length === 0} onClick={createToken}>
-            {tr("settings.token.create")}
-          </Button>
-        </Grid>
-      </Grid>
-      <Stack spacing={1}>
-        {tokens.map((token) => (
-          <Box key={token.id} sx={{ display: "flex", justifyContent: "space-between", gap: 1, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
-            <Box>
-              <Typography variant="body2" fontWeight={800}>{token.name}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                <Box component="span" dir="ltr">{token.scopes.join(", ")}</Box> ·{" "}
-                {tr("settings.token.createdOn", { time: format.dateTime(token.createdAt) })}
-                {token.lastUsedAt
-                  ? ` · ${tr("settings.token.lastUsed", { time: format.dateTime(token.lastUsedAt) })}`
-                  : ""}
-              </Typography>
-            </Box>
-            <Button size="small" color="error" disabled={Boolean(token.revokedAt)} onClick={() => revoke(token.id)}>
-              {token.revokedAt ? tr("settings.token.revoked") : tr("settings.token.revoke")}
-            </Button>
-          </Box>
-        ))}
-      </Stack>
-    </Stack>
-  );
-};
 
 const BackupManager: React.FC = () => {
   const { t: tr, format } = useI18n();

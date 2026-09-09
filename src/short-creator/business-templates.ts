@@ -5,6 +5,12 @@ export const BUSINESS_TEMPLATE_IDS = [
   "educational_tip",
   "viral_curiosity",
   "event_promo",
+  "saas_promo",
+  "business_tips",
+  "story_narrative",
+  "news_update",
+  "social_ad",
+  "my_media_showcase",
 ] as const;
 
 export type BusinessTemplateId = (typeof BUSINESS_TEMPLATE_IDS)[number];
@@ -551,6 +557,219 @@ const TEMPLATE_DEFINITIONS: Record<BusinessTemplateId, BusinessTemplate> = {
         required: true,
         placeholder: "WhatsApp / Instagram / Link",
       },
+    ],
+  },
+  // ------------------------------------------------------- V2.5.1 additions
+  // Six formats the library was missing. Each one differs from the others in
+  // what it actually produces, not only in its wording: see
+  // `templateProductionProfiles.ts` for the shape, length, visual strategy,
+  // caption treatment and production mode each of them resolves to.
+  saas_promo: {
+    id: "saas_promo",
+    displayName: "SaaS / AI Product Promo",
+    description:
+      "A short, benefit-led promo for a software or AI product: the problem, the fix, the proof, the sign-up.",
+    targetUseCase: "Software and AI teams promoting a product to small businesses",
+    defaultTone: "Sharp, modern, benefit-led",
+    suggestedDurationSeconds: 20,
+    recommendedSceneCount: 4,
+    targetDurationSeconds: 20,
+    qualityChecklist: [
+      "Opens with the problem the customer already has",
+      "Names the product and what it actually does",
+      "States one concrete benefit, not a slogan",
+      "Ends with a specific next step",
+    ],
+    examplePrompt:
+      "Open with the problem this tool removes, say plainly what it does, give one concrete benefit, and end with how to start.",
+    pexelsSearchHints: [
+      "laptop typing",
+      "software team",
+      "startup office",
+      "dashboard screen",
+      "remote work",
+      "collaboration",
+    ],
+    fallbackPexelsSearchHints: ["office", "technology", "computer", "team meeting"],
+    hookStyle: "Name the problem the viewer already recognises",
+    ctaStyle: "One clear next step: try it, book a demo, start free",
+    fields: [
+      { key: "productName", label: "Product name", type: "text", required: true },
+      {
+        key: "problem",
+        label: "Problem it removes",
+        type: "textarea",
+        required: true,
+        helperText: "What is painful today, in the customer's words",
+      },
+      { key: "mainBenefit", label: "Main benefit", type: "text", required: true },
+      { key: "targetCustomer", label: "Who it is for", type: "text", required: true },
+      {
+        key: "callToAction",
+        label: "Next step",
+        type: "text",
+        required: true,
+        placeholder: "Start free / Book a demo",
+      },
+    ],
+  },
+  business_tips: {
+    id: "business_tips",
+    displayName: "Business Tips",
+    description:
+      "A numbered list of practical tips, told as clean on-screen points rather than generic stock footage.",
+    targetUseCase: "Consultants and small business owners sharing practical advice",
+    defaultTone: "Direct, useful, no filler",
+    suggestedDurationSeconds: 30,
+    recommendedSceneCount: 5,
+    targetDurationSeconds: 30,
+    qualityChecklist: [
+      "Opens by naming who the advice is for",
+      "Each tip is one specific, actionable sentence",
+      "No tip repeats another",
+      "Ends by inviting a follow or a question",
+    ],
+    examplePrompt:
+      "Name who this is for, give three specific tips they can act on today, and end by inviting a question.",
+    pexelsSearchHints: ["small business", "shop owner", "planning", "notebook", "meeting"],
+    fallbackPexelsSearchHints: ["business", "work", "office"],
+    hookStyle: "Say exactly who the advice is for",
+    ctaStyle: "Invite a follow or a question in the comments",
+    fields: [
+      { key: "topic", label: "Topic", type: "text", required: true },
+      { key: "audience", label: "Who it is for", type: "text", required: true },
+      {
+        key: "tips",
+        label: "The tips",
+        type: "textarea",
+        required: true,
+        helperText: "One tip per line",
+      },
+      {
+        key: "callToAction",
+        label: "Call to action",
+        type: "text",
+        required: true,
+      },
+    ],
+  },
+  story_narrative: {
+    id: "story_narrative",
+    displayName: "Story",
+    description:
+      "A longer, slower piece that carries one story from its opening line to its point.",
+    targetUseCase: "Brands and creators telling a story rather than making an offer",
+    defaultTone: "Warm, unhurried, cinematic",
+    suggestedDurationSeconds: 45,
+    recommendedSceneCount: 6,
+    targetDurationSeconds: 45,
+    qualityChecklist: [
+      "Opens on a moment, not a summary",
+      "The middle changes something",
+      "The point is stated once, at the end",
+      "Shots are held rather than cut on every line",
+    ],
+    examplePrompt:
+      "Open on a single moment, carry it through what changed, and land the point in one closing line.",
+    pexelsSearchHints: ["sunrise", "walking", "hands", "city street", "portrait", "quiet moment"],
+    fallbackPexelsSearchHints: ["people", "nature", "city"],
+    hookStyle: "Open on a moment, not a summary",
+    ctaStyle: "Land the point in one line; no hard sell",
+    fields: [
+      { key: "subject", label: "Who or what the story is about", type: "text", required: true },
+      {
+        key: "story",
+        label: "The story",
+        type: "textarea",
+        required: true,
+        helperText: "What happened, in the order it happened",
+      },
+      { key: "message", label: "The point", type: "text", required: true },
+    ],
+  },
+  news_update: {
+    id: "news_update",
+    displayName: "News / Update",
+    description:
+      "A square, graphics-led update that states what changed, when, and what it means.",
+    targetUseCase: "Announcing a change, a release or a piece of news",
+    defaultTone: "Clear, factual, unhurried",
+    suggestedDurationSeconds: 20,
+    recommendedSceneCount: 4,
+    targetDurationSeconds: 20,
+    qualityChecklist: [
+      "States what changed in the first sentence",
+      "Says when it takes effect",
+      "Says what the viewer should do, if anything",
+      "Claims nothing that was not supplied",
+    ],
+    examplePrompt:
+      "State what changed, when it applies, and what the viewer needs to do about it. State no figure I did not give you.",
+    pexelsSearchHints: ["announcement", "city", "office", "screen", "calendar"],
+    fallbackPexelsSearchHints: ["business", "technology"],
+    hookStyle: "Lead with what changed",
+    ctaStyle: "Say what the viewer should do, or say that nothing is needed",
+    fields: [
+      { key: "headline", label: "What changed", type: "text", required: true },
+      { key: "details", label: "Details", type: "textarea", required: true },
+      { key: "effectiveDate", label: "When it applies", type: "text", required: false },
+      { key: "callToAction", label: "What to do", type: "text", required: false },
+    ],
+  },
+  social_ad: {
+    id: "social_ad",
+    displayName: "Social Advertisement",
+    description:
+      "The shortest format: one hook, one offer, one action, built to survive a scroll.",
+    targetUseCase: "Paid and organic social advertising",
+    defaultTone: "Fast, direct, confident",
+    suggestedDurationSeconds: 15,
+    recommendedSceneCount: 3,
+    targetDurationSeconds: 15,
+    qualityChecklist: [
+      "Hook lands in the first two seconds",
+      "One offer, stated once",
+      "One action, stated clearly",
+      "Nothing is claimed that was not supplied",
+    ],
+    examplePrompt:
+      "Open with a two-second hook, state the offer once, and close on one clear action.",
+    pexelsSearchHints: ["shopping", "product", "lifestyle", "city", "smiling"],
+    fallbackPexelsSearchHints: ["lifestyle", "people"],
+    hookStyle: "Two seconds or nothing",
+    ctaStyle: "One action, said once",
+    fields: [
+      { key: "offer", label: "The offer", type: "text", required: true },
+      { key: "audience", label: "Who it is for", type: "text", required: true },
+      { key: "callToAction", label: "The action", type: "text", required: true },
+    ],
+  },
+  my_media_showcase: {
+    id: "my_media_showcase",
+    displayName: "My Media Showcase",
+    description:
+      "Built entirely from footage and photographs you upload. No stock library is contacted.",
+    targetUseCase: "Showing your own work, place, product or event in your own footage",
+    defaultTone: "Honest, unembellished",
+    suggestedDurationSeconds: 20,
+    recommendedSceneCount: 4,
+    targetDurationSeconds: 20,
+    qualityChecklist: [
+      "Every shot is the customer's own media",
+      "No stock provider is contacted",
+      "Narration describes what is actually on screen",
+      "Ends with one clear action",
+    ],
+    examplePrompt:
+      "Describe what my own footage shows, in the order I selected it, and end with one clear action.",
+    pexelsSearchHints: [],
+    fallbackPexelsSearchHints: [],
+    hookStyle: "Open on your strongest shot",
+    ctaStyle: "One clear action at the end",
+    fields: [
+      { key: "subject", label: "What the footage shows", type: "text", required: true },
+      { key: "message", label: "What you want to say about it", type: "textarea", required: true },
+      { key: "callToAction", label: "Call to action", type: "text", required: true },
     ],
   },
 };

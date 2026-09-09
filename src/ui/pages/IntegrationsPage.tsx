@@ -178,18 +178,40 @@ const IntegrationsContent: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Two visual sources that always work and take no credential: the customer's
+   * own uploaded media, and the built-in motion-graphics engine. They have no
+   * provider record because there is nothing to configure or authenticate, and
+   * that is exactly why they used to be invisible on the page whose job is to
+   * tell the customer what their videos can be made from. They are marked
+   * healthy because they genuinely are - both are shipped with the product and
+   * neither can be "unconfigured".
+   */
+  const builtInVisualRoutes: ProviderRecord[] = useMemo(
+    () =>
+      (["customer_media", "motion_graphics"] as const).map((id) => ({
+        id,
+        name: id,
+        category: "Visuals",
+        status: "healthy",
+        configured: true,
+        healthy: true,
+      })) as unknown as ProviderRecord[],
+    [],
+  );
+
   /** Only providers the catalog knows about are shown to a customer. */
   const grouped = useMemo(() => {
     const map = new Map<ClientCategory, ProviderRecord[]>();
     CLIENT_CATEGORY_ORDER.forEach((category) => map.set(category, []));
-    providers.forEach((provider) => {
+    [...providers, ...builtInVisualRoutes].forEach((provider) => {
       if (!provider.id) return;
       const category = clientCategoryFor(provider.id);
       if (!category) return;
       map.get(category)!.push(provider);
     });
     return map;
-  }, [providers]);
+  }, [providers, builtInVisualRoutes]);
 
   const runTest = async (provider: ProviderRecord) => {
     if (!provider.id) return;

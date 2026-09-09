@@ -4,12 +4,14 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   Grid,
   Stack,
   TextField,
@@ -23,7 +25,7 @@ import {
   SectionCard,
   StatusBadge,
 } from "../components/v2";
-import type { ProviderItem } from "./v2Types";
+import type { ApiTokenItem, ProviderItem } from "./v2Types";
 import { useI18n } from "../i18n";
 import { localizedStatus } from "../i18n/status";
 
@@ -876,7 +878,125 @@ const ProvidersPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <SectionCard
+        title={tr("settings.security.title")}
+        description={tr("settings.security.description")}
+      >
+        <ApiTokenManager />
+      </SectionCard>
     </>
+  );
+};
+
+/**
+ * APPLICATION ACCESS TOKENS (moved here in V2.5.1)
+ * ------------------------------------------------
+ * These are tokens for wiring an external system into this installation. They
+ * were on the customer Settings page, where the person making videos had to
+ * scroll past a scope list to reach Backup. This product runs as
+ * LOCAL_SINGLE_USER on the owner's own machine and needs none of them to work,
+ * so they belong on the technical surface with the rest of the developer
+ * controls. Internal service authentication is untouched.
+ */
+const API_SCOPES = ["production:create", "production:read", "videos:read", "publishing:write"];
+
+const ApiTokenManager: React.FC = () => {
+  const { t: tr, format } = useI18n();
+  const [tokens, setTokens] = useState<ApiTokenItem[]>([]);
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["production:create", "production:read"]);
+  const [shownToken, setShownToken] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    const res = await axios.get("/api/v2/api-tokens");
+    setTokens(res.data.tokens || []);
+  };
+
+  useEffect(() => {
+    load().catch(() => setError(tr("settings.token.loadFailed")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleScope = (scope: string) => {
+    setScopes((current) =>
+      current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope],
+    );
+  };
+
+  const createToken = async () => {
+    setError(null);
+    try {
+      const res = await axios.post("/api/v2/api-tokens", { name, scopes });
+      setShownToken(res.data.token?.token || null);
+      setName("");
+      await load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || tr("settings.token.createFailed"));
+    }
+  };
+
+  const revoke = async (id: string) => {
+    await axios.post(`/api/v2/api-tokens/${id}/revoke`);
+    await load();
+  };
+
+  return (
+    <Stack spacing={2}>
+      {error && <Alert severity="error">{error}</Alert>}
+      {shownToken && (
+        <Alert severity="warning" onClose={() => setShownToken(null)}>
+          {tr("settings.token.newOnce")}{" "}
+          <Box component="code" dir="ltr" sx={{ display: "inline-block" }}>{shownToken}</Box>
+        </Alert>
+      )}
+      <Grid container spacing={1.5}>
+        <Grid item xs={12} md={4}>
+          <TextField
+            fullWidth
+            label={tr("settings.token.name")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {API_SCOPES.map((scope) => (
+              <FormControlLabel
+                key={scope}
+                control={<Checkbox checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} />}
+                label={<Box component="span" dir="ltr">{scope}</Box>}
+              />
+            ))}
+          </Stack>
+        </Grid>
+        <Grid item xs={12} md={2}>
+          <Button fullWidth variant="contained" disabled={!name || scopes.length === 0} onClick={createToken}>
+            {tr("settings.token.create")}
+          </Button>
+        </Grid>
+      </Grid>
+      <Stack spacing={1}>
+        {tokens.map((token) => (
+          <Box key={token.id} sx={{ display: "flex", justifyContent: "space-between", gap: 1, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+            <Box>
+              <Typography variant="body2" fontWeight={800}>{token.name}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                <Box component="span" dir="ltr">{token.scopes.join(", ")}</Box> ·{" "}
+                {tr("settings.token.createdOn", { time: format.dateTime(token.createdAt) })}
+                {token.lastUsedAt
+                  ? ` · ${tr("settings.token.lastUsed", { time: format.dateTime(token.lastUsedAt) })}`
+                  : ""}
+              </Typography>
+            </Box>
+            <Button size="small" color="error" disabled={Boolean(token.revokedAt)} onClick={() => revoke(token.id)}>
+              {token.revokedAt ? tr("settings.token.revoked") : tr("settings.token.revoke")}
+            </Button>
+          </Box>
+        ))}
+      </Stack>
+    </Stack>
   );
 };
 
