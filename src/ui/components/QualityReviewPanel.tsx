@@ -44,7 +44,7 @@ export function QualityReviewPanel({
   onRetry?: () => void;
   retrying?: boolean;
 }) {
-  const { t, format } = useI18n();
+  const { t, format, locale } = useI18n();
   if (!review || review.outcome === "ready" || review.findings.length === 0) return null;
 
   const failed = review.outcome === "failed";
@@ -102,7 +102,7 @@ export function QualityReviewPanel({
           </Stack>
         )}
 
-        <Accordion variant="outlined" sx={{ borderRadius: 1 }}>
+        {locale === "en" && <Accordion variant="outlined" sx={{ borderRadius: 1 }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="caption" fontWeight={700}>
               {t("quality.technicalDetails")}
@@ -120,7 +120,7 @@ export function QualityReviewPanel({
               ))}
             </Stack>
           </AccordionDetails>
-        </Accordion>
+        </Accordion>}
       </Stack>
     </SectionCard>
   );

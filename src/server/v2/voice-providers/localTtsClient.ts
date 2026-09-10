@@ -8,6 +8,7 @@ export type LocalTtsHealth = {
   status: string;
   hardware?: Record<string, unknown>;
   models?: Array<Record<string, unknown>>;
+  models_ready?: string[];
 };
 
 export class LocalTtsClient {

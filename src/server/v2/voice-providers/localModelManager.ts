@@ -54,7 +54,7 @@ export class LocalModelManager {
       };
     }
     const parsed = fs.readJsonSync(metadataPath) as Partial<LocalModelInstallRecord>;
-    return {
+    const record: LocalModelInstallRecord = {
       modelId,
       providerModelId: model.providerModelId,
       revision: parsed.revision || model.revision,
@@ -68,6 +68,15 @@ export class LocalModelManager {
       runtimeStatus: parsed.runtimeStatus,
       lastError: parsed.lastError,
     };
+    if (!model.liveQualified) {
+      return {
+        ...record,
+        state: "not_live_qualified",
+        runtimeStatus: "not_live_qualified",
+        lastError: "Installed files are retained, but real KemeTone inference is not live-qualified in this release.",
+      };
+    }
+    return record;
   }
 
   public write(record: LocalModelInstallRecord): LocalModelInstallRecord {
@@ -107,6 +116,17 @@ export class LocalModelManager {
     const missing = model.expectedFiles.filter((relative) => !fs.existsSync(path.join(modelDir, relative)));
     if (missing.length > 0) {
       return this.markError(modelId, `Missing inference files: ${missing.join(", ")}`);
+    }
+    if (!model.liveQualified) {
+      return this.write({
+        ...this.read(modelId),
+        state: "not_live_qualified",
+        downloadedBytes: directorySizeBytes(modelDir),
+        installedAt: this.read(modelId).installedAt || new Date().toISOString(),
+        lastVerifiedAt: new Date().toISOString(),
+        runtimeStatus: "not_live_qualified",
+        lastError: "Installed files are retained, but real KemeTone inference is not live-qualified in this release.",
+      });
     }
     const downloadedBytes = directorySizeBytes(modelDir);
     return this.write({

@@ -28,6 +28,7 @@ import {
 import type { ApiTokenItem, ProviderItem } from "./v2Types";
 import { useI18n } from "../i18n";
 import { localizedStatus } from "../i18n/status";
+import { localizedApiError, localizedApiMessage } from "../utils/localizedApiError";
 
 type DiscoveredVoice = {
   id: string;
@@ -71,7 +72,7 @@ const CATEGORY_KEY: Record<string, { label: string; desc: string }> = {
 };
 
 const ProvidersPage: React.FC = () => {
-  const { t: tr, format } = useI18n();
+  const { t: tr, format, locale } = useI18n();
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,14 +205,14 @@ const ProvidersPage: React.FC = () => {
       const response = await axios.post(`/api/v2/providers/${slug}/validate`);
       setValidationAlert({
         provider: providerName,
-        message: response.data.message || tr("providers.testSucceeded"),
+        message: localizedApiMessage(response.data, locale, tr("providers.testSucceeded")),
         healthy: response.data.healthy ?? (response.data.status === "healthy"),
       });
       await load();
     } catch (err: any) {
       setValidationAlert({
         provider: providerName,
-        message: err?.response?.data?.message || tr("providers.testCallFailed"),
+        message: localizedApiError(err, locale, tr("providers.testCallFailed")),
         healthy: false,
       });
     } finally {
@@ -245,9 +246,11 @@ const ProvidersPage: React.FC = () => {
         ...(voicesResponse.data.warnings || []),
         ...(config.setupRequiredReason ? [config.setupRequiredReason] : []),
       ];
-      if (warnings.length) setVoiceLabError(warnings.join(" "));
+      if (warnings.length) {
+        setVoiceLabError(locale === "ar" ? tr("providers.voiceLab.needsKey") : warnings.join(" "));
+      }
     } catch (err: any) {
-      setVoiceLabError(err?.response?.data?.message || tr("providers.voiceLab.loadFailed"));
+      setVoiceLabError(localizedApiError(err, locale, tr("providers.voiceLab.loadFailed")));
     } finally {
       setVoiceLabLoading(false);
     }
@@ -270,9 +273,7 @@ const ProvidersPage: React.FC = () => {
       setVoiceLabError(null);
       await load();
     } catch (err) {
-      setVoiceLabError(
-        (err as any)?.response?.data?.message || tr("providers.voiceLab.saveDefaultFailed"),
-      );
+      setVoiceLabError(localizedApiError(err, locale, tr("providers.voiceLab.saveDefaultFailed")));
     }
   };
 
@@ -290,7 +291,7 @@ const ProvidersPage: React.FC = () => {
       });
       setVoiceLabAudio(response.data.audioBase64 || null);
     } catch (err: any) {
-      setVoiceLabError(err?.response?.data?.message || tr("providers.voiceLab.previewFailed"));
+      setVoiceLabError(localizedApiError(err, locale, tr("providers.voiceLab.previewFailed")));
     } finally {
       setVoiceLabGenerating(false);
     }
@@ -314,7 +315,7 @@ const ProvidersPage: React.FC = () => {
       setCredentialValue("");
       await load();
     } catch (err: any) {
-      setError(err?.response?.data?.message || tr("providers.credentialSaveFailed"));
+      setError(localizedApiError(err, locale, tr("providers.credentialSaveFailed")));
     } finally {
       setSavingCredential(false);
     }
@@ -326,7 +327,7 @@ const ProvidersPage: React.FC = () => {
       await axios.delete(`/api/v2/providers/${provider.id}/credentials`);
       await load();
     } catch (err: any) {
-      setError(err?.response?.data?.message || tr("providers.disconnectFailed"));
+      setError(localizedApiError(err, locale, tr("providers.disconnectFailed")));
     }
   };
 
@@ -618,7 +619,7 @@ const ProvidersPage: React.FC = () => {
                               };
                               return (
                                 <Typography variant="caption" color="error.main">
-                                  {String(errorDetail.upstreamMessage || errorDetail.category)}
+                                  {tr("providers.testCallFailed")} <code>{String(errorDetail.category || "provider_error")}</code>
                                   {errorDetail.requestId
                                     ? ` ${tr("providers.detail.requestId", { id: errorDetail.requestId })}`
                                     : ""}
@@ -902,7 +903,7 @@ const ProvidersPage: React.FC = () => {
 const API_SCOPES = ["production:create", "production:read", "videos:read", "publishing:write"];
 
 const ApiTokenManager: React.FC = () => {
-  const { t: tr, format } = useI18n();
+  const { t: tr, format, locale } = useI18n();
   const [tokens, setTokens] = useState<ApiTokenItem[]>([]);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["production:create", "production:read"]);
@@ -933,7 +934,7 @@ const ApiTokenManager: React.FC = () => {
       setName("");
       await load();
     } catch (err: any) {
-      setError(err?.response?.data?.message || tr("settings.token.createFailed"));
+      setError(localizedApiError(err, locale, tr("settings.token.createFailed")));
     }
   };
 

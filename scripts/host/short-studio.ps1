@@ -591,7 +591,13 @@ function Sync-LocalVoiceWithProductLifecycle {
                 }
             }
             "stop"    { Stop-LocalVoiceService -Paths $paths | Out-Null }
-            "restart" { Restart-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token | Out-Null }
+            "restart" {
+                Restart-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token | Out-Null
+                $autoStart = Test-LocalVoiceAutoStartRegistered
+                if (-not $autoStart.any) {
+                    Register-LocalVoiceAutoStart -AbudShared $AbudShared | Out-Null
+                }
+            }
         }
     } catch {
         Write-Warn "Local Voice $Action failed: $($_.Exception.Message)"
@@ -717,8 +723,11 @@ function Invoke-LocalVoiceCommand {
         }
         "start" {
             $r = Start-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token
+            $autoStart = Test-LocalVoiceAutoStartRegistered
+            if (-not $autoStart.any) { $autoStart = Register-LocalVoiceAutoStart -AbudShared $AbudShared }
             if ($r.ready) { Write-Ok "Local Voice is running on port $($paths.Port)." }
             else { Write-Bad "Local Voice did not become healthy. Check $($paths.LogFile)." }
+            if (-not $autoStart.any -and -not $autoStart.registered) { Write-Warn "Local Voice auto-start could not be registered." }
         }
         "stop" {
             Stop-LocalVoiceService -Paths $paths | Out-Null
@@ -726,8 +735,11 @@ function Invoke-LocalVoiceCommand {
         }
         "restart" {
             $r = Restart-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token
+            $autoStart = Test-LocalVoiceAutoStartRegistered
+            if (-not $autoStart.any) { $autoStart = Register-LocalVoiceAutoStart -AbudShared $AbudShared }
             if ($r.ready) { Write-Ok "Local Voice restarted and healthy." }
             else { Write-Bad "Local Voice did not become healthy after restart. Check $($paths.LogFile)." }
+            if (-not $autoStart.any -and -not $autoStart.registered) { Write-Warn "Local Voice auto-start could not be registered." }
         }
         "repair" {
             Write-Step "Repairing Local Voice..."

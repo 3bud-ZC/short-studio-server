@@ -17,6 +17,7 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
     assert "hardware" in data
     assert "cpu_count" in data["hardware"]
+    assert "kemetone" not in data["models_ready"]
 
 def test_capabilities_endpoint():
     response = client.get("/capabilities")
@@ -35,6 +36,7 @@ def test_list_models_endpoint():
     assert "kemetone" in models
     assert models["voicetut"]["speakers_count"] == 17
     assert models["kemetone"]["speakers_count"] == 1
+    assert models["kemetone"]["state"] in ("not_installed", "not_live_qualified")
 
 def test_list_voices_voicetut():
     response = client.get("/voices?model=voicetut")
@@ -77,11 +79,8 @@ def test_synthesize_kemetone():
         "speed": 1.0,
     }
     response = client.post("/synthesize", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["model"] == "kemetone"
-    assert data["durationSeconds"] > 0
-    assert data["audioBase64"].startswith("data:audio/wav;base64,")
+    assert response.status_code == 409
+    assert "not installed" in response.json()["detail"]
 
 def test_token_authentication(monkeypatch):
     monkeypatch.setattr("app.main.INTERNAL_SERVICE_TOKEN", "secret-test-token")

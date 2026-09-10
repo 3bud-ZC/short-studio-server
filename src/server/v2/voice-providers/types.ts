@@ -201,6 +201,7 @@ export type VoiceProviderValidationResult = {
   status:
     | "healthy"
     | "not_configured"
+    | "not_live_qualified"
     | "invalid_credentials"
     | "missing_permissions"
     | "voice_discovery_restricted"

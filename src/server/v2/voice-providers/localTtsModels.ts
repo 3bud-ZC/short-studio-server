@@ -10,6 +10,7 @@ export type LocalTtsModelState =
   | "loading"
   | "healthy"
   | "error"
+  | "not_live_qualified"
   | "update_available";
 
 export type LocalTtsModelMetadata = {
@@ -23,6 +24,7 @@ export type LocalTtsModelMetadata = {
   dialect: ArabicDialect;
   sampleRate: 24000;
   local: true;
+  liveQualified: boolean;
   costLabel: "Local / Free";
   supportsCodeSwitching: boolean;
   requiresDiacritization: boolean;
@@ -82,6 +84,7 @@ export const LOCAL_TTS_MODELS: Record<LocalTtsModelId, LocalTtsModelMetadata> = 
     dialect: "egyptian",
     sampleRate: 24000,
     local: true,
+    liveQualified: true,
     costLabel: "Local / Free",
     supportsCodeSwitching: true,
     requiresDiacritization: false,
@@ -134,6 +137,7 @@ export const LOCAL_TTS_MODELS: Record<LocalTtsModelId, LocalTtsModelMetadata> = 
     dialect: "egyptian",
     sampleRate: 24000,
     local: true,
+    liveQualified: false,
     costLabel: "Local / Free",
     supportsCodeSwitching: false,
     requiresDiacritization: true,

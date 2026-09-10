@@ -379,21 +379,26 @@ function Install-LocalVoiceModel {
 function Get-LocalVoiceServiceStatus {
     param([Parameter(Mandatory = $true)]$Paths)
     $result = [ordered]@{ running = $false; processId = $null; healthy = $false; modelsReady = @() }
-    if (Test-Path $Paths.PidFile) {
-        $pidValue = (Get-Content $Paths.PidFile -Raw).Trim()
-        if ($pidValue -match '^\d+$') {
-            $proc = Get-Process -Id ([int]$pidValue) -ErrorAction SilentlyContinue
-            if ($proc -and $proc.ProcessName -match "python") {
-                $result.running = $true
-                $result.processId = [int]$pidValue
-            }
-        }
-    }
     try {
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Paths.Port)/health" -TimeoutSec 3 -ErrorAction Stop
         $result.healthy = [bool]$health.ok
         if ($health.models_ready) { $result.modelsReady = @($health.models_ready) }
-        if (-not $result.running) { $result.running = $true }
+    } catch { }
+    try {
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $Paths.Port -ErrorAction Stop |
+            Where-Object { $_.OwningProcess -gt 0 } |
+            Select-Object -First 1
+        if ($listener) {
+            $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction Stop
+            $expectedPort = "--port $($Paths.Port)"
+            if ($process.Name -match '^pythonw?\.exe$' -and
+                $process.CommandLine -match '(^|\s)-m\s+uvicorn(\s|$)' -and
+                $process.CommandLine -match 'app\.main:app' -and
+                $process.CommandLine.Contains($expectedPort)) {
+                $result.running = $true
+                $result.processId = [int]$listener.OwningProcess
+            }
+        }
     } catch { }
     return $result
 }
@@ -405,10 +410,13 @@ function Start-LocalVoiceService {
         [string]$InternalServiceToken = ""
     )
     $status = Get-LocalVoiceServiceStatus -Paths $Paths
-    if ($status.healthy) { return [ordered]@{ started = $false; alreadyRunning = $true; ready = $true; processId = $status.processId } }
+    if ($status.healthy -and $status.running) {
+        Set-Content -Path $Paths.PidFile -Value "$($status.processId)" -Encoding ascii -NoNewline
+        return [ordered]@{ started = $false; alreadyRunning = $true; ready = $true; processId = $status.processId }
+    }
 
-    $python = Join-Path $Paths.VenvDir "Scripts\pythonw.exe"
-    if (-not (Test-Path $python)) { $python = Join-Path $Paths.VenvDir "Scripts\python.exe" }
+    $python = Join-Path $Paths.VenvDir "Scripts\python.exe"
+    if (-not (Test-Path $python)) { $python = Join-Path $Paths.VenvDir "Scripts\pythonw.exe" }
     if (-not (Test-Path $python)) { throw "The Local Voice runtime is not installed." }
 
     New-Item -ItemType Directory -Path (Split-Path $Paths.LogFile) -Force | Out-Null
@@ -437,25 +445,37 @@ function Start-LocalVoiceService {
         $env:ABUD_MODEL_CACHE_DIR = $previousCache
         $env:INTERNAL_SERVICE_TOKEN = $previousToken
     }
-    Set-Content -Path $Paths.PidFile -Value "$($proc.Id)" -Encoding ascii -NoNewline
-
     $ready = $false
     for ($i = 0; $i -lt 60; $i++) {
         try { Invoke-RestMethod -Uri "http://127.0.0.1:$($Paths.Port)/health" -TimeoutSec 3 -ErrorAction Stop | Out-Null; $ready = $true; break }
         catch { Start-Sleep -Seconds 2 }
     }
-    return [ordered]@{ started = $true; alreadyRunning = $false; ready = $ready; processId = $proc.Id }
+    $running = Get-LocalVoiceServiceStatus -Paths $Paths
+    if ($ready -and $running.running -and $running.processId) {
+        # venv launchers can delegate to the base interpreter. Persist the PID
+        # that actually owns the listening socket, never the short-lived
+        # launcher PID (which Windows may later reuse for an unrelated app).
+        Set-Content -Path $Paths.PidFile -Value "$($running.processId)" -Encoding ascii -NoNewline
+    }
+    return [ordered]@{
+        started = $true
+        alreadyRunning = $false
+        ready = ($ready -and $running.running)
+        processId = $running.processId
+        launcherProcessId = $proc.Id
+    }
 }
 
 function Stop-LocalVoiceService {
     param([Parameter(Mandatory = $true)]$Paths)
-    if (Test-Path $Paths.PidFile) {
-        $pidValue = (Get-Content $Paths.PidFile -Raw).Trim()
-        if ($pidValue -match '^\d+$') {
-            Stop-Process -Id ([int]$pidValue) -Force -ErrorAction SilentlyContinue
-        }
-        Remove-Item $Paths.PidFile -Force -ErrorAction SilentlyContinue
+    $status = Get-LocalVoiceServiceStatus -Paths $Paths
+    if ($status.running -and $status.processId) {
+        # Status proved this PID owns the Local Voice listener and runs the
+        # expected uvicorn command. Never kill an unrelated PID from a stale
+        # file after Windows reuses that number.
+        Stop-Process -Id ([int]$status.processId) -Force -ErrorAction SilentlyContinue
     }
+    Remove-Item $Paths.PidFile -Force -ErrorAction SilentlyContinue
     return [ordered]@{ stopped = $true }
 }
 

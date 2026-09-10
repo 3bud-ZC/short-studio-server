@@ -64,6 +64,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 
 import { LoadingState, PageHeader, SectionCard } from "../components/v2";
 import { useI18n } from "../i18n";
+import { localizedApiError } from "../utils/localizedApiError";
 import { withMediaAccessToken } from "../utils/auth";
 import type { BusinessTemplateOption, ProviderItem } from "./v2Types";
 import { promptBuilderTemplate } from "./promptBuilder";
@@ -419,8 +420,8 @@ const VideoCreator: React.FC = () => {
         },
       });
       navigate(`/jobs/${response.data.job.id}`);
-    } catch {
-      setError(t("create.error.submitFailed"));
+    } catch (error) {
+      setError(localizedApiError(error, locale, t("create.error.submitFailed")));
     } finally {
       setSubmitting(false);
     }
