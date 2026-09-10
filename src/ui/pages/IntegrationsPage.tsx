@@ -30,6 +30,7 @@ import BoltIcon from "@mui/icons-material/Bolt";
 
 import { ConfirmDialog, ErrorBoundary, LoadingState, PageHeader, SectionCard } from "../components/v2";
 import { useI18n } from "../i18n";
+import { localizedApiError, localizedApiMessage } from "../utils/localizedApiError";
 import { statusDescriptor, type StatusTone } from "../theme/statusModel";
 import {
   CLIENT_CATEGORY_ORDER,
@@ -106,7 +107,7 @@ const OAUTH_PLATFORMS: Record<string, string[]> = {
 const IntegrationsContent: React.FC = () => {
   const theme = useTheme();
   const t = theme.abud;
-  const { t: tr, format } = useI18n();
+  const { t: tr, format, locale } = useI18n();
   const [providers, setProviders] = useState<ProviderRecord[]>([]);
   const [vaultAvailable, setVaultAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -172,7 +173,9 @@ const IntegrationsContent: React.FC = () => {
     if (!outcome) return;
     if (outcome === "connected") setFeedback(tr("integrations.accountConnected"));
     else if (outcome === "cancelled") setError(tr("integrations.connectionCancelled"));
-    else setError(tr("integrations.connectionFailed", { reason: params.get("reason") || tr("common.unknown") }));
+    else setError(tr("integrations.connectionFailed", {
+      reason: localizedApiMessage({ message: params.get("reason") }, locale, tr("common.unknown")),
+    }));
     window.history.replaceState({}, "", window.location.pathname);
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,9 +227,11 @@ const IntegrationsContent: React.FC = () => {
         ...prev,
         [provider.id as string]: {
           ok: Boolean(healthy),
-          message:
-            data.message ||
-            (healthy ? tr("integrations.testSucceeded") : tr("integrations.testDidNotSucceed")),
+          message: localizedApiMessage(
+            data,
+            locale,
+            healthy ? tr("integrations.testSucceeded") : tr("integrations.testDidNotSucceed"),
+          ),
         },
       }));
       load();
@@ -235,7 +240,7 @@ const IntegrationsContent: React.FC = () => {
         ...prev,
         [provider.id as string]: {
           ok: false,
-          message: err?.response?.data?.message || tr("integrations.testFailed"),
+          message: localizedApiError(err, locale, tr("integrations.testFailed")),
         },
       }));
     } finally {
@@ -263,7 +268,7 @@ const IntegrationsContent: React.FC = () => {
       setSecretValue("");
       load();
     } catch (err: any) {
-      setError(err?.response?.data?.message || tr("integrations.saveFailed"));
+      setError(localizedApiError(err, locale, tr("integrations.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -309,7 +314,7 @@ const IntegrationsContent: React.FC = () => {
       setOauthSetup(null);
       await load();
     } catch (err: any) {
-      setOauthSetup({ ...oauthSetup, error: err?.response?.data?.error || tr("integrations.saveFailed") });
+      setOauthSetup({ ...oauthSetup, error: localizedApiError(err, locale, tr("integrations.saveFailed")) });
     } finally {
       setOauthSaving(false);
     }
@@ -333,7 +338,7 @@ const IntegrationsContent: React.FC = () => {
         await openOauthSetup(provider.id);
         return;
       }
-      setError(err?.response?.data?.message || tr("integrations.startFailed"));
+      setError(localizedApiError(err, locale, tr("integrations.startFailed")));
     }
   };
 

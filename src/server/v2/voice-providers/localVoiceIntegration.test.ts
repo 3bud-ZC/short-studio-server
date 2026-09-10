@@ -12,6 +12,7 @@ import {
   sanitizeJobFailure,
 } from "../customerView";
 import type { JobRecord } from "../types";
+import { evaluateLocalVoiceCreatePreflight } from "../routes";
 
 describe("Pass 9.7: Local Egyptian TTS & Arabic Error Localization", () => {
   const testRoot = path.join(process.cwd(), "test_data_dir", "local_voice_test_" + Date.now());
@@ -219,6 +220,38 @@ describe("Pass 9.7: Local Egyptian TTS & Arabic Error Localization", () => {
       expect(result.estimatedCostTier).toBe("free");
       expect(result.usageBasedCost).toBe(false);
       expect(result.voiceId).toBe("Mohamed");
+    });
+  });
+
+  describe("live create preflight", () => {
+    it("blocks before queueing when Local Voice is unreachable", () => {
+      expect(evaluateLocalVoiceCreatePreflight(undefined, "auto")).toEqual({
+        ready: false,
+        errorCode: "local_voice_unavailable",
+      });
+    });
+
+    it("resolves Arabic Auto to healthy VoiceTut", () => {
+      expect(evaluateLocalVoiceCreatePreflight({ ok: true, status: "healthy", models_ready: ["voicetut", "kemetone"] }, "auto")).toMatchObject({
+        ready: true,
+        resolvedProvider: "voicetut",
+      });
+    });
+
+    it("uses KemeTone only as supported local fallback", () => {
+      expect(evaluateLocalVoiceCreatePreflight({ ok: true, status: "healthy", models_ready: ["kemetone"] }, "auto")).toEqual({
+        ready: true,
+        resolvedProvider: "kemetone",
+        fallback: { from: "voicetut", to: "kemetone", reason: "voicetut_not_ready" },
+      });
+    });
+
+    it("never substitutes KemeTone for explicit VoiceTut", () => {
+      expect(evaluateLocalVoiceCreatePreflight({ ok: true, status: "healthy", models_ready: ["kemetone"] }, "voicetut")).toEqual({
+        ready: false,
+        resolvedProvider: "voicetut",
+        errorCode: "local_voice_model_unavailable",
+      });
     });
   });
 

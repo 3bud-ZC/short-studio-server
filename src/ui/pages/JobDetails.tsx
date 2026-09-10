@@ -42,6 +42,7 @@ import { useI18n, useT } from "../i18n";
 import { localizedStatus } from "../i18n/status";
 import type { CustomerFailure, CustomerTimelineStep, V2Job, V2JobEvent } from "./v2Types";
 import { withMediaAccessToken } from "../utils/auth";
+import { localizedApiError } from "../utils/localizedApiError";
 import { isFreeCost, isUsageBasedCost, videoCostLabel } from "../../types/costDisplay";
 import { QualityReviewPanel } from "../components/QualityReviewPanel";
 import {
@@ -184,7 +185,7 @@ const JobDetailsContent: React.FC = () => {
       const res = await axios.post(`/api/v2/jobs/${job.id}/retry`);
       navigate(`/jobs/${res.data.job.id}`);
     } catch (err: any) {
-      setError(err?.response?.data?.error || t("errors.loadFailed", { resource: t("errors.sourceJobs") }));
+      setError(localizedApiError(err, locale, t("errors.loadFailed", { resource: t("errors.sourceJobs") })));
     } finally {
       setBusyAction(false);
     }
@@ -197,7 +198,7 @@ const JobDetailsContent: React.FC = () => {
       await axios.post(`/api/v2/jobs/${job.id}/cancel`);
       await load();
     } catch (err: any) {
-      setError(err?.response?.data?.error || t("errors.loadFailed", { resource: t("errors.sourceJobs") }));
+      setError(localizedApiError(err, locale, t("errors.loadFailed", { resource: t("errors.sourceJobs") })));
     } finally {
       setBusyAction(false);
     }
@@ -211,7 +212,7 @@ const JobDetailsContent: React.FC = () => {
       setJob(res.data.job);
       setError(null);
     } catch (err: any) {
-      setError(err?.response?.data?.error || t("productions.detail.retryStageFailed"));
+      setError(localizedApiError(err, locale, t("productions.detail.retryStageFailed")));
     } finally {
       setRetryingStage(null);
     }

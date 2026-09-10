@@ -92,6 +92,7 @@ import {
 } from "./voice-providers/types";
 import { LOCAL_TTS_MODELS } from "./voice-providers/localTtsModels";
 import { LocalModelManager } from "./voice-providers/localModelManager";
+import { LocalTtsClient, type LocalTtsHealth } from "./voice-providers/localTtsClient";
 import {
   ELEVENLABS_DEFAULT_MODEL_ID,
   ELEVENLABS_PRESETS,
@@ -712,13 +713,8 @@ function revisionReuseSummary(plan: ReturnType<typeof buildRevisionReusePlan>) {
   };
 }
 
-/**
- * Canonical spec-level voice routing.
- *
- * Arabic / Egyptian Arabic / MSA always resolve to ElevenLabs regardless of
- * what the caller requested. Piper is no longer a production Arabic route; it
- * survives only so historical jobs and their metadata remain readable.
- */
+/** Canonical spec-level voice routing. Arabic Auto is local-first; ElevenLabs
+ * is reachable only through explicit Premium selection. */
 function inferResolvedVoiceProvider(input: {
   language?: string;
   dialect?: string;
@@ -747,6 +743,39 @@ function defaultVoiceForResolvedProvider(provider: VoiceProviderId): string {
   if (provider === "edge_tts") return process.env.EDGE_TTS_DEFAULT_VOICE || "ar-EG-SalmaNeural";
   if (provider === "google_cloud_tts") return process.env.GOOGLE_CLOUD_TTS_DEFAULT_VOICE || "";
   return "af_heart";
+}
+
+export type LocalVoiceCreatePreflight = {
+  ready: boolean;
+  resolvedProvider?: "voicetut" | "kemetone";
+  fallback?: { from: "voicetut"; to: "kemetone"; reason: "voicetut_not_ready" };
+  errorCode?: "local_voice_unavailable" | "local_voice_model_unavailable";
+};
+
+/** Pure policy used before a job exists. Disk installation state alone is not
+ * enough: queue only when app can reach Local Voice and requested model is
+ * reported ready by live service. */
+export function evaluateLocalVoiceCreatePreflight(
+  health: LocalTtsHealth | undefined,
+  requestedProvider: string | undefined,
+): LocalVoiceCreatePreflight {
+  if (!health?.ok) return { ready: false, errorCode: "local_voice_unavailable" };
+  const readyModels = new Set(health.models_ready || []);
+  const requested = requestedProvider && requestedProvider !== "auto" ? requestedProvider : "auto";
+  if (requested === "voicetut" || requested === "kemetone") {
+    return readyModels.has(requested)
+      ? { ready: true, resolvedProvider: requested }
+      : { ready: false, resolvedProvider: requested, errorCode: "local_voice_model_unavailable" };
+  }
+  if (readyModels.has("voicetut")) return { ready: true, resolvedProvider: "voicetut" };
+  if (readyModels.has("kemetone")) {
+    return {
+      ready: true,
+      resolvedProvider: "kemetone",
+      fallback: { from: "voicetut", to: "kemetone", reason: "voicetut_not_ready" },
+    };
+  }
+  return { ready: false, errorCode: "local_voice_model_unavailable" };
 }
 
 /**
@@ -1770,10 +1799,22 @@ export function createV2PublicRouter(
       },
     });
     const missingRequirements: string[] = [];
+    const missingRequirementsAr: string[] = [];
     const capabilities: { id: string; name: string; ready: boolean; required: boolean; action?: { label: string; href: string } }[] = [];
-    const add = (id: string, name: string, ready: boolean, required: boolean, message?: string, action?: { label: string; href: string }) => {
+    const add = (
+      id: string,
+      name: string,
+      ready: boolean,
+      required: boolean,
+      message?: string,
+      action?: { label: string; href: string },
+      messageAr?: string,
+    ) => {
       capabilities.push({ id, name, ready, required, action });
-      if (required && !ready) missingRequirements.push(message || `${name} is required.`);
+      if (required && !ready) {
+        missingRequirements.push(message || `${name} is required.`);
+        missingRequirementsAr.push(messageAr || "إعداد الإنتاج المختار غير جاهز للتشغيل بعد. راجع الإعدادات المطلوبة ثم حاول مرة أخرى.");
+      }
     };
 
     const anyStock = providerIds.has("pexels") || providerIds.has("pixabay");
@@ -1920,17 +1961,41 @@ export function createV2PublicRouter(
           true,
           ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
           { label: "Configure ElevenLabs", href: "/providers" },
+          "مفتاح ElevenLabs غير مُعدّ أو غير صالح. افتح المزوّدون للتحقق من الحساب، أو اختر تلقائي لاستخدام الصوت المحلي.",
         );
       } else {
-        const localVoiceConfigured = new VoiceRegistry({} as any).isArabicProductionConfigured();
-        const hasArabicVoice = localVoiceConfigured || providerIds.has("elevenlabs");
+        const requestedVoiceProvider = String(
+          contract.requestedVoiceProvider || controls.voiceProvider || "auto",
+        );
+        const localHealth = await new LocalTtsClient().health().catch(() => undefined);
+        const localPreflight = evaluateLocalVoiceCreatePreflight(localHealth, requestedVoiceProvider);
+        if (localPreflight.ready && spec && localPreflight.resolvedProvider) {
+          const resolved = localPreflight.resolvedProvider;
+          spec.voiceProvider = resolved;
+          spec.voiceId = defaultVoiceForResolvedProvider(resolved);
+          spec.voiceModelId = LOCAL_TTS_MODELS[resolved].providerModelId;
+          spec.metadata = {
+            ...(spec.metadata || {}),
+            uiContract: {
+              ...contract,
+              requestedVoiceProvider,
+              resolvedVoiceProvider: resolved,
+              ...(localPreflight.fallback ? { voiceFallback: localPreflight.fallback } : {}),
+            },
+          };
+        }
         add(
           "local_voice",
           "Local Egyptian Arabic voice",
-          hasArabicVoice,
+          localPreflight.ready,
           true,
-          ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE,
-          { label: "Open Local Voice Setup", href: "/providers" },
+          localPreflight.errorCode === "local_voice_unavailable"
+            ? "Local Voice is not reachable. Open Settings, start or repair Local Voice, then try again."
+            : ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE,
+          { label: "Open Local Voice Setup", href: "/settings" },
+          localPreflight.errorCode === "local_voice_unavailable"
+            ? "خدمة الصوت المحلي غير متاحة الآن. افتح الإعدادات، وشغّل الصوت المحلي أو أصلحه، ثم حاول مرة أخرى."
+            : "نموذج الصوت المحلي المطلوب غير جاهز. افتح الإعدادات للتحقق من VoiceTut أو KemeTone ثم حاول مرة أخرى.",
         );
       }
     } else {
@@ -1950,6 +2015,7 @@ export function createV2PublicRouter(
       characterConsistencyAvailable: characterProfileId ? referenceCapableVisualProviders(providerIds).length > 0 : false,
       ready: missingRequirements.length === 0,
       missingRequirements,
+      missingRequirementsAr,
       capabilities,
       externalUsage: expectedExternalUsage({
         providerIds,
@@ -2488,6 +2554,7 @@ export function createV2PublicRouter(
         res.status(409).json({
           error: "production_not_runnable",
           message: readiness.missingRequirements[0] || "This production setup is not runnable.",
+          messageAr: readiness.missingRequirementsAr[0] || "إعداد الإنتاج المختار غير جاهز للتشغيل بعد.",
           readiness,
           action: readiness.capabilities.find((cap) => cap.required && !cap.ready)?.action,
         });
@@ -2621,6 +2688,7 @@ export function createV2PublicRouter(
           res.status(409).json({
             error: "production_not_runnable",
             message: readiness.missingRequirements[0] || "This production setup is not runnable.",
+            messageAr: readiness.missingRequirementsAr[0] || "إعداد الإنتاج المختار غير جاهز للتشغيل بعد.",
             readiness,
             action: readiness.capabilities.find((cap) => cap.required && !cap.ready)?.action,
           });
@@ -2649,6 +2717,7 @@ export function createV2PublicRouter(
           res.status(409).json({
             error: "production_not_runnable",
             message: readiness.missingRequirements[0] || "This production setup is not runnable.",
+            messageAr: readiness.missingRequirementsAr[0] || "إعداد الإنتاج المختار غير جاهز للتشغيل بعد.",
             readiness,
             action: readiness.capabilities.find((cap) => cap.required && !cap.ready)?.action,
           });
@@ -2677,6 +2746,7 @@ export function createV2PublicRouter(
           res.status(409).json({
             error: "production_not_runnable",
             message: readiness.missingRequirements[0] || "This production setup is not runnable.",
+            messageAr: readiness.missingRequirementsAr[0] || "إعداد الإنتاج المختار غير جاهز للتشغيل بعد.",
             readiness,
             action: readiness.capabilities.find((cap) => cap.required && !cap.ready)?.action,
           });

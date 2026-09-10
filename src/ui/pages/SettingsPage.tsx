@@ -30,9 +30,10 @@ import PublicAddressPanel from "../components/PublicAddressPanel";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { LocalVoicePanel } from "../components/LocalVoicePanel";
 import { useI18n } from "../i18n";
+import { localizedApiError, localizedApiMessage } from "../utils/localizedApiError";
 
 const SettingsPage: React.FC = () => {
-  const { t: tr, format } = useI18n();
+  const { t: tr, format, locale } = useI18n();
   const navigate = useNavigate();
   const [settings, setSettings] = useState<any>(null);
   const [draft, setDraft] = useState<any>({});
@@ -59,7 +60,7 @@ const SettingsPage: React.FC = () => {
       setDraft(response.data.settings || {});
       setMessage(tr("settings.saved"));
     } catch (err: any) {
-      setError(err?.response?.data?.error || tr("settings.saveFailed"));
+      setError(localizedApiError(err, locale, tr("settings.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -343,7 +344,7 @@ const SettingsPage: React.FC = () => {
 
 
 const BackupManager: React.FC = () => {
-  const { t: tr, format } = useI18n();
+  const { t: tr, format, locale } = useI18n();
   const [backups, setBackups] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -386,10 +387,10 @@ const BackupManager: React.FC = () => {
     setLoading(true);
     try {
       const res = await axios.post(`/api/v2/backups/${id}/restore`);
-      alert(res.data.message || tr("settings.backup.restored"));
+      alert(localizedApiMessage(res.data, locale, tr("settings.backup.restored")));
       loadBackups();
     } catch (err: any) {
-      alert(err.response?.data?.message || tr("settings.backup.restoreFailed"));
+      alert(localizedApiError(err, locale, tr("settings.backup.restoreFailed")));
     } finally {
       setLoading(false);
     }
@@ -502,7 +503,7 @@ const BackupManager: React.FC = () => {
 };
 
 const AccountSecurityManager: React.FC = () => {
-  const { t: tr } = useI18n();
+  const { t: tr, locale } = useI18n();
   const [me, setMe] = useState<{ username: string; accessMode?: "local"; remoteAccess?: "disabled" } | null>(null);
   const [sessionCount, setSessionCount] = useState(0);
   const [newUsername, setNewUsername] = useState("");
@@ -547,7 +548,7 @@ const AccountSecurityManager: React.FC = () => {
       setMe({ username: res.data.username });
     } catch (err: any) {
       setUsernameMsg({
-        text: err.response?.data?.error || tr("settings.account.updateFailed"),
+        text: localizedApiError(err, locale, tr("settings.account.updateFailed")),
         severity: "error",
       });
     } finally {
@@ -571,7 +572,7 @@ const AccountSecurityManager: React.FC = () => {
       setPasswordMsg({ text: tr("settings.account.passwordUpdated"), severity: "success" });
     } catch (err: any) {
       setPasswordMsg({
-        text: err.response?.data?.error || tr("settings.account.updateFailed"),
+        text: localizedApiError(err, locale, tr("settings.account.updateFailed")),
         severity: "error",
       });
     } finally {
