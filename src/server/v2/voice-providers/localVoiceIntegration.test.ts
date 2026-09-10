@@ -160,6 +160,25 @@ describe("Pass 9.7: Local Egyptian TTS & Arabic Error Localization", () => {
       expect(failure?.messageAr).toBeUndefined();
       expect(failure?.action?.label).toBe("Retry production");
     });
+
+    it("classifies local voice ECONNREFUSED as VOICE_FAILURE and provides Arabic message", () => {
+      const failedJob: JobRecord = {
+        id: "job_test_ar_connrefused",
+        status: "failed",
+        language: "ar",
+        technicalError: "connect ECONNREFUSED 192.168.65.254:8765",
+        currentStage: "generating_voice",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as any;
+
+      const failure = sanitizeJobFailure(failedJob);
+      expect(failure).toBeDefined();
+      expect(failure?.category).toBe("VOICE_FAILURE");
+      expect(failure?.messageAr).toBe(CATEGORY_MESSAGES_AR.VOICE_FAILURE);
+      expect(failure?.messageAr).not.toContain("This production could not");
+      expect(failure?.action?.label).toBe("إعادة المحاولة");
+    });
   });
 
   describe("LocalEgyptianTtsProvider & Client", () => {

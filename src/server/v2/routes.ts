@@ -134,6 +134,7 @@ import {
   buildCustomerTimeline,
   sanitizeJobFailure,
   classifyRenderFailure,
+  CATEGORY_MESSAGES_AR,
   customerDisplayProgress,
   scrubInternal,
   STATUS_GROUPS,
@@ -5868,7 +5869,9 @@ export function createV2InternalRouter(
     }
     const current = await jobs.getJob(req.params.id);
     const rawMessage = parsed.data.technicalMessage || parsed.data.message;
-    const { message } = classifyRenderFailure(rawMessage);
+    const classified = classifyRenderFailure(rawMessage);
+    const isArabic = current?.language === "ar" || (current?.productionSpec as any)?.language === "ar";
+    const message = isArabic ? CATEGORY_MESSAGES_AR[classified.category] : classified.message;
     const job = await jobs.updateJob(
       req.params.id,
       "failed",
@@ -5960,7 +5963,9 @@ export function createV2InternalRouter(
           "Render job failed",
         );
         // The customer sees a recoverable category, never the raw message.
-        const { message: customerMessage } = classifyRenderFailure(rawMsg);
+        const classified = classifyRenderFailure(rawMsg);
+        const isArabic = (input as any)?.language === "ar" || (input as any)?.dialect === "egyptian_arabic" || (input as any)?.dialect === "egyptian";
+        const customerMessage = isArabic ? CATEGORY_MESSAGES_AR[classified.category] : classified.message;
         await axios.post(
           `${callbackBaseUrl}/internal/v1/jobs/${jobId}/fail`,
           {

@@ -10,9 +10,9 @@ export const PRODUCT_SLUG = "short-studio";
 /** Shown only in migration/history contexts (e.g. "Upgraded from ABUD Shorts Engine 2.4"). */
 export const PREVIOUS_PRODUCT_NAME = "ABUD Shorts Engine";
 export const PREVIOUS_PRODUCT_VERSION = "2.4.0";
-export const PRODUCT_VERSION = "2.5.1";
+export const PRODUCT_VERSION = "2.5.2";
 export const PRODUCT_STAGE = "General Availability";
-export const PRODUCT_BUILD = "2026.09.09.1";
+export const PRODUCT_BUILD = "2026.09.10.1";
 /**
  * The highest migration in `MIGRATIONS`. `verifySchemaVersion()` in the
  * migration runner fails the build if the two drift apart: a stale constant here

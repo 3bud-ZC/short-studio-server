@@ -884,11 +884,8 @@ export class ElevenLabsVoiceProvider implements VoiceProvider {
         key,
       );
       if (timestamped) {
-        const stream = new Readable();
-        stream.push(timestamped.audio);
-        stream.push(null);
         return {
-          audio: stream,
+          audio: timestamped.audio,
           audioLength: timestamped.alignment
             ? timestamped.alignment.endSeconds[timestamped.alignment.endSeconds.length - 1] || Math.max(synthesisText.length / 14, 1.5)
             : Math.max(synthesisText.length / 14, 1.5),
@@ -936,12 +933,9 @@ export class ElevenLabsVoiceProvider implements VoiceProvider {
     }
 
     const buffer = Buffer.from(response.data);
-    const stream = new Readable();
-    stream.push(buffer);
-    stream.push(null);
 
     return {
-      audio: stream,
+      audio: buffer,
       // Rough pre-decode hint only. The render pipeline measures the real
       // duration with FFmpeg and uses that for scene fitting.
       audioLength: Math.max(synthesisText.length / 14, 1.5),

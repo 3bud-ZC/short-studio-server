@@ -1,4 +1,4 @@
-﻿import React, { Component, ErrorInfo, ReactNode } from "react";
+import React, { Component, ErrorInfo, ReactNode } from "react";
 import {
   Alert,
   AlertTitle,
@@ -535,6 +535,7 @@ export function RecentJobCard({
     createdAt: string;
     updatedAt: string;
     error?: string | null;
+    failure?: { category?: string; messageAr?: string; message?: string };
   };
   onClick?: () => void;
   onPreview?: () => void;
@@ -614,13 +615,15 @@ export function RecentJobCard({
             </Stack>
           )}
 
-          {job.status === "failed" && job.error && (
+          {job.status === "failed" && (
             <Typography
               variant="caption"
               color="error.main"
               sx={{ display: "block", wordBreak: "break-word" }}
             >
-              {job.error}
+              {job.failure?.category
+                ? t(`productions.failure.${job.failure.category}`)
+                : (job.failure?.messageAr || job.error || t("productions.failure.UNKNOWN"))}
             </Typography>
           )}
 

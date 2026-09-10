@@ -583,7 +583,13 @@ function Sync-LocalVoiceWithProductLifecycle {
         $paths = Get-LocalVoicePaths -AbudShared $AbudShared -AbudDataDir $AbudDataDir -Port $port
         $token = Get-EnvValue "INTERNAL_SERVICE_TOKEN" ""
         switch ($Action) {
-            "start"   { Start-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token | Out-Null }
+            "start"   {
+                Start-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token | Out-Null
+                $autoStart = Test-LocalVoiceAutoStartRegistered
+                if (-not $autoStart.any) {
+                    Register-LocalVoiceAutoStart -AbudShared $AbudShared | Out-Null
+                }
+            }
             "stop"    { Stop-LocalVoiceService -Paths $paths | Out-Null }
             "restart" { Restart-LocalVoiceService -Paths $paths -AppSourceDir $appSourceDir -InternalServiceToken $token | Out-Null }
         }

@@ -46,9 +46,14 @@ describe("Visual Providers & AutoVisualRouter", () => {
     scenes: [dummyScene],
   };
 
+  const mockStockRegistry: any = {
+    searchQueries: vi.fn().mockResolvedValue([]),
+    attributionFor: vi.fn().mockReturnValue(undefined),
+  };
+
   it("routes to Pexels in stock mode", async () => {
     const pexelsProvider = new PexelsVisualProvider(dummyPexelsApi, "test-key");
-    const router = new AutoVisualRouter(pexelsProvider, []);
+    const router = new AutoVisualRouter(pexelsProvider, [], mockStockRegistry);
 
     const result = await router.resolveSceneVisual(
       dummyScene,
@@ -68,7 +73,7 @@ describe("Visual Providers & AutoVisualRouter", () => {
     vi.spyOn(brokenVeo, "isConfigured").mockReturnValue(true);
     vi.spyOn(brokenVeo, "fetchOrGenerateScene").mockRejectedValue(new Error("Veo Quota Exceeded"));
 
-    const router = new AutoVisualRouter(pexelsProvider, [brokenVeo]);
+    const router = new AutoVisualRouter(pexelsProvider, [brokenVeo], mockStockRegistry);
 
     const result = await router.resolveSceneVisual(
       { ...dummyScene, visualSource: "ai" },

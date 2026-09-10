@@ -427,7 +427,7 @@ function Start-LocalVoiceService {
     $env:INTERNAL_SERVICE_TOKEN = $InternalServiceToken
     try {
         $proc = Start-Process -FilePath $python `
-            -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "$($Paths.Port)") `
+            -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "$($Paths.Port)") `
             -WorkingDirectory $AppSourceDir `
             -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput $Paths.LogFile `
@@ -528,6 +528,10 @@ function Register-LocalVoiceStartupFolderFallback {
     param([Parameter(Mandatory = $true)][string]$LauncherPath)
     try {
         $shortcutPath = Get-LocalVoiceStartupShortcutPath
+        $startupDir = Split-Path $shortcutPath -Parent
+        if ($startupDir -and -not (Test-Path $startupDir)) {
+            New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
+        }
         $shell = New-Object -ComObject WScript.Shell
         $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = "powershell.exe"

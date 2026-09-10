@@ -98,6 +98,7 @@ export type CustomerTimelineStep = {
 
 export type CustomerFailure = {
   message: string;
+  messageAr?: string;
   supportCode: string;
   recoverable: boolean;
   category?: string;

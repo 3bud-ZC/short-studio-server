@@ -1,3 +1,35 @@
+# Short Studio 2.5.2
+
+**Product:** Short Studio  
+**Technical Product:** Short Studio Server  
+**Release Version:** `2.5.2`  
+**Release Channel:** stable  
+**Stage:** General Availability Patch  
+**Database Schema:** `2.13.0` (unchanged - no migration required)  
+**Previous Release:** Short Studio `2.5.1`
+
+Short Studio 2.5.2 is a runtime, voice provider, localization, and customer delivery closure release addressing real-world production feedback on host voice binding, auto-start persistence, audio stream reuse, and Arabic error copy isolation.
+
+---
+
+## What's New in 2.5.2
+
+### Host Local Voice Bridge Connectivity
+- **0.0.0.0 Interface Binding:** Host-native Local Voice service (VoiceTut & KemeTone) now binds to `0.0.0.0`, enabling reliable container-to-host connectivity from Docker Desktop WSL2/Hyper-V bridge (`host.docker.internal` -> `192.168.65.254:8765`) without `ECONNREFUSED` network rejections.
+- **Auto-Start Self-Healing:** The Short Studio CLI (`short-studio.ps1`) automatically verifies and registers the Windows Startup folder fallback shortcut (`ShortStudioLocalVoice.lnk`) whenever Task Scheduler elevation is unavailable, guaranteeing that Local Voice starts upon user login and survives system reboots.
+
+### Voice Provider Reliability & Stream Safety
+- **ElevenLabs Stream Buffer Preservation:** Audio synthesis streams for ElevenLabs now preserve buffer payloads across secondary normalization passes, preventing premature stream exhaustion and eliminating `fluent-ffmpeg "Invalid input"` errors during high-quality audio mastering.
+- **Accurate Failure Classification:** Connection errors, port drops, and voice synthesis aborts are classified deterministically as `VOICE_FAILURE` rather than generic `UNKNOWN` errors.
+
+### Complete Arabic Error Localization Closure
+- **Zero English Copy Leakage in Arabic Mode:** Both backend job serialization and frontend customer views deliver pure Arabic translations (`CATEGORY_MESSAGES_AR`) on job failures. The English placeholder string ("This production could not be completed. Please try again.") has been completely replaced with localized Arabic messaging.
+- **Clear Voice Choice Labels:** Voice selection choices in Create Video are clearly labeled in customer-facing Arabic and English:
+  - Arabic: `تلقائي — موصى به`, `فويس تت — محلي / جودة عالية`, `كيميتون — محلي / خفيف`, `إلفن لابس — سحابي / مدفوع`
+  - English: `Auto — Recommended`, `VoiceTut — Local / High Quality`, `KemeTone — Local / Lightweight`, `ElevenLabs — Cloud / Premium`
+
+---
+
 # Short Studio 2.5.1
 
 **Product:** Short Studio  

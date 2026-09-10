@@ -633,7 +633,7 @@ export class FFMpeg {
       return audio;
     }
     const inputStream = new Readable();
-    inputStream.push(Buffer.from(audio));
+    inputStream.push(Buffer.isBuffer(audio) ? audio : Buffer.from(audio as ArrayBuffer));
     inputStream.push(null);
     return inputStream;
   }

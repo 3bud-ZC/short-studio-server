@@ -175,7 +175,7 @@ export type CustomerFailure = {
   action?: { label: string; href: string };
 };
 
-const READINESS_ACTION_RE = /provider|configure|connect|api key|credential|not configured|not runnable/i;
+const READINESS_ACTION_RE = /provider|configure|connect\s+(account|provider)|api key|credential|not configured|not runnable/i;
 export type FailureCategory =
   | "CONTENT_GATE"
   | "VOICE_FAILURE"
@@ -260,6 +260,12 @@ export function classifyRenderFailure(rawTechnicalMessage: string): {
     return {
       category: "RESOURCE_EXHAUSTION",
       message: CATEGORY_MESSAGES.RESOURCE_EXHAUSTION,
+    };
+  }
+  if (/econnrefused.*8765|8765.*econnrefused|connect econnrefused|local-tts|local_voice|voicetut|kemetone/.test(raw)) {
+    return {
+      category: "VOICE_FAILURE",
+      message: CATEGORY_MESSAGES.VOICE_FAILURE,
     };
   }
   if (/elevenlabs|text-to-speech|tts|voice|narration|arabic narration|selected voice|api key|quota|credit|rate limit|invalid input/.test(raw)) {

@@ -214,6 +214,9 @@ describe("Voice Providers & Registry", () => {
     expect(result.language).toBe("ar");
     expect(result.voiceId).toBe("voice_abc");
     expect(result.estimatedCostTier).toBe("premium");
+    // Audio must be returned as a Buffer (not a one-shot Readable stream) to allow
+    // multiple FFmpeg normalization and speed passes without stream exhaustion.
+    expect(Buffer.isBuffer(result.audio)).toBe(true);
     // Cost is usage based; the engine must not invent a dollar amount.
     expect(result.usageBasedCost).toBe(true);
     expect(result.estimatedCost).toBeUndefined();

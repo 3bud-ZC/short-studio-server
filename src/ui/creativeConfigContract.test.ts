@@ -171,6 +171,25 @@ describe("Unified Create Video (V2.5.1)", () => {
     }
   });
 
+  it("translates voice choice labels strictly to customer-facing specifications", () => {
+    const arabicChoices = voiceChoicesFor("ar");
+    const arLabels = arabicChoices.map((c) => (CATALOGS.ar as any)[c.labelKey]);
+    expect(arLabels).toEqual([
+      "تلقائي — موصى به",
+      "فويس تت — محلي / جودة عالية",
+      "كيميتون — محلي / خفيف",
+      "إلفن لابس — سحابي / مدفوع",
+    ]);
+
+    const englishChoices = voiceChoicesFor("en");
+    const enLabels = englishChoices.map((c) => (CATALOGS.en as any)[c.labelKey]);
+    expect(enLabels).toEqual([
+      "Auto — Recommended",
+      "Kokoro — Local / High Quality",
+      "ElevenLabs — Cloud / Premium",
+    ]);
+  });
+
   it("labels every creative option in plain language, never as an enum", () => {
     const optionLabels = Array.from(
       creatorSource.matchAll(/<MenuItem value="[^"]+">([^<]+)</g),

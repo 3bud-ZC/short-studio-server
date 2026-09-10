@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import {
   Accordion,
@@ -63,7 +63,7 @@ const JobDetailsContent: React.FC = () => {
   const effectiveId = jobId || id;
   const navigate = useNavigate();
 
-  const { t, format } = useI18n();
+  const { t, format, locale } = useI18n();
   const [job, setJob] = useState<V2Job | null>(null);
   const [events, setEvents] = useState<V2JobEvent[]>([]);
   const [timeline, setTimeline] = useState<CustomerTimelineStep[]>([]);
@@ -165,7 +165,9 @@ const JobDetailsContent: React.FC = () => {
   const costIsFree = isFreeCost(cost as any);
   const costIsUsageBased = isUsageBasedCost(cost as any);
   const costText = videoCostLabel(cost as any);
-  const failureMessage = failure?.category ? t(`productions.failure.${failure.category}`) : failure?.message;
+  const failureMessage = failure?.category
+    ? t(`productions.failure.${failure.category}`)
+    : (failure?.messageAr || failure?.message || t("productions.failure.UNKNOWN"));
   const stageKeys = ["planning", "media", "voice", "captions", "render", "mastering", "validation"];
 
   const isActive = job
@@ -349,7 +351,11 @@ const JobDetailsContent: React.FC = () => {
                   stage={job.currentStage}
                   progress={job.progress}
                   timestamp={latestEvent?.createdAt || job.updatedAt}
-                  message={job.error || latestEvent?.message || t("productions.detail.orchestrationActive")}
+                  message={
+                    job.status === "failed"
+                      ? (failureMessage || t("productions.failure.UNKNOWN"))
+                      : (latestEvent?.message || t("productions.detail.orchestrationActive"))
+                  }
                 />
 
                 <Divider />
@@ -394,10 +400,12 @@ const JobDetailsContent: React.FC = () => {
                   </Grid>
                 </Grid>
 
-                {job.status === "failed" && job.error && !job.qualityReview && (
+                {job.status === "failed" && !job.qualityReview && (
                   <Alert severity="error" icon={<ErrorIcon />} sx={{ mt: 1 }}>
                     <Typography fontWeight={700}>{t("productions.detail.executionError")}</Typography>
-                    <Typography variant="body2" sx={{ wordBreak: "break-word" }}>{job.error}</Typography>
+                    <Typography variant="body2" sx={{ wordBreak: "break-word" }}>
+                      {failureMessage || t("productions.failure.UNKNOWN")}
+                    </Typography>
                   </Alert>
                 )}
               </Stack>
@@ -415,7 +423,7 @@ const JobDetailsContent: React.FC = () => {
               <SectionCard title={t("productions.failureTitle")}>
                 <Stack spacing={1.5}>
                   <Alert severity="warning" icon={<ErrorIcon />}>
-                    {failureMessage || failure.message}
+                    {failureMessage || t("productions.failure.UNKNOWN")}
                   </Alert>
                   <Typography variant="caption" color="text.secondary">
                     {t("productions.supportCode")}: <code>{failure.supportCode}</code>

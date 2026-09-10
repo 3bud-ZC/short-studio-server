@@ -80,28 +80,28 @@ export type VoiceChoice = {
 const ARABIC_VOICES: VoiceChoice[] = [
   {
     id: "auto",
-    labelKey: "create.voice.auto",
+    labelKey: "create.voice.choice.auto",
     hintKey: "create.voice.autoHint",
     tierKey: "create.voice.local",
     costKey: "create.voice.free",
   },
   {
     id: "voicetut",
-    labelKey: "integrations.catalog.voicetut.label",
+    labelKey: "create.voice.choice.voicetut",
     hintKey: "create.voice.voicetutHint",
     tierKey: "create.voice.local",
     costKey: "create.voice.free",
   },
   {
     id: "kemetone",
-    labelKey: "integrations.catalog.kemetone.label",
+    labelKey: "create.voice.choice.kemetone",
     hintKey: "create.voice.kemetoneHint",
     tierKey: "create.voice.local",
     costKey: "create.voice.free",
   },
   {
     id: "elevenlabs",
-    labelKey: "integrations.catalog.elevenlabs.label",
+    labelKey: "create.voice.choice.elevenlabs",
     hintKey: "create.voice.elevenlabsHint",
     tierKey: "create.voice.premium",
     costKey: "create.voice.paid",
@@ -112,21 +112,21 @@ const ARABIC_VOICES: VoiceChoice[] = [
 const ENGLISH_VOICES: VoiceChoice[] = [
   {
     id: "auto",
-    labelKey: "create.voice.auto",
+    labelKey: "create.voice.choice.auto",
     hintKey: "create.voice.autoHint",
     tierKey: "create.voice.local",
     costKey: "create.voice.free",
   },
   {
     id: "kokoro",
-    labelKey: "integrations.catalog.kokoro.label",
+    labelKey: "create.voice.choice.kokoro",
     hintKey: "create.voice.kokoroHint",
     tierKey: "create.voice.local",
     costKey: "create.voice.free",
   },
   {
     id: "elevenlabs",
-    labelKey: "integrations.catalog.elevenlabs.label",
+    labelKey: "create.voice.choice.elevenlabs",
     hintKey: "create.voice.elevenlabsHint",
     tierKey: "create.voice.premium",
     costKey: "create.voice.paid",

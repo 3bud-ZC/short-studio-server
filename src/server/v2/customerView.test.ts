@@ -124,6 +124,22 @@ describe("failure sanitisation", () => {
     expect(customerDisplayProgress(failed)).toBe(99);
     expect(serializeJobForCustomer(failed).progress).toBe(99);
   });
+
+  it("classifies local voice connection refused as VOICE_FAILURE with localized Arabic message", () => {
+    const failed = job({
+      status: "failed",
+      progress: 15,
+      currentStage: "Generating voice",
+      language: "ar",
+      error: "This production could not be completed. Please try again.",
+      technicalError: "connect ECONNREFUSED 192.168.65.254:8765",
+    });
+    const failure = sanitizeJobFailure(failed);
+    expect(failure?.category).toBe("VOICE_FAILURE");
+    expect(failure?.messageAr).toBeDefined();
+    expect(failure?.messageAr).toContain("التعليق الصوتي");
+    expect(failure?.supportCode).toMatch(/^ASE-[0-9A-Z]{6}$/);
+  });
 });
 
 describe("internal scrubbing", () => {
