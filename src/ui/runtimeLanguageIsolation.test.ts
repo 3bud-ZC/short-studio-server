@@ -12,8 +12,10 @@ describe("runtime customer-message language isolation", () => {
   });
 
   it("keeps English-only engineering detail out of the Arabic DOM", () => {
-    const source = read("src/ui/components/QualityReviewPanel.tsx");
-    expect(source).toContain('locale === "en"');
-    expect(source).toContain("finding.technicalDetail");
+    const reviewSource = read("src/ui/components/QualityReviewPanel.tsx");
+    const jobSource = read("src/ui/pages/JobDetails.tsx");
+    expect(reviewSource).toContain('locale === "en"');
+    expect(reviewSource).toContain("finding.technicalDetail");
+    expect(jobSource).toContain('locale === "en" && job.technicalError');
   });
 });

@@ -857,7 +857,7 @@ const JobDetailsContent: React.FC = () => {
                     </Typography>
                   )}
 
-                  {job.technicalError && (
+                  {locale === "en" && job.technicalError && (
                     <Alert severity="warning" sx={{ fontSize: "0.8rem" }}>
                       <AlertTitle fontWeight={700}>{t("productions.detail.technicalDetail")}</AlertTitle>
                       {job.technicalError}
