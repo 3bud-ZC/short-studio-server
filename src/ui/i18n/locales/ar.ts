@@ -871,6 +871,12 @@ export const ar: TranslationCatalog = {
   "settings.publicAddress.copy": "نسخ",
   "settings.publicAddress.copyAria": "نسخ عنوان إعادة التوجيه لـ {provider}",
   "settings.publicAddress.reverseProxy": "الوكيل العكسي: {description}",
+  "settings.publicAddress.warningLocal":
+    "يستخدم هذا التثبيت عنوانًا محليًا. تحتاج الحسابات التي تعود عبر الإنترنت إلى تعيين عنوان عام هنا أولًا.",
+  "settings.publicAddress.warningInsecure":
+    "يستخدم هذا التثبيت اتصال HTTP. تتطلب معظم المنصات الاجتماعية عنوان إعادة توجيه HTTPS.",
+  "settings.publicAddress.proxyTrusted": "ترويسات الوكيل الموثوق مفعّلة.",
+  "settings.publicAddress.proxyUntrusted": "لا يوجد وكيل موثوق، ويتم تجاهل ترويسات إعادة التوجيه.",
   "settings.publicAddress.metaLabel": "Instagram / Facebook",
 
   "settings.backup.title": "النسخ الاحتياطي والاستعادة",

@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
 
-import { useT } from "../i18n";
+import { useI18n } from "../i18n";
 
 /**
  * SETTINGS -> PUBLIC ADDRESS
@@ -46,7 +46,7 @@ const SOURCE_KEYS: Record<PublicUrlState["source"], string> = {
 };
 
 const PublicAddressPanel: React.FC = () => {
-  const tr = useT();
+  const { t: tr } = useI18n();
   const [state, setState] = useState<PublicUrlState | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -126,11 +126,12 @@ const PublicAddressPanel: React.FC = () => {
         </Grid>
       </Grid>
 
-      {state.warnings.map((warning) => (
-        <Alert key={warning} severity="info">
-          {warning}
-        </Alert>
-      ))}
+      {state.isLocal && (
+        <Alert severity="info">{tr("settings.publicAddress.warningLocal")}</Alert>
+      )}
+      {!state.isLocal && !state.isSecure && (
+        <Alert severity="info">{tr("settings.publicAddress.warningInsecure")}</Alert>
+      )}
 
       <Box>
         <Typography variant="subtitle2" fontWeight={800} gutterBottom>
@@ -182,7 +183,13 @@ const PublicAddressPanel: React.FC = () => {
       </Box>
 
       <Typography variant="caption" color="text.secondary">
-        {tr("settings.publicAddress.reverseProxy", { description: state.trustedProxy.description })}
+        {tr("settings.publicAddress.reverseProxy", {
+          description: tr(
+            state.trustedProxy.enabled
+              ? "settings.publicAddress.proxyTrusted"
+              : "settings.publicAddress.proxyUntrusted",
+          ),
+        })}
       </Typography>
     </Stack>
   );

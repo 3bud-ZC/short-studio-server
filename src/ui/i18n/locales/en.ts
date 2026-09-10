@@ -874,6 +874,12 @@ export const en: TranslationCatalog = {
   "settings.publicAddress.copy": "Copy",
   "settings.publicAddress.copyAria": "Copy the {provider} callback URL",
   "settings.publicAddress.reverseProxy": "Reverse proxy: {description}",
+  "settings.publicAddress.warningLocal":
+    "This installation uses a local address. Social accounts that return over the internet need a public address configured here first.",
+  "settings.publicAddress.warningInsecure":
+    "This installation uses HTTP. Most social platforms require an HTTPS callback address.",
+  "settings.publicAddress.proxyTrusted": "Trusted proxy headers are enabled.",
+  "settings.publicAddress.proxyUntrusted": "No trusted proxy. Forwarded headers are ignored.",
   "settings.publicAddress.metaLabel": "Instagram / Facebook",
 
   "settings.backup.title": "Backup & restore",
