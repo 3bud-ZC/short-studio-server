@@ -104,7 +104,7 @@ primary volumes were never touched.
 
 Storage Cleanup: PASS / 9.69 GB logical image storage + 1.70 GB host temp reclaimed safely.
 
-Docker VHDX: COMPACTED / Non-elevated execution limitation: Hyper-V Optimize-VHD requires administrator authorization policy; diskpart requires elevated UAC token. Docker data and all canonical containers remain safe and healthy.
+Docker VHDX: NOT COMPACTED — Win32 Error 50 (The request is not supported): Agent subprocess token lacks interactive desktop station privileges to trigger UAC elevation prompt; manual elevated execution required via PowerShell (Run as Administrator) targeting C:\Users\Abud\AppData\Local\Temp\compact_docker_vhdx.ps1. Docker data and all canonical containers remain safe and healthy.
 
 Linux Native: NOT NATIVE-QUALIFIED — POST-2.5 OR FUTURE QUALIFICATION. This is
 not a Windows GA blocker. The Linux host scripts ship and are supported, and
