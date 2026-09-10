@@ -49,7 +49,7 @@ class ModelManager:
 
     def list_models(self) -> List[ModelItem]:
         vt_ready = self.voicetut.is_ready()
-        kt_ready = self.kemetone.is_ready()
+        kt_installed = self.kemetone.files_installed()
 
         vt_bytes = self._dir_size(self.voicetut.cache_dir)
         kt_bytes = self._dir_size(self.kemetone.cache_dir)
@@ -74,7 +74,7 @@ class ModelManager:
                 name="KemeTone Local Lightweight",
                 repo_id=KEMETONE_REPO_ID,
                 revision=KEMETONE_REVISION,
-                state="ready" if kt_ready else "not_installed",
+                state="not_live_qualified" if kt_installed else "not_installed",
                 downloaded_bytes=kt_bytes,
                 license="Apache-2.0",
                 speakers_count=1,

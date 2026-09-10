@@ -28,6 +28,7 @@ export class LocalEgyptianTtsProvider implements VoiceProvider {
   }
 
   public isConfigured(): boolean {
+    if (!LOCAL_TTS_MODELS[this.id].liveQualified) return false;
     const state = this.models.read(this.id).state;
     return state === "ready" || state === "healthy" || process.env.ABUD_LOCAL_TTS_ASSUME_READY === this.id;
   }
@@ -87,6 +88,18 @@ export class LocalEgyptianTtsProvider implements VoiceProvider {
 
   public async validate(): Promise<VoiceProviderValidationResult> {
     const record = this.models.read(this.id);
+    if (!LOCAL_TTS_MODELS[this.id].liveQualified) {
+      return {
+        provider: this.displayName,
+        category: "Voice",
+        tier: "free",
+        configured: false,
+        healthy: false,
+        status: "not_live_qualified",
+        message: "KemeTone files are retained, but real synthesis is not live-qualified in this release.",
+        checkedAt: new Date().toISOString(),
+      };
+    }
     const installed = this.isConfigured();
     if (!installed) {
       return {
