@@ -24,7 +24,7 @@ RUN apt-get update \
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-RUN corepack enable
+RUN npm install -g pnpm@11.7.0
 
 FROM base AS deps
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
