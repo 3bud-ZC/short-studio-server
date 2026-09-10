@@ -14,6 +14,56 @@
 
 ## Current Product State
 
+Product: Short Studio Server 2.5.2
+
+Stage: GENERAL AVAILABILITY
+
+Release: RELEASED / SELLABLE / PROJECT CLOSED
+
+Repository: `3bud-ZC/short-studio-server`
+
+GA_PRODUCT_SHA: `b29c5d576a9fd40d733cf4e384f8b2f9db9c83c3`
+
+GA_MAIN_SHA: `a3d70409a9e5a55b60bd0ad7bc59908dff063aa9` (protected PR `#5` merge and annotated `v2.5.2` tag target)
+
+Final image: `ghcr.io/3bud-zc/short-studio-server@sha256:30fdbe608f1c8213619a36efafde1f9110447f416b86f8899d38409fc7238548`
+
+Registry identity: candidate `sha-b29c5d5`, immutable `2.5.2`, and `stable` all resolve to the exact same OCI digest. Promotion reused the accepted digest; no rebuild occurred.
+
+Package: `Short-Studio-Server-2.5.2.tar.gz` (102,207 bytes), SHA256 `509296184b062bd2db5592f70f4eb55f1b7ea79b172e2f9568246f63bc2e2fcf`. Package allowlist, checksum, manifest, and isolated install smoke passed. Publicly downloaded assets passed the same independent verification.
+
+GitHub Release: `v2.5.2`, `Short Studio Server 2.5.2`, public, non-draft, non-prerelease: <https://github.com/3bud-ZC/short-studio-server/releases/tag/v2.5.2>
+
+ASE-D544TL root cause: canonical Docker startup did not guarantee host Local Voice readiness. Stale launcher PID handling could treat a dead/reused process as healthy, leaving app and render-worker calls to `host.docker.internal:8765` rejected during voice generation at 15%. Job creation checked model installation but not live provider reachability, so a doomed job could enter the queue. Runtime errors then exposed backend English in Arabic UI.
+
+Runtime fix: canonical start/restart now starts Local Voice, verifies its real TCP listener, repairs stale PID state, and registers a non-admin Windows Startup fallback when Task Scheduler is unavailable. App and render-worker both reach the live host service through `host.docker.internal:8765`. Selected voice readiness is preflighted before job creation; unavailable providers fail immediately with localized actionable UI and a language-neutral support code. Requested provider, resolved provider, model, fallback, and paid-call policy remain structured metadata.
+
+VoiceTut: PASS / LIVE. Host CUDA runtime uses cached model `mohammedaly22/VoiceTut-TTS`; short Egyptian Arabic preview passed. Arabic Auto resolves to VoiceTut when healthy.
+
+Kokoro: PASS / LIVE. Short English preview passed. English Auto resolves to Kokoro.
+
+KemeTone: TRUTHFUL NOT LIVE-QUALIFIED. Mock/test-tone output was removed and cannot count as readiness, fallback, or production proof. It is not selected automatically unless a real supported runtime becomes healthy and qualified.
+
+ElevenLabs: CONFIGURED / AUTHENTICATED / SAFE VALIDATION PASS. Voice catalogue and TTS entitlement were validated without synthesis. It remains explicit Premium only and is never an automatic fallback. Paid synthesis calls: 0.
+
+Owner regression: PASS / legitimate `NEEDS_REVIEW`. Normal product job `cmtvmanag000507o4ddco5tb5`: Egyptian Arabic, 20 seconds, 9:16, 1080p High, Auto media, VoiceTut/Mohamed, captions enabled, free-only policy. No SQL repair, `docker cp`, manual status mutation, or second production. Output is playable: MP4 preview HTTP 206, download HTTP 200 (8,977,483 bytes), thumbnail HTTP 200 (55,853 bytes), 1080x1920 at 25 fps, 20.01 seconds, audio and video streams present. Audio QA passed at -15.81 LUFS and -3 dBTP with no clipping or effective silence. Lossless Arabic frame review found 0 tofu, 0 broken joins, and no clipping. Only review finding: real footage coverage 66.5% versus 90% target.
+
+Localization: PASS. Targeted real-browser QA covered Create Video, Production Details, Integrations/Voice, and Settings/Local Voice in Arabic and English. Arabic used `lang=ar`, RTL, and zero English natural-language customer errors; English used `lang=en`, LTR, and zero Arabic natural-language customer errors. Exact sentence `This production could not be completed. Please try again.` is absent from Arabic UI. Raw engineering prose is excluded from Arabic DOM; structured translation keys and neutral support codes remain.
+
+Restart survival: PASS. One normal canonical Short Studio restart recovered Local Voice, app, render-worker, PostgreSQL, and n8n. All four containers became healthy; both app and worker reached Local Voice afterward; Startup fallback exists; PID file matches actual port 8765 listener. VoiceTut preview passed after recovery.
+
+Tests: PASS. `npm run typecheck`; `npx vitest run` (97 files, 1,378 tests); `npm run build`; focused voice, localization, preflight, retry, host-service, and local-TTS tests. Remote candidate workflow `34498689651` repeated typecheck/test/build and built the final image successfully. Zero unexplained failures.
+
+Primary runtime: PASS. Exactly four Short Studio containers run: app and render-worker on public digest `sha256:30fdbe...`, plus healthy PostgreSQL 16.10 and n8n 1.76.1. Current pointer is `C:\ProgramData\ShortStudio\releases\2.5.2`; installed `release.json`, host scripts, `.env`, and installation metadata identify 2.5.2 and the public digest. Customer DB, n8n data, Provider Vault, jobs, media, videos, backups, models, and historical releases remain intact.
+
+Storage: before final artifact, C: free `200,206,626,816` bytes (186.45 GiB), Docker VHDX `81,843,453,952` bytes (76.22 GiB), Docker images 63.61 GB. After release cleanup, C: free `197,050,822,656` bytes (183.52 GiB), Docker VHDX `85,064,679,424` bytes (79.22 GiB), Docker images 48.23 GB. Three exact unused rejected/pre-GA 2.5.2 images were removed (`be280abb49a1`, `da3113af842e`, `184199e4f013`), reclaiming 15.38 GB logical image usage; physical VHDX remains inflated because no compaction ran. One safe exact-target administrator script exists at `C:\Users\Abud\AppData\Local\Temp\compact_docker_vhdx.ps1`. No prune, historical image/tag removal, model deletion, or customer volume/data deletion occurred. Isolated smoke containers/network and exact host temp roots were removed; its two data-safety volumes remain preserved because volume deletion was forbidden.
+
+Release safety counters: local Docker builds after final instruction 0; paid calls 0; social posts 0; `docker cp` 0; prune 0; customer volumes/data deleted 0.
+
+---
+
+## 2.5.1 Historical Snapshot (superseded by Current Product State above)
+
 Product: Short Studio
 
 Technical Product: Short Studio Server
