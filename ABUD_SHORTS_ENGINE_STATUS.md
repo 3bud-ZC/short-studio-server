@@ -20,7 +20,7 @@ Stage: TRUE FRESH INSTALL ACCEPTANCE INCOMPLETE — product fixes applied, image
 
 Release: NOT READY FOR GA — true fresh install acceptance incomplete. Previous "fresh install sign-off" was INVALID (manual borrowing from primary installation). Product fixes applied in commit `c37eeda`, new image/package/EXE rebuilt, but the real EXE fresh install was not completed.
 
-Repository: `3bud-ZC/Abud-Shorts-Engine`
+Repository: `3bud-ZC/short-studio-server`
 
 ### 2.6 Recovery — Verified Gates
 
@@ -148,6 +148,32 @@ None of these interventions are acceptable for a commercial fresh install. This 
 **VHDX compaction script:** `C:\Users\Abud\AppData\Local\Temp\compact_docker_vhdx.ps1` (targets only docker_data.vhdx, Optimize-VHD Full). UAC elevation could not be completed by agent. VHDX auto-compacted on restart instead. For further compaction, owner can run:
 `Start-Process PowerShell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "C:\Users\Abud\AppData\Local\Temp\compact_docker_vhdx.ps1"'`
 **Data loss: 0.** All jobs (40), videos (63), backups (1), licensing keys, Provider Vault, VoiceTut, Kokoro, Ollama qwen2.5:7b-instruct preserved.
+
+---
+
+## 2.6 PC → Laptop Handoff
+
+**Branch:** `commercial/v2.6-quality-recovery`
+**GitHub remote:** `https://github.com/3bud-ZC/short-studio-server`
+**Remote branch:** `origin/commercial/v2.6-quality-recovery`
+**Source pushed:** YES
+**Existing 2.6 image digest:** `sha256:bdfac0d2f6d8b888c2a021c4ad58e22c115e875d2c5aa132359160514376b9ee`
+**Installer EXE SHA256:** `e5ac8ebcea6c4f0c72a22925cfb461144015efb546e7017e777f9d664019ee24`
+**Package SHA256:** `181e5aca3aac19ff0657b315ec1b99e3ac7b08f4940b78e6a015e856dd25688d`
+**Private signing key:** NOT in Git — remains external at `C:\ProgramData\ShortStudio\licensing\` on PC only
+**Primary PC customer data:** INTACT (all jobs, videos, backups, licensing preserved)
+
+**Current blocker:** TRUE FRESH INSTALL ACCEPTANCE NOT COMPLETED. First `Setup.exe` packaging failure (missing `install.ps1` in package) is FIXED — package rebuilt to include install engine. Second `Setup.exe` run was interrupted before completion.
+
+**Laptop continuation:**
+
+```bash
+git clone https://github.com/3bud-ZC/short-studio-server.git
+cd short-studio-server
+git fetch --all --tags
+git checkout commercial/v2.6-quality-recovery
+git pull --ff-only
+```
 
 ---
 
