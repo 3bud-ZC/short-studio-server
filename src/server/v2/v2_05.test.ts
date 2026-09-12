@@ -162,7 +162,7 @@ describe("V2-05 Release-Gate Engine Suites", () => {
     // Pinned to the version this branch builds. The updater compares this
     // constant against a published release, so it must describe the running
     // code rather than the newest version that exists.
-    expect(PRODUCT_VERSION).toBe("2.5.2");
+    expect(PRODUCT_VERSION).toBe("2.6.0");
   });
 
   it("2. Local Admin Authentication & Password Security", async () => {

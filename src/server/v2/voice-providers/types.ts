@@ -14,8 +14,9 @@ export type VoiceQualityProfile = "fast" | "balanced" | "premium";
 /**
  * CANONICAL ARABIC VOICE POLICY (V2.4 Pass 9.7)
  * ------------------------------------
- * Egyptian Arabic production is local-first. VoiceTut is the preferred local
- * high-quality provider; KemeTone is the CPU-capable local lightweight route.
+ * Egyptian Arabic production is local-first. VoiceTut is the accepted local
+ * high-quality provider. KemeTone metadata remains readable for legacy model
+ * management only; it is not live-qualified for customer production.
  * ElevenLabs remains supported only as explicit premium cloud selection.
  *
  * Piper remains readable for historical jobs and metadata but is no longer the
@@ -29,7 +30,7 @@ export const ARABIC_ELEVENLABS_REQUIRED_MESSAGE =
   "Arabic narration requires local voice setup or an explicit premium ElevenLabs selection.";
 
 export const ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE =
-  "Local Egyptian Arabic voice setup is required. Install VoiceTut for Local High Quality or KemeTone for Local Lightweight.";
+  "Local Egyptian Arabic voice setup is required. Install VoiceTut for Local High Quality.";
 
 /** Voice IDs that only ever existed as local Piper models. */
 export const LEGACY_PIPER_VOICE_IDS = ["ar_JO-kareem-medium"];

@@ -208,6 +208,27 @@ function Set-EnvValue {
     Write-TextFile $AbudEnvFile (($out -join "`r`n") + "`r`n")
 }
 
+function Get-DeviceFingerprintMaterial {
+    $parts = @()
+    try {
+        $guid = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name MachineGuid -ErrorAction Stop).MachineGuid
+        if ($guid) { $parts += "win_guid:$guid" }
+    } catch { }
+    try {
+        $uuid = (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop).UUID
+        if ($uuid) { $parts += "system_uuid:$uuid" }
+    } catch { }
+    try {
+        $cpu = (Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1).ProcessorId
+        if ($cpu) { $parts += "cpu:$cpu" }
+    } catch { }
+    $raw = if ($parts.Count -gt 0) { $parts -join "|" } else { "$env:COMPUTERNAME|$env:USERNAME" }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+    $hash = (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join "").ToUpperInvariant()
+    return "SS-$($hash.Substring(0,4))-$($hash.Substring(4,4))-$($hash.Substring(8,4))-$($hash.Substring(12,4))"
+}
+
 function Get-HostPort { return (Get-EnvValue "HOST_PORT" "3130") }
 function Get-AppBaseUrl { return "http://127.0.0.1:$(Get-HostPort)" }
 
@@ -263,6 +284,12 @@ function Invoke-Compose {
     $env:ABUD_RELEASE_DIR = $releaseDir
     $env:SHORT_STUDIO_CONTAINER_PREFIX = $project
     $env:ABUD_CONTAINER_PREFIX = $project
+    $hostFingerprint = Get-EnvValue "ABUD_HOST_DEVICE_FINGERPRINT" ""
+    if (-not $hostFingerprint) {
+        $hostFingerprint = Get-DeviceFingerprintMaterial
+        Set-EnvValue "ABUD_HOST_DEVICE_FINGERPRINT" $hostFingerprint
+    }
+    $env:ABUD_HOST_DEVICE_FINGERPRINT = $hostFingerprint
     $composeArgs = @("compose", "--project-name", $project, "--env-file", $AbudEnvFile, "--file", $composeFile) + $Arguments
     Invoke-Docker $composeArgs
 }

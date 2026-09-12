@@ -192,12 +192,12 @@ async function timedItem(
  */
 export type ProviderConfigurationSnapshot = {
   /**
-   * Voice: Local Voice (VoiceTut, or KemeTone as the lightweight fallback) is
+   * Voice: Local Voice (VoiceTut) is
    * the default Arabic route; ElevenLabs is an explicit, opt-in premium
    * alternative, never a requirement. Kokoro is local English.
    */
   elevenLabsConfigured: boolean;
-  /** True when VoiceTut or KemeTone is installed and ready for Arabic production. */
+  /** True when VoiceTut is installed and ready for Arabic production. */
   localVoiceConfigured: boolean;
   /** Media: Pexels is the stock footage route. */
   pexelsConfigured: boolean;
@@ -295,7 +295,7 @@ export async function getFastHealth(
     // ----------------------------------------------------------- providers
     // Configuration only. Whether ElevenLabs or Local Voice answers a request
     // right now is a deep-diagnostics question, and asking it here is exactly
-    // what used to stall the page. Local Voice (VoiceTut/KemeTone) is the
+    // what used to stall the page. Local Voice (VoiceTut) is the
     // default Arabic route, so its readiness - not ElevenLabs' - is what
     // decides whether Arabic is reported ready here.
     timedItem("voice", "providers", false, "voice-providers", async () => {
@@ -319,7 +319,7 @@ export async function getFastHealth(
       return {
         status: "healthy" as const,
         message:
-          "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone) - or an optional ElevenLabs connection.",
+          "Local English narration is available. Arabic narration needs Local Voice setup with VoiceTut - or an optional ElevenLabs connection.",
         messageKey: "health.msg.voiceEnglishOnly",
       };
     }),

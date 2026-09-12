@@ -68,7 +68,7 @@ export const MEDIA_SOURCE_OPTIONS: Array<{
  */
 export type VoiceChoice = {
   /** Value sent as `voiceProvider`. */
-  id: "auto" | "voicetut" | "kemetone" | "kokoro" | "elevenlabs";
+  id: "auto" | "voicetut" | "kokoro" | "elevenlabs";
   labelKey: string;
   hintKey: string;
   tierKey: "create.voice.local" | "create.voice.premium";
@@ -92,13 +92,7 @@ const ARABIC_VOICES: VoiceChoice[] = [
     tierKey: "create.voice.local",
     costKey: "create.voice.free",
   },
-  {
-    id: "kemetone",
-    labelKey: "create.voice.choice.kemetone",
-    hintKey: "create.voice.kemetoneHint",
-    tierKey: "create.voice.local",
-    costKey: "create.voice.free",
-  },
+
   {
     id: "elevenlabs",
     labelKey: "create.voice.choice.elevenlabs",

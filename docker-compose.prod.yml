@@ -47,7 +47,7 @@ services:
       # abud-shorts-postgres-data volume instead of a new empty one.
       - abud-shorts-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -79,7 +79,7 @@ services:
       # External volume name pinned via `name:` below - see the postgres note above.
       - abud-shorts-n8n-data:/home/node/.n8n
       - ${SHORT_STUDIO_RELEASE_DIR:-${ABUD_RELEASE_DIR:-.}}/integrations/n8n:/workflows:ro
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     # n8n 1.76's import:workflow reads the file and calls .map() on it, so a
     # single-workflow object fails with "workflows.map is not a function" and a
     # fresh installation ends up with no control plane at all - every video job
@@ -88,17 +88,9 @@ services:
     # exports, so they are concatenated into one JSON array here instead.
     # publish:workflow does not exist in this version and only logged an error.
     command: >
-      "printf '[' > /tmp/short-studio-workflows.json;
-      cat /workflows/abud-shorts-v2-control-plane-workflow.json >> /tmp/short-studio-workflows.json;
-      printf ',' >> /tmp/short-studio-workflows.json;
-      cat /workflows/abud-shorts-v2-publishing-workflow.json >> /tmp/short-studio-workflows.json;
-      printf ']' >> /tmp/short-studio-workflows.json;
-      n8n import:workflow --input=/tmp/short-studio-workflows.json || true;
-      n8n update:workflow --id=abud-shorts-v2-control-plane --active=true || true;
-      n8n update:workflow --id=abud-shorts-v2-publishing --active=true || true;
-      n8n start"
+      "printf '[' > /tmp/short-studio-workflows.json; cat /workflows/abud-shorts-v2-control-plane-workflow.json >> /tmp/short-studio-workflows.json; printf ',' >> /tmp/short-studio-workflows.json; cat /workflows/abud-shorts-v2-publishing-workflow.json >> /tmp/short-studio-workflows.json; printf ']' >> /tmp/short-studio-workflows.json; n8n import:workflow --input=/tmp/short-studio-workflows.json || true; n8n update:workflow --id=abud-shorts-v2-control-plane --active=true || true; n8n update:workflow --id=abud-shorts-v2-publishing --active=true || true; n8n start"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -147,10 +139,24 @@ services:
       PROVIDER_VAULT_MASTER_KEY: ${PROVIDER_VAULT_MASTER_KEY:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-short_studio}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-short_studio}
       DATA_DIR_PATH: /app/data
+      ABUD_HOST_DEVICE_FINGERPRINT: ${ABUD_HOST_DEVICE_FINGERPRINT:?ABUD_HOST_DEVICE_FINGERPRINT must be set by the installer}
       DOCKER: "true"
       DEV: "false"
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       KOKORO_MODEL_PRECISION: ${KOKORO_MODEL_PRECISION:-q4}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b-instruct}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-45000}
+      # OpenCLIP semantic media matching. Fail-closed: when the quality
+      # Python runtime (/opt/pyruntime) or the local checkpoint is absent the
+      # worker degrades to perceptual-hash-only ranking, so enabling this
+      # never blocks a render. The installer provisions the checkpoint under
+      # the shared data dir and mounts it at /models/openclip.
+      ABUD_ENABLE_OPENCLIP_SEMANTICS: ${ABUD_ENABLE_OPENCLIP_SEMANTICS:-true}
+      ABUD_OPENCLIP_MODEL_NAME: ${ABUD_OPENCLIP_MODEL_NAME:-ViT-B-32}
+      ABUD_OPENCLIP_LOCAL_WEIGHTS: ${ABUD_OPENCLIP_LOCAL_WEIGHTS:-/models/openclip/ViT-B-32-openclip-state.pt}
+      ABUD_OPENCLIP_PYTHON_BIN: ${ABUD_OPENCLIP_PYTHON_BIN:-/opt/pyruntime/bin/python}
+      ABUD_OPENCLIP_WORKER_POOL_SIZE: ${ABUD_OPENCLIP_WORKER_POOL_SIZE:-2}
       # Local Voice (VoiceTut/KemeTone) is the default Arabic route and runs
       # host-native on Windows (see the note above short-studio-render-worker);
       # host.docker.internal is how a container reaches it. ElevenLabs is an
@@ -175,9 +181,9 @@ services:
     # the model over the network when /app/data/libs/whisper isn't already
     # populated correctly, which is exactly what must happen on a fresh
     # install if this seed step is ever broken again.
-    entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js"]
+    entrypoint: [ "sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js" ]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3125/health >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:3125/health >/dev/null || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -242,10 +248,13 @@ services:
       SHORT_STUDIO_INSTALL_TYPE: ${SHORT_STUDIO_INSTALL_TYPE:-${ABUD_INSTALL_TYPE:-docker_linux}}
       SHORT_STUDIO_UPDATE_MANIFEST_URL: ${SHORT_STUDIO_UPDATE_MANIFEST_URL:-${ABUD_UPDATE_MANIFEST_URL:-}}
       DATA_DIR_PATH: /app/data
+      ABUD_HOST_DEVICE_FINGERPRINT: ${ABUD_HOST_DEVICE_FINGERPRINT:?ABUD_HOST_DEVICE_FINGERPRINT must be set by the installer}
       DOCKER: "true"
       DEV: "false"
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       KOKORO_MODEL_PRECISION: ${KOKORO_MODEL_PRECISION:-q4}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b-instruct}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_DEFAULT_VOICE_ID: ${ELEVENLABS_DEFAULT_VOICE_ID:-}
       CONCURRENCY: ${CONCURRENCY:-1}
@@ -267,9 +276,9 @@ services:
     # the model over the network when /app/data/libs/whisper isn't already
     # populated correctly, which is exactly what must happen on a fresh
     # install if this seed step is ever broken again.
-    entrypoint: ["sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js"]
+    entrypoint: [ "sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js" ]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3123/health >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:3123/health >/dev/null || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 20

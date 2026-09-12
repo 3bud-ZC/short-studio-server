@@ -238,11 +238,10 @@ describe("Pass 9.7: Local Egyptian TTS & Arabic Error Localization", () => {
       });
     });
 
-    it("uses KemeTone only as supported local fallback", () => {
+    it("does not substitute KemeTone as a production fallback", () => {
       expect(evaluateLocalVoiceCreatePreflight({ ok: true, status: "healthy", models_ready: ["kemetone"] }, "auto")).toEqual({
-        ready: true,
-        resolvedProvider: "kemetone",
-        fallback: { from: "voicetut", to: "kemetone", reason: "voicetut_not_ready" },
+        ready: false,
+        errorCode: "local_voice_model_unavailable",
       });
     });
 
@@ -303,11 +302,7 @@ describe("Pass 9.7: Local Egyptian TTS & Arabic Error Localization", () => {
       expect(voicetut.tier).toBe("free");
       expect(voicetut.isDefault).toBe(true);
 
-      const kemetone = providers.find((p: any) => p.id === "kemetone");
-      expect(kemetone).toBeDefined();
-      expect(kemetone.category).toBe("Voice");
-      expect(kemetone.tier).toBe("free");
-      expect(kemetone.isDefault).toBe(false);
+      expect(providers.find((p: any) => p.id === "kemetone")).toBeUndefined();
 
       const elevenlabs = providers.find((p: any) => p.id === "elevenlabs");
       expect(elevenlabs).toBeDefined();

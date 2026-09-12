@@ -142,7 +142,7 @@ export const en: TranslationCatalog = {
   "dashboard.alerts.serviceAttention": "{service} needs attention",
   "dashboard.alerts.elevenLabsMissing": "Arabic voice needs setup",
   "dashboard.alerts.elevenLabsMissingBody":
-    "Arabic narration needs Local Voice setup (VoiceTut or KemeTone) or an optional ElevenLabs connection. English production is unaffected.",
+    "Arabic narration needs Local Voice setup with VoiceTut or an optional ElevenLabs connection. English production is unaffected.",
   "dashboard.alerts.configure": "Configure",
   "dashboard.alerts.lowStorage": "Storage is running low",
   "dashboard.alerts.lowStorageBody": "{used} of {total} used.",
@@ -185,13 +185,13 @@ export const en: TranslationCatalog = {
     "The language spoken in the video. Independent of the interface language.",
   "create.readiness.writePrompt": "Write a prompt to create a video.",
   "create.readiness.arabicLocalVoiceRequired":
-    "Local Egyptian Arabic voice setup is required. Install VoiceTut for Local High Quality or KemeTone for Local Lightweight, or choose ElevenLabs as an explicit premium voice.",
+    "Local Egyptian Arabic voice setup is required. Install VoiceTut for Local High Quality, or choose ElevenLabs as an explicit premium voice.",
   "create.readiness.providerNotConfigured": "The selected voice provider is not configured.",
   "create.readiness.setupNotRunnable": "The selected production setup is not runnable yet.",
   "create.voiceGuidance.arabic":
-    "Arabic, Egyptian Arabic and MSA narration is produced locally with VoiceTut or KemeTone by default. ElevenLabs is available as an explicit premium option; voice quality is judged by you in Providers - Voice Lab.",
+    "Arabic, Egyptian Arabic and MSA narration is produced locally with VoiceTut by default. ElevenLabs is available as an explicit premium option; voice quality is judged by you in Providers - Voice Lab.",
   "create.voiceGuidance.localVoiceSetupRequired":
-    "Local Egyptian Arabic voice setup is required. Install VoiceTut for Local High Quality or KemeTone for Local Lightweight - or choose ElevenLabs as an explicit premium option in Providers.",
+    "Local Egyptian Arabic voice setup is required. Install VoiceTut for Local High Quality, or choose ElevenLabs as an explicit premium option in Providers.",
   "create.voiceGuidance.openLocalVoiceSetup": "Set up local voice",
   "create.voiceGuidance.elevenlabsNotConfigured":
     "ElevenLabs is not configured. Add an ElevenLabs API key in Providers, or switch back to Auto for local voice instead.",
@@ -719,7 +719,7 @@ export const en: TranslationCatalog = {
   "providers.voiceLab.browseVoices": "Browse voices",
   "providers.voiceLab.open": "Voice Lab",
   "providers.voiceLab.needsKey":
-    "An ElevenLabs API key is required to audition ElevenLabs voices here. Arabic narration itself defaults to local VoiceTut/KemeTone voices and does not require ElevenLabs.",
+    "An ElevenLabs API key is required to audition ElevenLabs voices here. Arabic narration itself defaults to local VoiceTut and does not require ElevenLabs.",
   "providers.voiceLab.auditionOnly":
     "Short auditions only — no video is rendered. Choose the voice you prefer by listening; the engine does not rank voices or claim any of them is Egyptian.",
   "providers.voiceLab.loadFailed": "ElevenLabs voice discovery could not be reached.",
@@ -963,7 +963,7 @@ export const en: TranslationCatalog = {
   "health.arabicReady": "Arabic production is ready",
   "health.arabicNotReady": "Arabic production needs voice setup",
   "health.arabicNotReadyBody":
-    "Arabic narration needs Local Voice setup (VoiceTut or KemeTone) or an optional ElevenLabs connection. English and local production remain available.",
+    "Arabic narration needs Local Voice setup with VoiceTut or an optional ElevenLabs connection. English and local production remain available.",
   "health.configureElevenLabs": "Set up Arabic voice",
 
   // Health check detail lines. The server sends a key alongside its English
@@ -981,7 +981,7 @@ export const en: TranslationCatalog = {
   "health.msg.voiceReadyElevenLabsOnly":
     "Local English narration is available, and ElevenLabs is configured as an optional premium Arabic voice.",
   "health.msg.voiceEnglishOnly":
-    "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone), or an optional ElevenLabs connection.",
+    "Local English narration is available. Arabic narration needs Local Voice setup with VoiceTut, or an optional ElevenLabs connection.",
   "health.msg.aiConfigured": "A script generation provider is configured.",
   "health.msg.aiNotConfigured": "Optional. Add a provider to generate scripts automatically.",
   "health.msg.mediaConfigured": "A stock footage provider is configured.",
@@ -1081,7 +1081,7 @@ export const en: TranslationCatalog = {
   "setup.welcomeBody":
     "This wizard prepares the video engine, your administrator sign-in, default production settings and optional publishing channels. Everything renders on this machine; cloud providers stay optional.",
   "setup.welcomeBodyVoice":
-    "English narration runs locally with Kokoro. Egyptian Arabic narration also runs locally by default, with VoiceTut (or the lighter KemeTone on modest hardware); ElevenLabs is an optional premium alternative you can connect in this wizard or later under Integrations.",
+    "English narration runs locally with Kokoro. Egyptian Arabic narration also runs locally by default with VoiceTut; ElevenLabs is an optional premium alternative you can connect in this wizard or later under Integrations.",
   "setup.localFirst": "Local-first video production",
   "setup.systemCheck": "System check",
   "setup.systemCheckHeading": "System check",
@@ -1113,7 +1113,7 @@ export const en: TranslationCatalog = {
   "setup.defaultNarrationLanguageHint":
     "The language new videos are narrated in. Separate from the interface language you are reading now.",
   "setup.arabicRequiresElevenLabs":
-    "Egyptian Arabic narration runs locally by default (VoiceTut, or KemeTone on lighter hardware). ElevenLabs is an optional premium alternative — add the key in this wizard, or connect it later under Integrations.",
+    "Egyptian Arabic narration runs locally by default with VoiceTut. ElevenLabs is an optional premium alternative — add the key in this wizard, or connect it later under Integrations.",
 
   // ---------------------------------------------------------------- errors
   "errors.generic": "Something went wrong.",

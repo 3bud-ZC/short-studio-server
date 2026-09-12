@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
 import path from "path";
 import fs from "fs-extra";
 
@@ -84,6 +86,11 @@ async function main() {
     );
     await providerSecrets.refreshElevenLabsApiKey().catch(() => undefined);
     await providerSecrets.refresh("upload_post", "api_key").catch(() => undefined);
+    const pexelsKey = await providerSecrets.refresh("pexels", "api_key").catch(() => undefined);
+    if (pexelsKey && !config.pexelsApiKey) {
+      config.pexelsApiKey = pexelsKey;
+    }
+    await providerSecrets.refresh("pixabay", "api_key").catch(() => undefined);
   }
 
   if (!config.runningInDocker) {

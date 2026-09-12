@@ -3878,6 +3878,8 @@ export class ShortCreator {
     };
   }
 
+  private static readonly downloadAgent = new https.Agent({ keepAlive: true, family: 4 });
+
   private async downloadFile(url: string, destPath: string, maxRetries = 3): Promise<void> {
     if (url.startsWith("file://") || url.startsWith("/")) {
       fs.copySync(url.replace("file://", ""), destPath);
@@ -3891,8 +3893,9 @@ export class ShortCreator {
           method: "GET",
           url,
           responseType: "stream",
-          timeout: 30000,
+          timeout: 45000,
           maxRedirects: 5,
+          httpsAgent: ShortCreator.downloadAgent,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           },
@@ -3911,12 +3914,25 @@ export class ShortCreator {
 
         await new Promise<void>((resolve, reject) => {
           const writer = fs.createWriteStream(destPath);
-          response.data.pipe(writer);
+          const streamTimeout = setTimeout(() => {
+            response.data.destroy();
+            writer.destroy();
+            fs.unlink(destPath, () => {});
+            reject(new Error("Download stream timed out after 45s"));
+          }, 45000);
+          response.data.on("error", (err: Error) => {
+            clearTimeout(streamTimeout);
+            writer.destroy();
+            fs.unlink(destPath, () => {});
+            reject(err);
+          });
           writer.on("finish", () => {
+            clearTimeout(streamTimeout);
             writer.close();
             resolve();
           });
           writer.on("error", (err: Error) => {
+            clearTimeout(streamTimeout);
             fs.unlink(destPath, () => {});
             reject(err);
           });
@@ -3939,7 +3955,7 @@ export class ShortCreator {
         );
         fs.removeSync(destPath);
         if (attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
       }
     }

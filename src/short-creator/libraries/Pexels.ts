@@ -7,6 +7,7 @@ import {
   selectBestCandidate,
   selectSmartClipWindow,
 } from "../../server/v2/media-intelligence/assetScorer";
+import { providerSecrets } from "../../server/v2/provider-vault/providerSecrets";
 
 const jokerTerms: string[] = ["nature", "globe", "space", "ocean"];
 const durationBufferSeconds = 3;
@@ -36,6 +37,20 @@ function sanitizeTerms(terms: string[] = []): string[] {
 export class PexelsAPI {
   constructor(private API_KEY: string) { }
 
+  public getApiKey(): string {
+    return (
+      this.API_KEY ||
+      providerSecrets.peek("pexels", "api_key") ||
+      process.env.PEXELS_API_KEY ||
+      ""
+    );
+  }
+
+  public isConfigured(): boolean {
+    const key = this.getApiKey();
+    return Boolean(key && key.trim().length > 8 && key !== "dummy-key" && !key.includes("your_"));
+  }
+
   private async _findVideo(
     searchTerm: string,
     minDurationSeconds: number,
@@ -44,7 +59,8 @@ export class PexelsAPI {
     timeout: number,
     previousCandidates: any[] = [],
   ): Promise<Video> {
-    if (!this.API_KEY) {
+    const effectiveKey = this.getApiKey();
+    if (!effectiveKey) {
       throw new Error("API key not set");
     }
     logger.debug(
@@ -52,7 +68,7 @@ export class PexelsAPI {
       "Searching for video in Pexels API",
     );
     const headers = new Headers();
-    headers.append("Authorization", this.API_KEY);
+    headers.append("Authorization", effectiveKey);
     const response = await fetch(
       `https://api.pexels.com/v1/videos/search?orientation=${orientation}&size=medium&per_page=80&query=${encodeURIComponent(searchTerm)}`,
       {

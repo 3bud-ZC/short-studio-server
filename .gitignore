@@ -70,3 +70,12 @@ venv/
 /models/
 data-dev/models/
 
+# Commercial license signing secrets are owner/server-side only.
+# Product builds embed the public key, never a private signing key.
+src/server/v2/licensing/commercial_root_key.json
+src/server/v2/licensing/*private*.pem
+src/server/v2/licensing/*private*.json
+commercial_root_key.json
+commercial_root_private*.pem
+commercial_root_private*.json
+

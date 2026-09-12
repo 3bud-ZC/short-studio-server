@@ -10,7 +10,6 @@ import type {
 } from "./types";
 import {
   ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
-  ARABIC_LIGHTWEIGHT_PROVIDER,
   ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE,
   ARABIC_PREMIUM_CLOUD_PROVIDER,
   ARABIC_PRODUCTION_PROVIDER,
@@ -54,12 +53,11 @@ export class VoiceRegistry {
   }
 
   public isArabicProductionConfigured(): boolean {
-    return this.voiceTutProvider.isConfigured() || this.kemeToneProvider.isConfigured();
+    return this.voiceTutProvider.isConfigured();
   }
 
   public getProvider(providerId?: string): VoiceProvider {
     if (providerId === "voicetut") return this.voiceTutProvider.isConfigured() ? this.voiceTutProvider : this.kokoroProvider;
-    if (providerId === "kemetone") return this.kemeToneProvider.isConfigured() ? this.kemeToneProvider : this.kokoroProvider;
     if (providerId === "elevenlabs") return this.elevenlabsProvider.isConfigured() ? this.elevenlabsProvider : this.kokoroProvider;
     if (providerId === "piper") return this.piperProvider.isConfigured() ? this.piperProvider : this.kokoroProvider;
     if (providerId === "edge_tts") return this.edgeTtsProvider.isConfigured() ? this.edgeTtsProvider : this.kokoroProvider;
@@ -142,18 +140,13 @@ export class VoiceRegistry {
         return pick(this.voiceTutProvider, request.voiceId || this.defaultVoiceFor("voicetut"), "arabic_local_high_quality_user_selected");
       }
       if (requestedProvider === "kemetone") {
-        if (!this.kemeToneProvider.isConfigured()) throw new Error(ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE);
-        return pick(this.kemeToneProvider, request.voiceId || this.defaultVoiceFor("kemetone"), "arabic_local_lightweight_user_selected");
+        throw new Error("KemeTone is installed metadata only; real synthesis is not live-qualified in this release. Choose VoiceTut or explicit ElevenLabs.");
       }
-      if (requestedProvider && requestedProvider !== ARABIC_PRODUCTION_PROVIDER && requestedProvider !== ARABIC_LIGHTWEIGHT_PROVIDER) {
+      if (requestedProvider && requestedProvider !== ARABIC_PRODUCTION_PROVIDER) {
         throw new Error(ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE);
       }
       if (this.voiceTutProvider.isConfigured()) {
         return pick(this.voiceTutProvider, request.voiceId || this.defaultVoiceFor("voicetut"), "arabic_auto_local_high_quality_voicetut");
-      }
-      if (this.kemeToneProvider.isConfigured()) {
-        warnings.push("VoiceTut is not ready; using the local lightweight KemeTone route.");
-        return pick(this.kemeToneProvider, request.voiceId || this.defaultVoiceFor("kemetone"), "arabic_auto_local_lightweight_kemetone");
       }
       throw new Error(ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE);
     }
@@ -278,9 +271,8 @@ export class VoiceRegistry {
   public async listAllVoices(language?: string): Promise<VoiceOption[]> {
     const kokoroVoices = await this.kokoroProvider.listVoices();
     const voiceTutVoices = await this.voiceTutProvider.listVoices();
-    const kemeToneVoices = await this.kemeToneProvider.listVoices();
     const elevenlabsVoices = await this.elevenlabsProvider.listVoices(language).catch(() => []);
-    return [...kokoroVoices, ...voiceTutVoices, ...kemeToneVoices, ...elevenlabsVoices];
+    return [...kokoroVoices, ...voiceTutVoices, ...elevenlabsVoices];
   }
 
   public async listCompatibleVoices(request: {
@@ -317,12 +309,17 @@ export class VoiceRegistry {
         return { voices, resolvedProvider: "elevenlabs", warnings };
       }
 
-      const selected =
-        provider === "kemetone"
-          ? this.kemeToneProvider
-          : provider === "voicetut" || provider === "auto"
-            ? this.voiceTutProvider
-            : undefined;
+      if (provider === "kemetone") {
+        return {
+          voices: [],
+          resolvedProvider: "voicetut",
+          warnings: ["KemeTone is not live-qualified in this release. Choose VoiceTut or explicit ElevenLabs."],
+          blocked: true,
+          blockedReason: "KemeTone is not live-qualified in this release.",
+          blockedReasonCode: "local_voice_setup_required",
+        };
+      }
+      const selected = provider === "voicetut" || provider === "auto" ? this.voiceTutProvider : undefined;
       if (!selected) {
         return {
           voices: [],
@@ -331,13 +328,6 @@ export class VoiceRegistry {
           blocked: true,
           blockedReason: ARABIC_LOCAL_VOICE_SETUP_REQUIRED_MESSAGE,
           blockedReasonCode: "local_voice_setup_required",
-        };
-      }
-      if (provider === "auto" && !this.voiceTutProvider.isConfigured() && this.kemeToneProvider.isConfigured()) {
-        return {
-          voices: await this.kemeToneProvider.listVoices(),
-          resolvedProvider: "kemetone",
-          warnings: ["VoiceTut is not ready; KemeTone is available as the local lightweight route."],
         };
       }
       if (!selected.isConfigured() && !request.includeUnavailable) {

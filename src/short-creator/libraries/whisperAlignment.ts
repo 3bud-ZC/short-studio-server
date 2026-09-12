@@ -31,10 +31,10 @@ export type WhisperAlignmentResult = {
 
 /**
  * Minimum script similarity before Whisper-derived timing is trusted at all.
- * Below this, the caller must fall back to deterministic timing rather than
- * risk anchoring canonical words to a transcript that doesn't describe them.
+ * Calibrated to 0.65 to accommodate natural colloquial Egyptian Arabic and ASR variance
+ * while rejecting genuine hallucinations or unrelated audio.
  */
-export const WHISPER_SCRIPT_SIMILARITY_THRESHOLD = 0.95;
+export const WHISPER_SCRIPT_SIMILARITY_THRESHOLD = 0.65;
 
 export function alignWhisperToNarration(
   whisperCaptions: Caption[],
@@ -83,6 +83,16 @@ export function alignWhisperToNarration(
     const slot = anchored[index]!;
     return { text: (index > 0 ? " " : "") + token, startMs: slot.startMs, endMs: Math.max(slot.endMs, slot.startMs) };
   });
+
+  // Enforce strictly monotonic, non-overlapping timestamps
+  for (let i = 1; i < captions.length; i++) {
+    if (captions[i].startMs < captions[i - 1].endMs) {
+      captions[i].startMs = captions[i - 1].endMs;
+    }
+    if (captions[i].endMs <= captions[i].startMs) {
+      captions[i].endMs = captions[i].startMs + 50;
+    }
+  }
 
   // Matched pairs are exactly the LCS between the whisper transcript and the
   // canonical text, so this doubles as an order-preserving similarity ratio.

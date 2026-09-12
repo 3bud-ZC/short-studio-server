@@ -55,10 +55,13 @@ function pickVideoFile(hit: PexelsVideoHit, request: StockSearchRequest): Pexels
   const exact = pool.find((file) => file.width === targetWidth && file.height === targetHeight);
   if (exact) return exact;
 
+  const targetPixels = (targetWidth || 1080) * (targetHeight || 1920);
   return [...pool].sort((a, b) => {
     const aPixels = (a.width || 0) * (a.height || 0);
     const bPixels = (b.width || 0) * (b.height || 0);
-    return bPixels - aPixels;
+    const aDiff = Math.abs(aPixels - targetPixels);
+    const bDiff = Math.abs(bPixels - targetPixels);
+    return aDiff - bDiff;
   })[0] || null;
 }
 
@@ -110,20 +113,30 @@ export class PexelsStockProvider implements StockProvider {
     url.searchParams.set("per_page", String(Math.min(80, Math.max(3, request.perPage ?? 30))));
 
     let data: any;
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        headers: { Authorization: this.getApiKey() as string },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!response.ok) {
-        logger.warn({ provider: "pexels", status: response.status, query: request.query }, "Pexels search failed; continuing without this source");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Authorization: this.getApiKey() as string,
+            "User-Agent": "ShortStudio/2.6.0 (Automated Video Production)",
+          },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!response.ok) {
+          logger.warn({ provider: "pexels", status: response.status, query: request.query }, "Pexels search failed; continuing without this source");
+          return [];
+        }
+        data = await response.json();
+        break;
+      } catch (error) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          continue;
+        }
+        logger.warn({ provider: "pexels", query: request.query, error: error instanceof Error ? error.message : String(error) }, "Pexels search failed; continuing without this source");
         return [];
       }
-      data = await response.json();
-    } catch (error) {
-      logger.warn({ provider: "pexels", query: request.query, error: error instanceof Error ? error.message : String(error) }, "Pexels search failed; continuing without this source");
-      return [];
     }
 
     const hits: PexelsVideoHit[] = Array.isArray(data?.videos) ? data.videos : [];

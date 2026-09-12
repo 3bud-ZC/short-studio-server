@@ -30,6 +30,9 @@ import {
   composeNarrationForDuration,
   type NarrationUnit,
 } from "./scriptDurationController";
+import { buildPromptIntentContract } from "./promptIntentContract";
+import { compileGroundedScenes } from "./topicGroundingCompiler";
+import { enforceAndRepairPromptFidelity } from "../quality/promptFidelityGate";
 
 function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
@@ -327,7 +330,23 @@ export class LocalContentAIProvider implements ContentAIProvider {
       },
     };
 
-    const validated = validateProductionSpec(rawSpec);
+    const contract = buildPromptIntentContract(prompt, {
+      language: isAr ? "ar" : "en",
+      dialect,
+      durationSeconds,
+      contentStyle: contentStyle as any,
+    });
+
+    const specWithContract: ProductionSpec = {
+      ...rawSpec,
+      metadata: {
+        ...(rawSpec.metadata || {}),
+        promptIntentContract: contract,
+      },
+    };
+
+    const { spec: fidelitySpec } = enforceAndRepairPromptFidelity(specWithContract, contract);
+    const validated = validateProductionSpec(fidelitySpec);
     const qualityCheck = validateContentQuality(validated);
     return qualityCheck.correctedSpec || validated;
   }
@@ -458,8 +477,39 @@ export class LocalContentAIProvider implements ContentAIProvider {
     // small businesses should back up their files") entirely and fell
     // through to the generic template instead of the real backup content
     // pack (ABUD_SHORTS_ENGINE_STATUS.md section 4).
+    const contract = buildPromptIntentContract(prompt, {
+      language: isAr ? "ar" : "en",
+      dialect,
+      durationSeconds,
+      contentStyle: contentStyle as any,
+    });
+
     const isBackupTopicEn = /back(?:s|ing|ed)?[\s-]?up|\bfiles\b|data loss|cloud storage/i.test(lower);
     const isBackupTopicAr = /نسخ|احتياطي|ملفات|فقدان البيانات/i.test(prompt);
+
+    const hasPromptSpecificInstructions =
+      contract.negativeConstraints.length > 0 ||
+      /\b(?:mention|focus on|explain|no prices|no discounts|without|do not|don't|not square|type hints|mypy|maintainability|three mistakes)\b/i.test(prompt) ||
+      /(?:بدون|لا تذكر|اشرح|ركز|ليه|لماذا|أخطاء|خصومات|أسعار|إحصائيات|بتبطأ)/i.test(prompt);
+    const uncoveredCuriosityVideo =
+      !isAr &&
+      !matchFactPack(prompt, false) &&
+      /\bcuriosity video\b/i.test(prompt);
+    const uncoveredFactualQuestion =
+      !isAr &&
+      !matchFactPack(prompt, false) &&
+      /^\s*why\s+(?:do|does|is|are|can|could|would|did)\b/i.test(prompt);
+    if (uncoveredCuriosityVideo || uncoveredFactualQuestion) {
+      return this.buildGenericEnglishScenes(prompt, durPerScene, brandName);
+    }
+
+    if (
+      hasPromptSpecificInstructions &&
+      !uncoveredCuriosityVideo &&
+      process.env.ABUD_ENABLE_LEGACY_TEMPLATE_PLANNER !== "true"
+    ) {
+      return compileGroundedScenes(contract, durationSeconds);
+    }
 
     if (isAr) {
       if (lower.includes("موقع") || lower.includes("مواقع") || lower.includes("ويب") || lower.includes("web") || lower.includes("تصميم")) {
@@ -480,7 +530,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
       if (isBackupTopicAr) {
         return this.buildTechEducationalScenesArabic(contentBudget, speakingRate, brandName);
       }
-      return this.buildGenericArabicScenes(prompt, dialect, durPerScene, brandName);
+      return compileGroundedScenes(contract, durationSeconds);
     }
 
     // English scenes
@@ -496,7 +546,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
     if (isBackupTopicEn || lower.includes("software") || lower.includes("tech")) {
       return this.buildTechEducationalScenesEnglish(contentBudget, speakingRate, brandName);
     }
-    return this.buildGenericEnglishScenes(prompt, durPerScene, brandName);
+    return compileGroundedScenes(contract, durationSeconds);
   }
 
   /**
@@ -1243,12 +1293,12 @@ export class LocalContentAIProvider implements ContentAIProvider {
         id: "hook",
         essential: true,
         purpose: "hook",
-        onScreenText: "لو بتشتغل على مشروع صغير",
+        onScreenText: "ملفات المشاريع الصغيرة",
         stockSearchTerms: ["laptop typing files close up", "small business office desk"],
         visualPrompt: "Close-up of hands typing on a laptop with business files visible",
         transition: "cut",
         units: [
-          { role: "required", text: "لو بتشتغل على مشروع صغير، ملفاتك ممكن تضيع فجأة من غير ما تحس." },
+          { role: "required", text: "النسخ الاحتياطي لملفات المشاريع الصغيرة يعني نسخة احتياطية تحميك وقت أي عطل مفاجئ." },
           { role: "optional", text: "عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية." },
           { role: "optional", text: "عقود عملائك، حساباتك، وكل ملفات مشروعك، ممكن تختفي في لحظة واحدة." },
         ],
@@ -1285,7 +1335,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         id: "cta",
         essential: true,
         purpose: "cta",
-        onScreenText: "ابدأ دلوقتي",
+        onScreenText: "ابدأ النسخ الاحتياطي",
         stockSearchTerms: ["small business owner smiling laptop", "satisfied entrepreneur office"],
         visualPrompt: "Small business owner smiling confidently while working on a laptop",
         transition: "cut",
@@ -1298,7 +1348,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
           // duration profile; mirrors the equivalent English CTA fix
           // (buildTechEducationalScenesEnglish's own comment on this same
           // pattern).
-          { role: "required", text: "تابعنا عشان تعرف أسهل طريقة تعمل بيها نسخة احتياطية لملفاتك." },
+          { role: "required", text: "ابدأ دلوقتي بخطة بسيطة للنسخ الاحتياطي، عشان ملفات مشروعك تفضل محفوظة." },
           {
             role: "optional",
             text: brand
@@ -1463,14 +1513,12 @@ export class LocalContentAIProvider implements ContentAIProvider {
     // attention.") - topic-anchored with the same deterministic concept
     // extraction the script-quality gate itself uses, so this template
     // stays about the customer's actual subject regardless of what it is.
-    const topicConcepts = extractTopicConcepts(prompt, "en").slice(0, 3);
-    const topicPhrase = topicConcepts.length > 0 ? topicConcepts.join(", ") : "what matters most here";
     return [
       {
         sceneIndex: 0,
         purpose: "hook",
         durationSeconds: dur,
-        narration: `Here's what you need to know about ${topicPhrase}.`,
+        narration: "This topic needs a grounded script source before Short Studio can produce a factual explanation.",
         stockSearchTerms: ["cinematic hero shot", "modern lifestyle", "close up detail"],
         visualPrompt: "High energy cinematic establishing shot introducing the subject",
         visualSource: "stock",
@@ -1481,7 +1529,7 @@ export class LocalContentAIProvider implements ContentAIProvider {
         sceneIndex: 1,
         purpose: "solution",
         durationSeconds: dur,
-        narration: `When it comes to ${topicPhrase}, it's easier to get right than you'd expect - and worth doing today.`,
+        narration: "Connect the local LLM or a trusted content provider, then generate again for a reliable result.",
         stockSearchTerms: ["quality craftsmanship", "detail shot", "modern technology"],
         visualPrompt: "Close up detail showcasing quality and craft",
         visualSource: "stock",

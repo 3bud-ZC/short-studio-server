@@ -163,15 +163,13 @@ export class LocalModelManager {
     ) {
       return "LOCAL_HIGH_QUALITY_READY";
     }
-    const kemetone = this.read("kemetone").state;
-    if (kemetone === "ready" || kemetone === "healthy") return "LOCAL_LIGHT_READY";
     return "LOCAL_UNAVAILABLE";
   }
 }
 
 export function defaultModelCacheRoot(): string {
   if (process.env.ABUD_MODEL_CACHE_DIR) return process.env.ABUD_MODEL_CACHE_DIR;
-  if (process.env.DOCKER === "true") return "/models";
+  if (process.env.DOCKER === "true") return path.join(process.env.DATA_DIR_PATH || "/app/data", "models");
   return path.join(process.cwd(), "data-dev", "models");
 }
 

@@ -141,7 +141,7 @@ export const ar: TranslationCatalog = {
   "dashboard.alerts.serviceAttention": "{service} يحتاج إلى مراجعة",
   "dashboard.alerts.elevenLabsMissing": "الصوت العربي يحتاج إلى إعداد",
   "dashboard.alerts.elevenLabsMissingBody":
-    "التعليق الصوتي العربي يحتاج إلى إعداد الصوت المحلي (VoiceTut أو KemeTone) أو ربط ElevenLabs الاختياري. الإنتاج بالإنجليزية غير متأثر.",
+    "التعليق الصوتي العربي يحتاج إلى إعداد VoiceTut المحلي أو ربط ElevenLabs الاختياري. الإنتاج بالإنجليزية غير متأثر.",
   "dashboard.alerts.configure": "إعداد",
   "dashboard.alerts.lowStorage": "المساحة التخزينية توشك على النفاد",
   "dashboard.alerts.lowStorageBody": "استُخدم {used} من أصل {total}.",
@@ -182,13 +182,13 @@ export const ar: TranslationCatalog = {
   "create.narrationLanguageHint": "اللغة المنطوقة في الفيديو، وهي مستقلة عن لغة الواجهة.",
   "create.readiness.writePrompt": "اكتب وصفًا لإنشاء الفيديو.",
   "create.readiness.arabicLocalVoiceRequired":
-    "يلزم إعداد صوت عربي مصري محلي. ثبّت VoiceTut للجودة المحلية العالية أو KemeTone للخفيف المحلي، أو اختر ElevenLabs كخيار مدفوع صريح.",
+    "يلزم إعداد صوت عربي مصري محلي. ثبّت VoiceTut للجودة المحلية العالية، أو اختر ElevenLabs كخيار مدفوع صريح.",
   "create.readiness.providerNotConfigured": "مزوّد الصوت المختار غير مُعدّ.",
   "create.readiness.setupNotRunnable": "إعداد الإنتاج المختار غير جاهز للتشغيل بعد.",
   "create.voiceGuidance.arabic":
-    "يتم إنتاج التعليق الصوتي بالعربية والمصرية والفصحى محليًا افتراضيًا عبر VoiceTut أو KemeTone. يظل ElevenLabs متاحًا كخيار مدفوع صريح؛ وتقيّم أنت جودة الصوت في المزوّدون - استوديو الصوت.",
+    "يتم إنتاج التعليق الصوتي بالعربية والمصرية والفصحى محليًا افتراضيًا عبر VoiceTut. يظل ElevenLabs متاحًا كخيار مدفوع صريح؛ وتقيّم أنت جودة الصوت في المزوّدون - استوديو الصوت.",
   "create.voiceGuidance.localVoiceSetupRequired":
-    "يلزم إعداد صوت عربي مصري محلي. ثبّت VoiceTut لجودة محلية عالية أو KemeTone لجودة محلية خفيفة - أو اختر ElevenLabs كخيار مدفوع صريح من المزوّدون.",
+    "يلزم إعداد صوت عربي مصري محلي. ثبّت VoiceTut لجودة محلية عالية، أو اختر ElevenLabs كخيار مدفوع صريح من المزوّدون.",
   "create.voiceGuidance.openLocalVoiceSetup": "إعداد الصوت المحلي",
   "create.voiceGuidance.elevenlabsNotConfigured":
     "ElevenLabs غير مُعدّ. أضف مفتاح API الخاص بـ ElevenLabs في المزوّدون، أو ارجع إلى الوضع التلقائي لاستخدام الصوت المحلي بدلاً من ذلك.",
@@ -716,7 +716,7 @@ export const ar: TranslationCatalog = {
   "providers.voiceLab.browseVoices": "تصفّح الأصوات",
   "providers.voiceLab.open": "مختبر الصوت",
   "providers.voiceLab.needsKey":
-    "يلزم مفتاح API الخاص بـ ElevenLabs لتجربة أصوات ElevenLabs هنا. التعليق الصوتي العربي نفسه يعتمد افتراضيًا على أصوات VoiceTut/KemeTone المحلية ولا يتطلب ElevenLabs.",
+    "يلزم مفتاح API الخاص بـ ElevenLabs لتجربة أصوات ElevenLabs هنا. التعليق الصوتي العربي نفسه يعتمد افتراضيًا على VoiceTut المحلي ولا يتطلب ElevenLabs.",
   "providers.voiceLab.auditionOnly":
     "تجارب قصيرة فقط — لا يُنتَج أي فيديو. اختر الصوت الذي تفضّله بالاستماع؛ المحرّك لا يرتّب الأصوات ولا يدّعي أن أيًّا منها مصري.",
   "providers.voiceLab.loadFailed": "تعذّر الوصول إلى استكشاف أصوات ElevenLabs.",
@@ -960,7 +960,7 @@ export const ar: TranslationCatalog = {
   "health.arabicReady": "الإنتاج بالعربية جاهز",
   "health.arabicNotReady": "الإنتاج بالعربية يحتاج إلى إعداد الصوت",
   "health.arabicNotReadyBody":
-    "التعليق الصوتي العربي يحتاج إلى إعداد الصوت المحلي (VoiceTut أو KemeTone) أو ربط ElevenLabs الاختياري. الإنتاج بالإنجليزية والإنتاج المحلي ما زالا متاحين.",
+    "التعليق الصوتي العربي يحتاج إلى إعداد VoiceTut المحلي أو ربط ElevenLabs الاختياري. الإنتاج بالإنجليزية والإنتاج المحلي ما زالا متاحين.",
   "health.configureElevenLabs": "إعداد الصوت العربي",
 
   // Health check detail lines.
@@ -976,7 +976,7 @@ export const ar: TranslationCatalog = {
   "health.msg.voiceReadyElevenLabsOnly":
     "التعليق الصوتي الإنجليزي المحلي متاح، و ElevenLabs مُعَدّ كخيار عربي مدفوع اختياري.",
   "health.msg.voiceEnglishOnly":
-    "التعليق الصوتي الإنجليزي المحلي متاح. يحتاج التعليق الصوتي العربي إلى إعداد الصوت المحلي (VoiceTut أو KemeTone)، أو ربط ElevenLabs الاختياري.",
+    "التعليق الصوتي الإنجليزي المحلي متاح. يحتاج التعليق الصوتي العربي إلى إعداد VoiceTut المحلي، أو ربط ElevenLabs الاختياري.",
   "health.msg.aiConfigured": "تم إعداد مزوّد لتوليد النصوص.",
   "health.msg.aiNotConfigured": "اختياري. أضِف مزوّدًا لتوليد النصوص تلقائيًا.",
   "health.msg.mediaConfigured": "تم إعداد مزوّد للقطات المخزون.",
@@ -1071,7 +1071,7 @@ export const ar: TranslationCatalog = {
   "setup.welcomeBody":
     "يجهّز هذا المعالج محرك الفيديو، وحساب المسؤول، وإعدادات الإنتاج الافتراضية، وقنوات النشر الاختيارية. تتم المعالجة على هذا الجهاز، وتبقى الخدمات السحابية اختيارية.",
   "setup.welcomeBodyVoice":
-    "التعليق الصوتي الإنجليزي يعمل محليًا عبر Kokoro. والتعليق الصوتي المصري أيضًا يعمل محليًا افتراضيًا عبر VoiceTut (أو KemeTone الأخف على الأجهزة المتواضعة)؛ وElevenLabs بديل مدفوع اختياري يمكنك ربطه الآن أو لاحقًا من صفحة التكاملات.",
+    "التعليق الصوتي الإنجليزي يعمل محليًا عبر Kokoro. والتعليق الصوتي المصري أيضًا يعمل محليًا افتراضيًا عبر VoiceTut؛ وElevenLabs بديل مدفوع اختياري يمكنك ربطه الآن أو لاحقًا من صفحة التكاملات.",
   "setup.localFirst": "إنتاج فيديو محلي أولًا",
   "setup.systemCheck": "فحص النظام",
   "setup.systemCheckHeading": "فحص النظام",
@@ -1101,7 +1101,7 @@ export const ar: TranslationCatalog = {
   "setup.defaultNarrationLanguageHint":
     "اللغة المنطوقة في المقاطع الجديدة، وهي منفصلة عن لغة الواجهة التي تقرأها الآن.",
   "setup.arabicRequiresElevenLabs":
-    "التعليق الصوتي المصري يعمل محليًا افتراضيًا (VoiceTut، أو KemeTone على الأجهزة الأخف). وElevenLabs بديل مدفوع اختياري — أضِف المفتاح في هذا المعالج، أو اربطه لاحقًا من صفحة التكاملات.",
+    "التعليق الصوتي المصري يعمل محليًا افتراضيًا عبر VoiceTut. وElevenLabs بديل مدفوع اختياري — أضِف المفتاح في هذا المعالج، أو اربطه لاحقًا من صفحة التكاملات.",
 
   // ---------------------------------------------------------------- errors
   "errors.generic": "حدث خطأ ما.",

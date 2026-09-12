@@ -14,6 +14,68 @@
 
 ## Current Product State
 
+Product: Short Studio Server 2.6.0
+
+Stage: Commercial Quality Recovery Candidate
+
+Release: IN PROGRESS — 2.6 commercial recovery from branch `commercial/v2.6-quality-recovery`
+
+Repository: `3bud-ZC/Abud-Shorts-Engine`
+
+### 2.6 Recovery — Verified Gates
+
+**Preserved recovery work:** 29 modified + 5 untracked files on branch `commercial/v2.6-quality-recovery`. No reset, restore, or rollback. Private signing key removed from source; commercial verifier uses public-key-only runtime design.
+
+**Private-key exposure scan:** CLEAN. No private PEM blocks in tracked source, untracked source, installer, dist, or git history (full pickaxe scan). Private signing key exists only at `C:\ProgramData\ShortStudio\licensing\commercial_root_private_20260912.pem`. Embedded source public key matches external public key.
+
+**Ollama local AI:** QUALIFIED. `qwen2.5:7b-instruct` (4.7 GB, digest `845dbda0ea48`) installed and reachable. Real inference returns correct answers. Structured JSON generation works. Timeout bounded (45s default). Malformed output rejected by `extractJsonObject` → deterministic baseline. Provenance labeled honestly (`DETERMINISTIC`/`SAFE_GENERIC`, never `MODEL_GENERATED`). LLM cannot override prohibitions, prices, contact, or factual claims.
+
+**OpenCLIP semantic media matching:** QUALIFIED. Real OpenCLIP ViT-B-32 checkpoint loaded from `C:\ProgramData\ShortStudio\models\ViT-B-32-openclip-state.pt`. Quality Python env `.venv-quality` (Python 3.11, open-clip-torch 3.3.0, torch 2.14.0 CPU). 6 real Pexels candidates tested: relevant coffee clips scored 65.05-65.59, irrelevant server/fashion/tech clips scored 56.33-58.61. Semantic discrimination gap 6.44 (positive). Production router rejects candidates below 55-floor when OpenCLIP enabled. Wired into docker-compose.prod.yml render-worker (fail-closed defaults).
+
+**Prompt intent fidelity:** 12/12 PASSED (6 EN + 6 AR). All benchmarks preserve subject, language, dialect, tone, prohibitions, prices, contact details. No raw prompt leakage. No generic template substitution. Arabic Auto routes to VoiceTut. KemeTone not auto-selected.
+
+**VoiceTut (Arabic):** PROVEN. 3 real Egyptian Arabic previews (Mohamed, Sarah, Ahmed) — ~5.4s each, 24kHz mono PCM, non-silent (-18.8 to -20.5 dB mean). VoiceTut model ready (2.48 GB, 17 speakers, Egyptian dialect, Apache-2.0).
+
+**Kokoro (English):** PROVEN. 2 real English previews (af_heart, am_michael) — 6.3s/7.4s, 24kHz mono PCM, non-silent (-23.1/-24.0 dB mean). kokoro-js 1.2.0, CPU in-process.
+
+**KemeTone:** TRUTHFUL NOT LIVE-QUALIFIED. Not auto-selected for customer production. Legacy metadata only.
+
+**ElevenLabs:** No paid calls during validation. Credentials not leaked.
+
+**Commercial licensing:** VERIFIED END-TO-END. Single-device binding (SHA256-hashed fingerprint, SS-XXXX format). Signed offline token, public-key verification. Wrong-device activation refused. Tampered token refused. Production gate blocks create/start with invalid license (402). Existing media remains readable. License admin CLI works (fingerprint, generate, activate, status, deactivate). 7/7 licensing tests pass.
+
+**Caption authority:** Canonical narration is visible text. Whisper supplies timing only (0.65 similarity threshold). Deterministic fallback when Whisper diverges. Arabic shaping via HarfBuzz+FriBidi+FreeType (libass).
+
+**A/V sync:** Audio-first timeline. Narration is master. All durations from real ffprobe-measured audio. No arbitrary visual padding.
+
+**Video technical quality:** 1080x1920 portrait, H.264 (libx264 CRF 20), 25fps, yuv420p. Audio mastering targets -16 LUFS, TP -1.5/-2 dBFS. No clipping.
+
+**Tests:** Vitest 98 files / 1385 tests PASSED. Typecheck PASSED. Build PASSED. Python local-tts 8/8 PASSED. Pester local-voice lifecycle 21/21 PASSED.
+
+**Docker image:** Building (main.Dockerfile, `short-studio-server:2.6.0-local`). Whisper model download in progress.
+
+**Installer:** Updated for 2.6.0 (ShortStudio.iss, run-install.ps1, uninstall-helper.ps1). Inno Setup (ISCC) available at `C:/Users/Abud/AppData/Local/Programs/Inno Setup 6/ISCC.exe`. Client package structure prepared.
+
+**Secrets scan:** CLEAN. No private keys in source, installer, dist, or git history. No hardcoded API keys. Only `.env.example` tracked.
+
+### Pending 2.6 Gates
+
+- Docker image build completion → image digest
+- 12 real MP4 benchmark (needs 2.6 runtime on port 3130)
+- Fresh install from final EXE
+- 4-service health + Local Voice health verification
+- License activation on fresh install
+- Production permitted/blocked verification
+- Uninstall data preservation
+- Final release.json + update-manifest.json with real digest
+- Final installer EXE build + SHA256
+- Release artifacts (tar.gz, sha256, manifest, exe, exe.sha256)
+- Workspace cleanup (after acceptance)
+
+---
+
+## 2.5.2 Historical Snapshot (superseded by 2.6 Current Product State above)
+
 Product: Short Studio Server 2.5.2
 
 Stage: GENERAL AVAILABILITY
@@ -14161,3 +14223,29 @@ performed no provider calls, because there are 0 publications in `processing`.
 - **Additional External Writes This Pass:** 0 (Uploads 1 total, Publications 1
   total, Drafts 0, Schedules 0, Retries/Additional Posts 0)
 - **GA:** READY FOR OWNER FINAL GA AUTHORIZATION
+
+## Commercial Installer Phase 1
+
+- **Product Version:** Short Studio Server 2.5.2 (GA / Released, Immutable)
+- **Framework:** Inno Setup 6.7.3 (Single-file professional Windows Setup)
+- **Installer Binary:** `dist-commercial/ShortStudio-Setup.exe`
+- **Installer SHA256:** `631df0c7f1cc8ee957193c2814c37eafa58979f50f9719d6ca7f4d1c05773748`
+- **Installer Size:** 2,211,518 bytes (~2.11 MB)
+- **Bundled Archive:** `Short-Studio-Server-2.5.2.tar.gz` (Official verified SHA256: `509296184b062bd2db5592f70f4eb55f1b7ea79b172e2f9568246f63bc2e2fcf`)
+- **Installation Engine:** Existing supported `install.ps1`
+- **Target Root:** `C:\ProgramData\ShortStudio` (canonical default, configurable)
+- **UX Workflow:**
+  - Short Studio branded setup wizard
+  - Welcome page with product explanation
+  - MIT License Agreement acceptance
+  - Truthful Prerequisite Check (Windows 10/11 x64, Admin, Docker Desktop installed/running, WSL2 backend, >=15 GB disk space, Port 3130 status; clear official guidance if Docker missing)
+  - Destination location selection
+  - Secure temp extraction & cryptographic SHA256 verification before installation
+  - Silent execution of supported `install.ps1` with sanitized logs under `logs/installer.log`
+  - Canonical 4-service runtime health gate (`app`, `render-worker`, `postgres`, `n8n`)
+  - Dashboard readiness gate (`http://127.0.0.1:3130`)
+  - Desktop & Start Menu shortcuts (direct web URL + maintenance: Start, Stop, Restart, Status, Uninstall)
+  - Finish page with "Launch Short Studio" integration
+- **Uninstaller:** Supported `uninstall.ps1` invocation; default preserves customer media, uploads, database volume, backups, and configs without data loss.
+- **Isolated Windows Verification:** Tested cleanly on isolated test root `C:\ProgramData\ShortStudioIsolatedTest`, port `3149`, compose project `ss-installer-test`. All 4 services healthy, dashboard HTTP 200, Local Voice verified on port 8765, shortcuts verified, uninstaller tested with verified customer data preservation, 0 customer data deleted, 0 Docker builds, 0 paid provider calls.
+

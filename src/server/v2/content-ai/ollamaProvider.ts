@@ -12,6 +12,8 @@ import { validateProductionSpec } from "../../../types/productionSpec";
 import { inventsUngroundedClaim } from "../creative/ctaPolicy";
 import { containsRawPromptLeak } from "../quality/professionalVisualQuality";
 import { logger } from "../../../logger";
+import { buildPromptIntentContract } from "./promptIntentContract";
+import { enforceAndRepairPromptFidelity } from "../quality/promptFidelityGate";
 
 function extractJsonObject(text: string): unknown {
   const start = text.indexOf("{");
@@ -68,7 +70,7 @@ export class OllamaContentAIProvider implements ContentAIProvider {
 
   constructor(
     private baseUrl = process.env.OLLAMA_BASE_URL || "",
-    private model = process.env.OLLAMA_MODEL || "qwen2.5:3b-instruct",
+    private model = process.env.OLLAMA_MODEL || "qwen2.5:7b-instruct",
   ) {}
 
   public get isConfigured(): boolean {
@@ -84,13 +86,22 @@ export class OllamaContentAIProvider implements ContentAIProvider {
     // the job outright, which the previous version - no try/catch around
     // the live call - would have done).
     const baseline = await this.fallback.generateProductionSpec(params);
+    const contract = buildPromptIntentContract(params.prompt, {
+      language: params.language === "ar" ? "ar" : params.language === "en" ? "en" : "auto",
+      dialect: params.dialect,
+      durationSeconds: params.durationSeconds || params.requestedDurationSeconds,
+      contentStyle: params.contentStyle,
+    });
     try {
       const system = [
         "You are ABUD Shorts Engine Creative Director.",
         "Return only valid JSON matching the provided ProductionSpec object shape.",
+        "User prompt is authoritative. Preserve every literal user requirement in the promptIntentContract.",
+        "Negative instructions are prohibitions, never positive instructions.",
         "Preserve durationSeconds, language, dialect, aspectRatio, quality, productionMode, visualMode, voiceProvider, and voiceId exactly.",
-        "Improve hook, spoken narration, CTA, scene intent, Pexels search terms, motion intent, and editing rhythm.",
+        "Improve hook, spoken narration, CTA when explicitly grounded, scene intent, precise concrete stock search terms, motion intent, and editing rhythm.",
         "Never invent a price, discount, phone number, WhatsApp number, testimonial, statistic, or claim that is not grounded in the customer's own prompt.",
+        "Stock search terms must be concrete visual subjects for each exact scene, never generic mood words.",
         "For Egyptian Arabic, use conversational spoken Egyptian Arabic, not translated MSA.",
         "Do not include subjective quality scores.",
       ].join(" ");
@@ -100,7 +111,7 @@ export class OllamaContentAIProvider implements ContentAIProvider {
           model: this.model,
           stream: false,
           system,
-          prompt: JSON.stringify({ params, baseline }),
+          prompt: JSON.stringify({ params, promptIntentContract: contract, baseline }),
           format: "json",
         },
         { timeout: Number(process.env.OLLAMA_TIMEOUT_MS || 45000) },
@@ -154,7 +165,7 @@ export class OllamaContentAIProvider implements ContentAIProvider {
           contentConfidence: "high",
         },
       });
-      return spec;
+      return enforceAndRepairPromptFidelity(spec, contract).spec;
     } catch (error) {
       logger.warn(
         { err: error instanceof Error ? error.message : String(error), model: this.model },

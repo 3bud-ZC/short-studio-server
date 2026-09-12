@@ -59,6 +59,7 @@ import { ElevenLabsVoiceProvider } from "./voice-providers/elevenlabsVoiceProvid
 import { GoogleCloudTtsProvider } from "./voice-providers/googleCloudTtsProvider";
 import { EdgeTtsProvider } from "./voice-providers/edgeTtsProvider";
 import { VoiceRegistry } from "./voice-providers/registry";
+import { LocalEgyptianTtsProvider } from "./voice-providers/localEgyptianTtsProvider";
 import { PIPER_ARABIC_MODEL } from "./voice-providers/piperArabicModel";
 import { mediaIntelligenceService } from "./media-intelligence/mediaIntelligenceService";
 import { mediaCache } from "./media-cache/mediaCache";
@@ -70,6 +71,8 @@ import { publishingRegistry } from "./publishing/registry";
 import { getProductInfo } from "../../version";
 import { UpdateService, type UpdateCenterState } from "./updates/updateService";
 import type { UpdateTransaction } from "./updates/updateState";
+import { createLicensingRouter } from "./licensing/routes";
+import { LicenseManager } from "./licensing/licenseManager";
 import {
   OAUTH_CALLBACK_PROVIDERS,
   oauthCallbackUrl,
@@ -725,7 +728,6 @@ function inferResolvedVoiceProvider(input: {
     (input.language === "auto" && Boolean(input.dialect) && input.dialect !== "none");
   if (isArabic) {
     if (input.voiceProvider === ARABIC_PREMIUM_CLOUD_PROVIDER) return ARABIC_PREMIUM_CLOUD_PROVIDER;
-    if (input.voiceProvider === "kemetone") return "kemetone";
     return ARABIC_PRODUCTION_PROVIDER;
   }
   if (input.voiceProvider && input.voiceProvider !== "auto") {
@@ -747,8 +749,7 @@ function defaultVoiceForResolvedProvider(provider: VoiceProviderId): string {
 
 export type LocalVoiceCreatePreflight = {
   ready: boolean;
-  resolvedProvider?: "voicetut" | "kemetone";
-  fallback?: { from: "voicetut"; to: "kemetone"; reason: "voicetut_not_ready" };
+  resolvedProvider?: "voicetut";
   errorCode?: "local_voice_unavailable" | "local_voice_model_unavailable";
 };
 
@@ -762,19 +763,15 @@ export function evaluateLocalVoiceCreatePreflight(
   if (!health?.ok) return { ready: false, errorCode: "local_voice_unavailable" };
   const readyModels = new Set(health.models_ready || []);
   const requested = requestedProvider && requestedProvider !== "auto" ? requestedProvider : "auto";
-  if (requested === "voicetut" || requested === "kemetone") {
-    return readyModels.has(requested)
-      ? { ready: true, resolvedProvider: requested }
-      : { ready: false, resolvedProvider: requested, errorCode: "local_voice_model_unavailable" };
+  if (requested === "kemetone") {
+    return { ready: false, errorCode: "local_voice_model_unavailable" };
+  }
+  if (requested === "voicetut") {
+    return readyModels.has("voicetut")
+      ? { ready: true, resolvedProvider: "voicetut" }
+      : { ready: false, resolvedProvider: "voicetut", errorCode: "local_voice_model_unavailable" };
   }
   if (readyModels.has("voicetut")) return { ready: true, resolvedProvider: "voicetut" };
-  if (readyModels.has("kemetone")) {
-    return {
-      ready: true,
-      resolvedProvider: "kemetone",
-      fallback: { from: "voicetut", to: "kemetone", reason: "voicetut_not_ready" },
-    };
-  }
   return { ready: false, errorCode: "local_voice_model_unavailable" };
 }
 
@@ -1727,6 +1724,7 @@ export function createV2PublicRouter(
   const workerLeaseService = new WorkerLeaseService(db);
   const providerVault = new ProviderCredentialsVault(db, config);
   const updateService = new UpdateService({ dataDir: config.dataDirPath });
+  const licenseManager = LicenseManager.getInstance();
 
   // Provider classes read credentials synchronously; the vault resolver keeps a
   // decrypted copy in process memory only. Plaintext never leaves this module.
@@ -1980,7 +1978,6 @@ export function createV2PublicRouter(
               ...contract,
               requestedVoiceProvider,
               resolvedVoiceProvider: resolved,
-              ...(localPreflight.fallback ? { voiceFallback: localPreflight.fallback } : {}),
             },
           };
         }
@@ -1995,7 +1992,7 @@ export function createV2PublicRouter(
           { label: "Open Local Voice Setup", href: "/settings" },
           localPreflight.errorCode === "local_voice_unavailable"
             ? "خدمة الصوت المحلي غير متاحة الآن. افتح الإعدادات، وشغّل الصوت المحلي أو أصلحه، ثم حاول مرة أخرى."
-            : "نموذج الصوت المحلي المطلوب غير جاهز. افتح الإعدادات للتحقق من VoiceTut أو KemeTone ثم حاول مرة أخرى.",
+            : "نموذج الصوت المحلي المطلوب غير جاهز. افتح الإعدادات للتحقق من VoiceTut ثم حاول مرة أخرى.",
         );
       }
     } else {
@@ -2082,7 +2079,24 @@ export function createV2PublicRouter(
   }
 
   router.use(express.json({ limit: "2mb" }));
+  router.use("/licensing", createLicensingRouter());
   router.use(requireV2Access(config, authService, apiTokenService));
+  router.use((req, res, next) => {
+    if (scopeForRequest(req) !== "production:create") {
+      next();
+      return;
+    }
+    if (process.env.VITEST === "true" && process.env.ABUD_ENFORCE_LICENSE_IN_TESTS !== "true") {
+      next();
+      return;
+    }
+    const gate = licenseManager.requireActiveForProduction();
+    if (!gate.allowed) {
+      res.status(402).json(gate.response);
+      return;
+    }
+    next();
+  });
 
   // Mount Publishing & Distribution Routes
   router.use("/publishing", createPublishingRouter(config, publishingService));
@@ -3019,8 +3033,7 @@ export function createV2PublicRouter(
       const vaultByProvider = new Map(vaultCredentials.map((credential) => [credential.providerId, credential]));
       const snapshot: ProviderConfigurationSnapshot = {
         elevenLabsConfigured: new ElevenLabsVoiceProvider().isConfigured(),
-        // Local Voice (VoiceTut, or KemeTone as the lightweight fallback) is
-        // the default Arabic route - the same signal job creation uses (see
+        // Local Voice (VoiceTut) is the default Arabic route - the same signal job creation uses (see
         // the local_voice_setup_required check above) so this health check
         // never claims Arabic is broken while local voice is actually ready.
         localVoiceConfigured: new VoiceRegistry({} as any).isArabicProductionConfigured(),
@@ -3410,16 +3423,6 @@ export function createV2PublicRouter(
 
   router.post("/voice-lab/preview", async (req, res) => {
     try {
-      await providerSecrets.refreshElevenLabsApiKey();
-      const provider = new ElevenLabsVoiceProvider();
-      if (!provider.isConfigured()) {
-        res.status(409).json({
-          error: "elevenlabs_not_configured",
-          message: ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
-          action: { label: "Configure ElevenLabs", href: "/providers" },
-        });
-        return;
-      }
       const rawText = typeof req.body?.text === "string" && req.body.text.trim()
         ? req.body.text.trim()
         : VOICE_LAB_REFERENCE_SCRIPT;
@@ -3433,6 +3436,35 @@ export function createV2PublicRouter(
       const voiceId = typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "";
       const preset = ELEVENLABS_PRESET_IDS.includes(req.body?.preset) ? req.body.preset : "natural";
       const language = req.body?.language === "en" ? "en" : "ar";
+
+      // If VoiceTut requested, or Arabic preview when ElevenLabs is unconfigured
+      if (req.body?.provider === "voicetut" || req.body?.provider === "local") {
+        const localProvider = new LocalEgyptianTtsProvider("voicetut");
+        const voiceRes = await localProvider.generateVoice(rawText, voiceId || undefined);
+        const buf = Buffer.isBuffer(voiceRes.audio) ? voiceRes.audio : Buffer.from(voiceRes.audio);
+        res.status(200).json({
+          audioBase64: buf.toString("base64"),
+          durationSeconds: voiceRes.audioLength,
+          provider: "voicetut",
+          voiceId: voiceId || "Mohamed",
+          language: "ar",
+          dialect: "egyptian",
+          text: rawText,
+          costLabel: "Free · Local",
+        });
+        return;
+      }
+
+      await providerSecrets.refreshElevenLabsApiKey();
+      const provider = new ElevenLabsVoiceProvider();
+      if (!provider.isConfigured()) {
+        res.status(409).json({
+          error: "elevenlabs_not_configured",
+          message: ARABIC_ELEVENLABS_REQUIRED_MESSAGE,
+          action: { label: "Configure ElevenLabs", href: "/providers" },
+        });
+        return;
+      }
       if (!(await voiceLabPreviewAllowed())) {
         res.status(402).json({
           error: "preview_synthesis_not_authorized",
@@ -3607,7 +3639,6 @@ export function createV2PublicRouter(
     const uploadPostStatus = await resolveUploadPostStatus();
     const localModelManager = new LocalModelManager();
     const voicetutRecord = localModelManager.read("voicetut");
-    const kemetoneRecord = localModelManager.read("kemetone");
 
     const providers = [
       // Content AI
@@ -3829,36 +3860,6 @@ export function createV2PublicRouter(
           license: "Apache-2.0",
           downloadedBytes: voicetutRecord.downloadedBytes,
           state: voicetutRecord.state,
-        },
-      },
-      {
-        id: "kemetone",
-        name: "KemeTone Local Lightweight",
-        category: "Voice",
-        tier: "free",
-        status: "not_live_qualified",
-        configured: false,
-        isDefault: false,
-        message: "KemeTone files are retained, but real synthesis is not live-qualified in this release.",
-        checkedAt: kemetoneRecord.lastVerifiedAt || kemetoneRecord.installedAt || new Date().toISOString(),
-        details: {
-          implemented: false,
-          configured: false,
-          healthy: false,
-          liveVerified: false,
-          languages: ["ar", "ar-EG"],
-          dialect: "egyptian",
-          speakersCount: 1,
-          modelId: "kemetone",
-          repoId: "Rabe3/kemetone",
-          revision: "9d65fab8cd71bc31a248e53bd18fe94941753aa6",
-          sampleRate: 24000,
-          local: true,
-          cpuCapable: true,
-          costTier: "free",
-          license: "Apache-2.0",
-          downloadedBytes: kemetoneRecord.downloadedBytes,
-          state: kemetoneRecord.state,
         },
       },
       {
@@ -5311,8 +5312,7 @@ export function createV2PublicRouter(
     // checkArabicProductionReadiness() is deliberately ElevenLabs-specific
     // (see its accepted contract and arabicVoicePolicy.test.ts) - it answers
     // "is the ElevenLabs route ready", not "is Arabic ready overall". Local
-    // Voice (VoiceTut, or KemeTone as the lightweight fallback) is the actual
-    // default Arabic route, so the response this endpoint returns is widened
+    // VoiceTut is the actual default Arabic route, so the response this endpoint returns is widened
     // here with that signal rather than by changing the narrower function.
     const elevenLabsReadiness = capabilityManager.checkArabicProductionReadiness({ configured, liveVerified });
     const localVoiceConfigured = new VoiceRegistry({} as any).isArabicProductionConfigured();
@@ -5324,7 +5324,7 @@ export function createV2PublicRouter(
         ? "READY — LOCAL VOICE CONFIGURED"
         : elevenLabsReadiness.statusText,
       message: localVoiceConfigured
-        ? "Local Voice (VoiceTut or KemeTone) is ready for Arabic narration."
+        ? "Local Voice (VoiceTut) is ready for Arabic narration."
         : elevenLabsReadiness.message,
     });
   });
@@ -5968,6 +5968,19 @@ export function createV2InternalRouter(
       return;
     }
     const { jobId, input, callbackBaseUrl, internalServiceToken, workerId } = parsed.data;
+    const licenseGate = LicenseManager.getInstance().requireActiveForProduction();
+    if (!licenseGate.allowed) {
+      await axios.post(
+        `${callbackBaseUrl}/internal/v1/jobs/${jobId}/fail`,
+        {
+          message: String(licenseGate.response.message),
+          technicalMessage: "Commercial license became invalid before render start.",
+        },
+        { headers: { "x-internal-token": internalServiceToken }, timeout: 5000 },
+      );
+      res.status(402).json(licenseGate.response);
+      return;
+    }
 
     // Pick up an ElevenLabs credential the customer configured after this
     // worker started, so Arabic jobs do not need a container restart.

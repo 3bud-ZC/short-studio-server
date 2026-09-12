@@ -103,21 +103,12 @@ export const INTEGRATION_CATALOG: Record<string, IntegrationEntry> = {
     category: "Voice",
     connectionType: "builtin",
   },
-  // The two local Egyptian Arabic voices. They are the default Arabic route
-  // and were missing from this catalogue entirely, which made the Integrations
-  // page imply ElevenLabs was the only way to narrate Arabic - the opposite of
-  // how the engine actually routes. They install from Settings rather than
-  // taking a credential, so they are `builtin`.
+  // VoiceTut is the default Arabic route and installs from Settings rather
+  // than taking a credential.
   voicetut: {
     id: "voicetut",
     shortName: "VoiceTut",
     hasDefault: true,
-    category: "Voice",
-    connectionType: "builtin",
-  },
-  kemetone: {
-    id: "kemetone",
-    shortName: "KemeTone",
     category: "Voice",
     connectionType: "builtin",
   },

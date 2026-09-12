@@ -103,10 +103,7 @@ describe("Integration catalog", () => {
     const knownProviderIds = [
       "local_ai", "gemini", "ollama", "pexels", "pixabay", "veo", "fal",
       "kokoro", "piper", "edge_tts", "google_cloud_tts", "elevenlabs",
-      // The two local Egyptian Arabic voices. Real entries of the engine's
-      // `voiceProviderEnum`, reported by the providers API with their own
-      // install state, and the default Arabic route - not a decoration.
-      "voicetut", "kemetone",
+      "voicetut",
       "upload_post",
     ];
     // ...or a built-in engine route that always works and never takes a

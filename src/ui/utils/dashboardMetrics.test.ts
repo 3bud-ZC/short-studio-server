@@ -306,7 +306,7 @@ describe("dashboard alerts", () => {
             optional: false,
             messageKey: "health.msg.voiceEnglishOnly",
             message:
-              "Local English narration is available. Arabic narration needs Local Voice setup (VoiceTut or KemeTone) - or an optional ElevenLabs connection.",
+              "Local English narration is available. Arabic narration needs Local Voice setup with VoiceTut - or an optional ElevenLabs connection.",
           },
         ],
       },

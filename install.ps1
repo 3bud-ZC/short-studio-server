@@ -337,6 +337,29 @@ function Test-EnvKeyPresent([string[]]$Lines, [string]$Key) {
     return [bool]($Lines | Where-Object { $_ -match "^$([regex]::Escape($Key))=" })
 }
 
+function Get-DeviceFingerprintMaterial {
+    $parts = @()
+    try {
+        $guid = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name MachineGuid -ErrorAction Stop).MachineGuid
+        if ($guid) { $parts += "win_guid:$guid" }
+    } catch { }
+    try {
+        $uuid = (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop).UUID
+        if ($uuid) { $parts += "system_uuid:$uuid" }
+    } catch { }
+    try {
+        $cpu = (Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1).ProcessorId
+        if ($cpu) { $parts += "cpu:$cpu" }
+    } catch { }
+    $raw = if ($parts.Count -gt 0) { $parts -join "|" } else { "$env:COMPUTERNAME|$env:USERNAME" }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+    $hash = (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join "").ToUpperInvariant()
+    return "SS-$($hash.Substring(0,4))-$($hash.Substring(4,4))-$($hash.Substring(8,4))-$($hash.Substring(12,4))"
+}
+
+$HostDeviceFingerprint = Get-DeviceFingerprintMaterial
+
 if (-not (Test-Path $AbudEnvFile)) {
     # Never reached for an upgrade: $IsLegacyAbudInstall guarantees this file
     # already exists whenever a real ABUD Shorts Engine 2.4 install is present.
@@ -369,6 +392,7 @@ LOG_LEVEL=info
 GENERIC_TIMEZONE=Africa/Cairo
 WHISPER_MODEL=small
 KOKORO_MODEL_PRECISION=q4
+ABUD_HOST_DEVICE_FINGERPRINT=$HostDeviceFingerprint
 
 POSTGRES_DB=short_studio
 POSTGRES_USER=short_studio
@@ -442,6 +466,7 @@ PEXELS_API_KEY=
     if (-not (Test-EnvKeyPresent $lines "SHORT_STUDIO_PUBLIC_BIND_HOST")) {
         $lines = Update-EnvLine $lines "SHORT_STUDIO_PUBLIC_BIND_HOST" "127.0.0.1"
     }
+    $lines = Update-EnvLine $lines "ABUD_HOST_DEVICE_FINGERPRINT" $HostDeviceFingerprint
     Write-TextFile $AbudEnvFile (($lines -join "`r`n") + "`r`n")
     Write-Host "      Existing configuration kept; secrets and data untouched." -ForegroundColor Green
 }
@@ -534,6 +559,7 @@ $env:SHORT_STUDIO_RELEASE_DIR = $ReleaseDir
 $env:ABUD_RELEASE_DIR = $ReleaseDir
 $env:SHORT_STUDIO_CONTAINER_PREFIX = $ComposeProject
 $env:ABUD_CONTAINER_PREFIX = $ComposeProject
+$env:ABUD_HOST_DEVICE_FINGERPRINT = $HostDeviceFingerprint
 if (-not $IsLegacyAbudInstall) {
     $env:SHORT_STUDIO_POSTGRES_VOLUME = "$ComposeProject-postgres-data"
     $env:SHORT_STUDIO_N8N_VOLUME = "$ComposeProject-n8n-data"

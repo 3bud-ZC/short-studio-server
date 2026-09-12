@@ -24,6 +24,7 @@ import {
   type VideoSemanticAnalysis,
 } from "../media-intelligence/semanticSimilarity";
 import { ProviderCircuitBreaker, type HeroShotAllocation } from "../providers/providerServicePolicy";
+import { providerSecrets } from "../provider-vault/providerSecrets";
 
 export type ResolvedSceneAsset = {
   sceneIndex: number;
@@ -55,6 +56,40 @@ type SemanticRankerOptions = {
   analyzer?: typeof analyzeVideoSemanticSimilarity;
   onPerf?: (event: import("./types").PerfEvent) => void;
 };
+
+const GENERIC_STOCK_TERMS = new Set([
+  "cinematic",
+  "lifestyle",
+  "business",
+  "technology",
+  "modern",
+  "video",
+  "short",
+  "scene",
+  "professional",
+  "content",
+  "reel",
+  "story",
+  "visual",
+]);
+const MIN_LEXICAL_SEMANTIC_SCORE = 45;
+const MIN_OPENCLIP_VISUAL_SEMANTIC_SCORE = 55;
+
+function deriveConcreteStockTerms(scene: ProductionSceneSpec): string[] {
+  const source = [
+    (scene as any).visualPrompt,
+    scene.narration,
+    (scene as any).onScreenText,
+  ].filter(Boolean).join(" ");
+  const tokens = Array.from(source.toLowerCase().matchAll(/[\p{L}\p{N}][\p{L}\p{N}'-]{2,}/gu))
+    .map((match) => match[0])
+    .filter((token) => !GENERIC_STOCK_TERMS.has(token));
+  const unique = Array.from(new Set(tokens)).slice(0, 8);
+  if (unique.length < 2) return [];
+  const primary = unique.slice(0, 4).join(" ");
+  const secondary = unique.slice(2, 6).join(" ");
+  return Array.from(new Set([primary, secondary].filter((term) => term.split(/\s+/).length >= 2)));
+}
 
 function semanticCandidateFileName(candidate: ScoredCandidate): string {
   const key = crypto
@@ -261,12 +296,26 @@ export class AutoVisualRouter {
     const searchTerms =
       scene.stockSearchTerms && scene.stockSearchTerms.length > 0
         ? scene.stockSearchTerms
-        : ["modern lifestyle", "city"];
+        : deriveConcreteStockTerms(scene);
+    if (searchTerms.length === 0) {
+      throw new Error(
+        "Professional automatic video needs concrete stock search terms for each scene; refusing generic filler footage.",
+      );
+    }
     const duration = options.targetDurationSeconds || scene.durationSeconds || 5;
     const orientation =
       options.orientation === OrientationEnum.landscape ? "landscape" : "portrait";
 
     const searchStartedAt = Date.now();
+    if (
+      typeof (this.stockRegistry as any).configuredProviders === "function" &&
+      this.stockRegistry.configuredProviders().length === 0
+    ) {
+      await Promise.all([
+        providerSecrets.refresh("pexels", "api_key").catch(() => undefined),
+        providerSecrets.refresh("pixabay", "api_key").catch(() => undefined),
+      ]);
+    }
     const lexicalCandidates = await this.stockRegistry.searchQueries(
       searchTerms.slice(0, 6).map((query) => ({
         query,
@@ -412,9 +461,14 @@ export class AutoVisualRouter {
       if (!candidate.downloadUrl || !candidate.width || !candidate.height) return false;
       if (Math.min(candidate.width, candidate.height) < 480) return false;
       if (candidate.visualHealthPass === false) return false;
-      return candidate.semanticScore >= 45 && candidate.qualityScore >= 45;
+      if (process.env.ABUD_ENABLE_OPENCLIP_SEMANTICS === "true") {
+        if (candidate.semanticAvailable !== true) return false;
+        if ((candidate.visualSemanticScore ?? 0) < MIN_OPENCLIP_VISUAL_SEMANTIC_SCORE) return false;
+      }
+      return candidate.semanticScore >= MIN_LEXICAL_SEMANTIC_SCORE && candidate.qualityScore >= 45;
     });
-    return usable[0] || null;
+    if (usable[0]) return usable[0];
+    return null;
   }
 
   private determineSceneSource(

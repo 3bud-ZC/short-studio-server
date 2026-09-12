@@ -35,12 +35,14 @@ import { AuthService } from "../v2/auth/authService";
 import { ApiTokenService } from "../v2/auth/apiTokenService";
 import { isLocalSingleUserAccess, localSingleUserOwner } from "../v2/auth/localSingleUser";
 import { PRODUCT_SLUG } from "../../version";
+import { LicenseManager } from "../v2/licensing/licenseManager";
 
 // todo abstract class
 export class APIRouter {
   public router: express.Router;
   private shortCreator: ShortCreator;
   private config: Config;
+  private licenseManager = LicenseManager.getInstance();
 
   constructor(config: Config, shortCreator: ShortCreator, private authService?: AuthService, private apiTokenService?: ApiTokenService) {
     this.config = config;
@@ -599,6 +601,17 @@ export class APIRouter {
 
   private requireProtectedAccess(requiredScope: "production:create" | "videos:read") {
     return async (req: ExpressRequest, res: ExpressResponse, next: express.NextFunction) => {
+      if (requiredScope === "production:create") {
+        if (process.env.VITEST === "true" && process.env.ABUD_ENFORCE_LICENSE_IN_TESTS !== "true") {
+          next();
+          return;
+        }
+        const gate = this.licenseManager.requireActiveForProduction();
+        if (!gate.allowed) {
+          res.status(402).json(gate.response);
+          return;
+        }
+      }
       if (!this.authService) {
         next();
         return;

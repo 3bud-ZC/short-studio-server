@@ -148,7 +148,7 @@ describe("Unified Create Video (V2.5.1)", () => {
   it("never offers a voice that cannot narrate the chosen language", () => {
     const arabic = voiceChoicesFor("ar").map((choice) => choice.id);
     const english = voiceChoicesFor("en").map((choice) => choice.id);
-    expect(arabic).toEqual(["auto", "voicetut", "kemetone", "elevenlabs"]);
+    expect(arabic).toEqual(["auto", "voicetut", "elevenlabs"]);
     expect(english).toEqual(["auto", "kokoro", "elevenlabs"]);
     // Kokoro is English-only and VoiceTut/KemeTone are Arabic-only; offering
     // either across the line can only produce a bad video.
@@ -177,7 +177,6 @@ describe("Unified Create Video (V2.5.1)", () => {
     expect(arLabels).toEqual([
       "تلقائي — موصى به",
       "فويس تت — محلي / جودة عالية",
-      "كيميتون — محلي / خفيف",
       "إلفن لابس — سحابي / مدفوع",
     ]);
 
