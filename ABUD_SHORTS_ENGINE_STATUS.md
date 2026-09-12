@@ -154,7 +154,7 @@ None of these interventions are acceptable for a commercial fresh install. This 
 ## 2.6 PC → Laptop Handoff
 
 **Branch:** `commercial/v2.6-quality-recovery`
-**Final HEAD SHA:** `b556d55a799e2d8995dd49b5927350a6399a66ee`
+**Final HEAD SHA:** `028e3dd` (handoff commit; earlier SHAs: `c37eeda` product fixes, `8d9bdab` status correction, `b556d55` installer sources)
 **GitHub remote:** `https://github.com/3bud-ZC/short-studio-server`
 **Remote branch:** `origin/commercial/v2.6-quality-recovery` (local HEAD == remote HEAD, verified)
 **Source pushed:** YES
