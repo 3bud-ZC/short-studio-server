@@ -60,7 +60,7 @@ export type MixedSilenceGateResult = {
 };
 
 export class AudioMasteringService {
-  constructor(private ffmpeg: FFMpeg) {}
+  constructor(private ffmpeg: FFMpeg) { }
 
   public analyzeDeadAir(
     speechWindows: Array<{
@@ -162,7 +162,7 @@ export class AudioMasteringService {
     } = {},
   ): Promise<MixedSilenceGateResult> {
     const warningThresholdMs = options.warningThresholdMs ?? 500;
-    const midVideoCriticalMs = options.midVideoCriticalMs ?? 900;
+    const midVideoCriticalMs = options.midVideoCriticalMs ?? 2000;
     const outroCriticalMs = options.outroCriticalMs ?? 1000;
     const outroWindowSeconds = options.outroWindowSeconds ?? 0.25;
 
@@ -224,12 +224,12 @@ export class AudioMasteringService {
     const finalMixMetrics = stream.hasAudioStream
       ? await this.ffmpeg.measureAudioLoudness(videoPath)
       : {
-          integratedLufs: null,
-          truePeakDbtp: null,
-          loudnessRange: null,
-          clippingDetected: false,
-          effectivelySilent: true,
-        };
+        integratedLufs: null,
+        truePeakDbtp: null,
+        loudnessRange: null,
+        clippingDetected: false,
+        effectivelySilent: true,
+      };
 
     const issues: string[] = [];
     if (!stream.hasAudioStream) issues.push("Audio stream missing.");

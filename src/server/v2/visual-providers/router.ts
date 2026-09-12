@@ -123,9 +123,9 @@ function rebuildCandidateScore(
   const semanticScore = Math.round(candidate.semanticScore * 0.25 + visualSemanticScore * 0.75);
   const totalScore = Math.round(
     semanticScore * 0.58 +
-      candidate.qualityScore * 0.24 +
-      candidate.decisionBreakdown.durationFit * 0.09 +
-      candidate.decisionBreakdown.orientationFit * 0.09,
+    candidate.qualityScore * 0.24 +
+    candidate.decisionBreakdown.durationFit * 0.09 +
+    candidate.decisionBreakdown.orientationFit * 0.09,
   );
   return {
     ...candidate,
@@ -234,7 +234,7 @@ export class AutoVisualRouter {
     private aiProviders: VisualProvider[] = [],
     private stockRegistry: StockProviderRegistry = new StockProviderRegistry(),
     private circuitBreaker: ProviderCircuitBreaker = new ProviderCircuitBreaker(),
-  ) {}
+  ) { }
 
   public async resolveSceneVisual(
     scene: ProductionSceneSpec,
@@ -456,12 +456,14 @@ export class AutoVisualRouter {
   }
 
   private pickBestCandidate(candidates: SemanticRankedCandidate[]): SemanticRankedCandidate | null {
+    const openclipEnabled = process.env.ABUD_ENABLE_OPENCLIP_SEMANTICS === "true";
+    const openclipAvailable = openclipEnabled && candidates.some((c) => c.semanticAvailable === true);
     const usable = candidates.filter((candidate) => {
       if (candidate.kind !== "video") return false;
       if (!candidate.downloadUrl || !candidate.width || !candidate.height) return false;
       if (Math.min(candidate.width, candidate.height) < 480) return false;
       if (candidate.visualHealthPass === false) return false;
-      if (process.env.ABUD_ENABLE_OPENCLIP_SEMANTICS === "true") {
+      if (openclipAvailable) {
         if (candidate.semanticAvailable !== true) return false;
         if ((candidate.visualSemanticScore ?? 0) < MIN_OPENCLIP_VISUAL_SEMANTIC_SCORE) return false;
       }

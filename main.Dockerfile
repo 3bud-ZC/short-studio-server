@@ -47,42 +47,49 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 RUN apt update
 RUN apt install -y \
-      # whisper dependencies
-      git \
-      wget \
-      cmake \
-      ffmpeg \
-      curl \
-      make \
-      libsdl2-dev \
-      # OpenMP runtime the whisper.cpp binary (built with -fopenmp in the
-      # install-whisper stage) links against; not pulled in transitively
-      # here since this stage never installs a C/C++ compiler itself.
-      libgomp1 \
-      # remotion dependencies
-      libnss3 \
-      libdbus-1-3 \
-      libatk1.0-0 \
-      libgbm-dev \
-      libasound2 \
-      libxrandr2 \
-      libxkbcommon-dev \
-      libxfixes3 \
-      libxcomposite1 \
-      libxdamage1 \
-      libatk-bridge2.0-0 \
-      libpango-1.0-0 \
-      libcairo2 \
-      libcups2 \
-      # Revideo evaluation: @puppeteer/browsers (used to fetch Chromium for
-      # @revideo/renderer) extracts the downloaded archive with `unzip` -
-      # without it the download itself "succeeds" but leaves an empty,
-      # non-functional install directory with no build-time error, only
-      # discovered the first time a real render tries to launch Chromium.
-      # See ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation" section 3/4.
-      unzip \
+    # whisper dependencies
+    git \
+    wget \
+    cmake \
+    ffmpeg \
+    curl \
+    make \
+    libsdl2-dev \
+    # OpenMP runtime the whisper.cpp binary (built with -fopenmp in the
+    # install-whisper stage) links against; not pulled in transitively
+    # here since this stage never installs a C/C++ compiler itself.
+    libgomp1 \
+    # remotion dependencies
+    libnss3 \
+    libdbus-1-3 \
+    libatk1.0-0 \
+    libgbm-dev \
+    libasound2 \
+    libxrandr2 \
+    libxkbcommon-dev \
+    libxfixes3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libatk-bridge2.0-0 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libcups2 \
+    # Revideo evaluation: @puppeteer/browsers (used to fetch Chromium for
+    # @revideo/renderer) extracts the downloaded archive with `unzip` -
+    # without it the download itself "succeeds" but leaves an empty,
+    # non-functional install directory with no build-time error, only
+    # discovered the first time a real render tries to launch Chromium.
+    # See ABUD_SHORTS_ENGINE_STATUS.md "Revideo Evaluation" section 3/4.
+    unzip \
+    # Kokoro TTS phonemizer (phonemizer@1.2.1, used by kokoro-js) bundles an
+    # Emscripten build of espeak-ng and expects /usr/share/espeak-ng-data
+    # to exist at runtime. Without it the phonemizer throws an
+    # uncaughtException that crashes the whole Node process. Install the
+    # native espeak-ng-data package so the data directory is present.
+    espeak-ng-data \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/lib/x86_64-linux-gnu/espeak-ng-data /usr/share/espeak-ng-data
 # setup pnpm
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"

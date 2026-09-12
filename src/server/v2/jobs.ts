@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import cuid from "cuid";
 import type { Response as ExpressResponse } from "express";
 import { V2Database } from "./db";
+import { logger } from "../../logger";
 import {
   type CreateVideoJobInput,
   type JobEventRecord,
@@ -109,13 +110,13 @@ function retrySceneTextFingerprints(spec: ProductionSpec | undefined, artifact: 
   const normalizedSpoken =
     spec?.language === "ar"
       ? preprocessArabicSpeech(spokenText, {
-          dialect: spec.dialect,
-          pronunciationOverrides:
-            (spec as any).pronunciationOverrides ||
-            (spec as any).metadata?.pronunciationOverrides ||
-            (spec as any).pronunciations,
-          brandPronunciations: (spec.brandKit?.voiceProfile as any)?.pronunciationDictionary,
-        }).ttsNormalizedText
+        dialect: spec.dialect,
+        pronunciationOverrides:
+          (spec as any).pronunciationOverrides ||
+          (spec as any).metadata?.pronunciationOverrides ||
+          (spec as any).pronunciations,
+        brandPronunciations: (spec.brandKit?.voiceProfile as any)?.pronunciationDictionary,
+      }).ttsNormalizedText
       : spokenText.trim();
   return {
     canonicalSpokenContentFingerprint: sha256Text({
@@ -253,13 +254,13 @@ export class JobService {
     const boundedLimit = Math.min(1000, Math.max(1, Math.floor(limit)));
     const rows = status
       ? await this.db.query<DbJobRow>(
-          "SELECT * FROM jobs WHERE status = $1 ORDER BY created_at DESC LIMIT $2",
-          [status, boundedLimit],
-        )
+        "SELECT * FROM jobs WHERE status = $1 ORDER BY created_at DESC LIMIT $2",
+        [status, boundedLimit],
+      )
       : await this.db.query<DbJobRow>(
-          "SELECT * FROM jobs ORDER BY created_at DESC LIMIT $1",
-          [boundedLimit],
-        );
+        "SELECT * FROM jobs ORDER BY created_at DESC LIMIT $1",
+        [boundedLimit],
+      );
     return rows.map((row) => this.mapJob(row));
   }
 
@@ -582,21 +583,21 @@ export class JobService {
 
     const productionSpec = current.productionSpec
       ? {
-          ...current.productionSpec,
-          metadata: {
-            ...((current.productionSpec as any).metadata || {}),
-            revision: {
-              ...(((current.productionSpec as any).metadata || {}).revision || {}),
-              type: "retry",
-              originalJobId,
-              retryOf: current.id,
-              retryNumber,
-              reuseStages: reusedStageList,
-              regeneratedStages,
-              reuseArtifacts: safeReuseArtifacts,
-            },
+        ...current.productionSpec,
+        metadata: {
+          ...((current.productionSpec as any).metadata || {}),
+          revision: {
+            ...(((current.productionSpec as any).metadata || {}).revision || {}),
+            type: "retry",
+            originalJobId,
+            retryOf: current.id,
+            retryNumber,
+            reuseStages: reusedStageList,
+            regeneratedStages,
+            reuseArtifacts: safeReuseArtifacts,
           },
-        }
+        },
+      }
       : undefined;
 
     // Historical truth is preserved: the failed record is untouched and the new
@@ -640,13 +641,25 @@ export class JobService {
     message: string,
     technicalMessage?: string,
   ): Promise<void> {
-    const rows = await this.db.query<DbJobEventRow>(
-      `INSERT INTO job_events (job_id, status, progress, stage, message, technical_message)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [jobId, status, progress, stage, message, technicalMessage || null],
-    );
-    this.events.emit(jobId, this.mapEvent(rows[0]));
+    try {
+      const rows = await this.db.query<DbJobEventRow>(
+        `INSERT INTO job_events (job_id, status, progress, stage, message, technical_message)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [jobId, status, progress, stage, message, technicalMessage || null],
+      );
+      this.events.emit(jobId, this.mapEvent(rows[0]));
+    } catch (err: any) {
+      // The job_events table has a foreign key on job_id. If the job was
+      // deleted (e.g. by a restart race or explicit cleanup) between the
+      // update and this event insert, the FK violation would crash the
+      // process. Log and swallow so a missing job can never kill the server.
+      if (err?.constraint === "job_events_job_id_fkey" || err?.code === "23503") {
+        logger?.warn?.({ jobId, err: err.message }, "Suppressed job_events FK violation (job no longer exists)");
+        return;
+      }
+      throw err;
+    }
   }
 
   private mapJob(row: DbJobRow): JobRecord {

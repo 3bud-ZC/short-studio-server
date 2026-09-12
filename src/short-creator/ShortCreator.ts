@@ -5,6 +5,9 @@ import path from "path";
 import https from "https";
 import http from "http";
 import axios from "axios";
+import { exec as execCb } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(execCb);
 
 import { Kokoro } from "./libraries/Kokoro";
 import { Remotion } from "./libraries/Remotion";
@@ -152,13 +155,13 @@ import type { ProductionTemplate } from "../video-core/types";
 
 type RenderProgressEvent = {
   status:
-    | "preparing"
-    | "generating_content"
-    | "searching_assets"
-    | "generating_voice"
-    | "generating_captions"
-    | "rendering"
-    | "finalizing";
+  | "preparing"
+  | "generating_content"
+  | "searching_assets"
+  | "generating_voice"
+  | "generating_captions"
+  | "rendering"
+  | "finalizing";
   progress: number;
   currentStage: string;
   message: string;
@@ -583,11 +586,11 @@ export class ShortCreator {
     const pixabayVaultKey = await providerSecrets.refresh("pixabay", "api_key").catch(() => undefined);
     const stockRuntimeAvailable = Boolean(
       this.config.pexelsApiKey ||
-        process.env.PIXABAY_API_KEY ||
-        pexelsVaultKey ||
-        pixabayVaultKey ||
-        providerSecrets.peek("pexels", "api_key") ||
-        providerSecrets.peek("pixabay", "api_key"),
+      process.env.PIXABAY_API_KEY ||
+      pexelsVaultKey ||
+      pixabayVaultKey ||
+      providerSecrets.peek("pexels", "api_key") ||
+      providerSecrets.peek("pixabay", "api_key"),
     );
 
     // An explicitly graphic production must not depend on stock footage: asking
@@ -597,8 +600,8 @@ export class ShortCreator {
       spec.productionMode === "motion_graphics" || spec.productionMode === "animated_explainer";
     const requestedVisualSource = String(
       (spec.metadata as any)?.uiContract?.visualSource ||
-        (spec as any).visualSource ||
-        "",
+      (spec as any).visualSource ||
+      "",
     );
     const forceStockFootage =
       spec.visualMode === "stock" ||
@@ -753,9 +756,9 @@ export class ShortCreator {
     ) =>
       String(revision.type || "") === "retry"
         ? revisionReuseArtifacts.find((artifact) =>
-            artifact.type === type &&
-            artifact.sceneIndex === sceneIndex,
-          )
+          artifact.type === type &&
+          artifact.sceneIndex === sceneIndex,
+        )
         : undefined;
     const reusableArtifactFor = (
       type: DurableSceneArtifact["type"],
@@ -869,10 +872,10 @@ export class ShortCreator {
       const retryReuseSpokenNarration =
         spec.language === "ar"
           ? preprocessArabicSpeech(requestedSpokenNarration, {
-              dialect: requestedDialect as any,
-              pronunciationOverrides: jobPronunciationOverrides,
-              brandPronunciations: brandVoiceProfile?.pronunciationDictionary,
-            }).ttsNormalizedText
+            dialect: requestedDialect as any,
+            pronunciationOverrides: jobPronunciationOverrides,
+            brandPronunciations: brandVoiceProfile?.pronunciationDictionary,
+          }).ttsNormalizedText
           : requestedSpokenNarration.trim();
       const canonicalSpokenContentFingerprint = retryContentFingerprint({
         text: retryReuseSpokenNarration,
@@ -1119,7 +1122,7 @@ export class ShortCreator {
         let correctionRetries = 0;
         let expandedSpokenNarration = requestedSpokenNarration;
         let gaveUpReason: string | undefined;
-        for (;;) {
+        for (; ;) {
           const decision = decideCorrectionAction({
             actualSeconds: actualVoiceDuration,
             targetSeconds: targetSceneDuration,
@@ -1738,8 +1741,8 @@ export class ShortCreator {
           const segIntent =
             originalSceneSpec.purpose === "hook" ? "hook"
               : originalSceneSpec.purpose === "cta" ? "cta"
-              : originalSceneSpec.purpose === "solution" ? "solution"
-              : "detail";
+                : originalSceneSpec.purpose === "solution" ? "solution"
+                  : "detail";
           plannedShots.push({
             shotId: `${index}-${seg.segmentIndex}`,
             narrationSceneId: `scene${index}`,
@@ -1849,10 +1852,10 @@ export class ShortCreator {
                 : undefined,
             numberStat: extracted?.statValue
               ? {
-                  value: extracted.statValue,
-                  label: String(originalSceneSpec.onScreenText || ""),
-                  suffix: extracted.statSuffix,
-                }
+                value: extracted.statValue,
+                label: String(originalSceneSpec.onScreenText || ""),
+                suffix: extracted.statSuffix,
+              }
               : undefined,
             features:
               motionTemplate === "feature_list"
@@ -2269,22 +2272,22 @@ export class ShortCreator {
                   subtitle: String((originalSceneSpec as any).displayText || ""),
                   numberStat: planned?.extracted?.statValue
                     ? {
-                        value: planned.extracted.statValue,
-                        label: String(originalSceneSpec.onScreenText || ""),
-                        suffix: planned.extracted.statSuffix,
-                      }
+                      value: planned.extracted.statValue,
+                      label: String(originalSceneSpec.onScreenText || ""),
+                      suffix: planned.extracted.statSuffix,
+                    }
                     : undefined,
                   features: planned?.extracted?.stepCount
                     ? splitNarrationBeats(String(sceneTimeline.narration || "")).slice(
-                        0,
-                        planned.extracted.stepCount,
-                      )
+                      0,
+                      planned.extracted.stepCount,
+                    )
                     : undefined,
                   steps: planned?.extracted?.stepCount
                     ? splitNarrationBeats(String(sceneTimeline.narration || "")).slice(
-                        0,
-                        planned.extracted.stepCount,
-                      )
+                      0,
+                      planned.extracted.stepCount,
+                    )
                     : undefined,
                   ctaText: brandStyle.ctaText,
                   contactText: spec.contact || spec.brandKit?.contactText,
@@ -2801,7 +2804,7 @@ export class ShortCreator {
     // gaps (incident cmtehsptj000108ledzk3f3ji: ~4.5s/~5.3s/~4.8s runs below
     // -35dB in exactly this situation).
     let musicForRender: MusicForVideo = selectedMusic;
-    if (selectedMusic?.file && capabilityManager.isPythonQualityVenvInstalled()) {
+    if (selectedMusic?.file) {
       try {
         const sourceMusicPath = path.join(this.config.musicDirPath, selectedMusic.file);
         const windowSeconds = totalDurationSeconds;
@@ -2886,12 +2889,12 @@ export class ShortCreator {
         }
         const additionalVisualPaths = segments && segments.length > 1
           ? segments.slice(1).map((segment: any) => {
-              const segmentPath = this.localPathForMediaUrl(segment.video);
-              if (!segmentPath || !fs.existsSync(segmentPath)) {
-                throw new Error(`Revideo render: scene ${sceneIdx} additional segment is not available.`);
-              }
-              return segmentPath;
-            })
+            const segmentPath = this.localPathForMediaUrl(segment.video);
+            if (!segmentPath || !fs.existsSync(segmentPath)) {
+              throw new Error(`Revideo render: scene ${sceneIdx} additional segment is not available.`);
+            }
+            return segmentPath;
+          })
           : undefined;
         const narrationPath = this.localPathForMediaUrl(scene.audio?.url);
         if (!narrationPath || !fs.existsSync(narrationPath)) {
@@ -2963,15 +2966,15 @@ export class ShortCreator {
       try {
         const fastCaptionAssPath = burnCaptionsWithLibass
           ? this.createTimelineCaptionAss({
-              videoId,
-              scenes,
-              sceneCaptionWords,
-              captionStyleId: spec.captionStyle as string,
-              orientation,
-              captionStyleSpec,
-              fontsDir,
-              tempFiles,
-            })
+            videoId,
+            scenes,
+            sceneCaptionWords,
+            captionStyleId: spec.captionStyle as string,
+            orientation,
+            captionStyleSpec,
+            fontsDir,
+            tempFiles,
+          })
           : undefined;
         if (fastCaptionAssPath) {
           captionRenderer = "libass";
@@ -3473,10 +3476,10 @@ export class ShortCreator {
         // must not be hidden behind an average that looks fine.
         captionScriptSimilarity: voiceArtifacts.reduce((min: number | undefined, v: any) =>
           typeof v.captionScriptSimilarity === "number" ? Math.min(min ?? 1, v.captionScriptSimilarity) : min,
-        undefined as number | undefined),
+          undefined as number | undefined),
         captionAlignmentConfidence: voiceArtifacts.reduce((min: number | undefined, v: any) =>
           typeof v.captionAlignmentConfidence === "number" ? Math.min(min ?? 1, v.captionAlignmentConfidence) : min,
-        undefined as number | undefined),
+          undefined as number | undefined),
         voiceArtifacts,
         costEstimate: spec.costEstimate as any,
         productionSpec: spec as any,
@@ -3889,18 +3892,17 @@ export class ShortCreator {
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await axios({
-          method: "GET",
+        await fs.ensureDir(path.dirname(destPath));
+        const curlArgs = [
+          "-sSL",
+          "--max-time", "120",
+          "--connect-timeout", "15",
+          "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "-o", destPath,
+          "-w", "%{content_type}",
           url,
-          responseType: "stream",
-          timeout: 45000,
-          maxRedirects: 5,
-          httpsAgent: ShortCreator.downloadAgent,
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          },
-        });
-        const contentType = String(response.headers?.["content-type"] || "").toLowerCase();
+        ];
+        const { stdout: contentType } = await execAsync(`curl ${curlArgs.map(a => `"${a}"`).join(" ")}`, { timeout: 150000, windowsHide: true });
         const expectsVideo = path.extname(destPath).toLowerCase() === ".mp4";
         if (
           expectsVideo &&
@@ -3911,32 +3913,6 @@ export class ShortCreator {
         ) {
           throw new Error(`Provider returned non-video content type: ${contentType}`);
         }
-
-        await new Promise<void>((resolve, reject) => {
-          const writer = fs.createWriteStream(destPath);
-          const streamTimeout = setTimeout(() => {
-            response.data.destroy();
-            writer.destroy();
-            fs.unlink(destPath, () => {});
-            reject(new Error("Download stream timed out after 45s"));
-          }, 45000);
-          response.data.on("error", (err: Error) => {
-            clearTimeout(streamTimeout);
-            writer.destroy();
-            fs.unlink(destPath, () => {});
-            reject(err);
-          });
-          writer.on("finish", () => {
-            clearTimeout(streamTimeout);
-            writer.close();
-            resolve();
-          });
-          writer.on("error", (err: Error) => {
-            clearTimeout(streamTimeout);
-            fs.unlink(destPath, () => {});
-            reject(err);
-          });
-        });
 
         if (expectsVideo) {
           const validation = await this.ffmpeg.validateDownloadedVideoAsset(destPath);

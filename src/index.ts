@@ -4,6 +4,31 @@ dns.setDefaultResultOrder("ipv4first");
 import path from "path";
 import fs from "fs-extra";
 
+// Kokoro's phonemizer (phonemizer@1.2.1, an Emscripten build of espeak-ng)
+// installs an `unhandledRejection` handler that rethrows, and its module
+// initialization can throw asynchronously after the import completes. That
+// would crash the whole Node process and take down the app mid-job. Install
+// a defensive handler that logs and swallows these specific phonemizer
+// failures so a TTS-library initialization fault can never kill the server.
+// The Kokoro provider already degrades gracefully to a deterministic fallback
+// when phonemization is unavailable, so suppressing the crash is safe.
+process.on("unhandledRejection", (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  if (msg.includes("phonemizer") || msg.includes("espeak") || msg.includes("Emscripten")) {
+    logger?.warn?.({ msg }, "Suppressed phonemizer unhandled rejection (Kokoro will fall back)");
+    return;
+  }
+  logger?.error?.({ err: reason }, "Unhandled rejection");
+});
+process.on("uncaughtException", (err) => {
+  const msg = err?.message || String(err);
+  if (msg.includes("phonemizer") || msg.includes("espeak") || msg.includes("Emscripten")) {
+    logger?.warn?.({ msg }, "Suppressed phonemizer uncaught exception (Kokoro will fall back)");
+    return;
+  }
+  logger?.error?.({ err }, "Uncaught exception");
+});
+
 import { Kokoro } from "./short-creator/libraries/Kokoro";
 import { Remotion } from "./short-creator/libraries/Remotion";
 import { Whisper } from "./short-creator/libraries/Whisper";
