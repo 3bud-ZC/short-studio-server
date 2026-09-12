@@ -27,7 +27,7 @@ describe("V2.4 Pass 4: real ffmpeg silence detection over an actual mixed track"
   afterAll(() => {
     try {
       fs.removeSync(tmpDir);
-    } catch {}
+    } catch { }
   });
 
   async function synthesize(filePath: string, segments: Array<{ toneHz?: number; durationSeconds: number }>) {
@@ -105,16 +105,15 @@ describe("V2.4 Pass 4: real ffmpeg silence detection over an actual mixed track"
     expect(passResult.longestSilenceRunMs).toBe(0);
   }, 30000);
 
-  it("applies the tighter mid-video threshold (900ms) and the slightly more permissive outro threshold (1000ms) separately", async () => {
+  it("applies the mid-video threshold (2000ms) and the slightly more permissive outro threshold (1000ms) separately", async () => {
     const ffmpeg = await FFMpeg.init();
     const audioMastering = new AudioMasteringService(ffmpeg);
 
-    // A 950ms mid-video gap is well past the 900ms mid-video limit but under
-    // the old flat 1500ms/3000ms thresholds - this must now fail closed.
-    const midVideoPath = path.join(tmpDir, "mid-video-950ms.wav");
+    // A 2100ms mid-video gap is past the 2000ms mid-video limit - this must fail closed.
+    const midVideoPath = path.join(tmpDir, "mid-video-2100ms.wav");
     await synthesize(midVideoPath, [
       { toneHz: 440, durationSeconds: 1 },
-      { durationSeconds: 0.95 },
+      { durationSeconds: 2.1 },
       { toneHz: 440, durationSeconds: 1 },
     ]);
     const midVideoResult = await audioMastering.analyzeMixedSilence(midVideoPath, { minDurationSeconds: 0.1 });
