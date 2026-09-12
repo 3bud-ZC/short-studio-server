@@ -154,10 +154,12 @@ None of these interventions are acceptable for a commercial fresh install. This 
 ## 2.6 PC → Laptop Handoff
 
 **Branch:** `commercial/v2.6-quality-recovery`
+**Final HEAD SHA:** `b556d55a799e2d8995dd49b5927350a6399a66ee`
 **GitHub remote:** `https://github.com/3bud-ZC/short-studio-server`
-**Remote branch:** `origin/commercial/v2.6-quality-recovery`
+**Remote branch:** `origin/commercial/v2.6-quality-recovery` (local HEAD == remote HEAD, verified)
 **Source pushed:** YES
 **Existing 2.6 image digest:** `sha256:bdfac0d2f6d8b888c2a021c4ad58e22c115e875d2c5aa132359160514376b9ee`
+**GHCR handoff image:** BLOCKED — `docker push ghcr.io/3bud-zc/short-studio-server:2.6.0-handoff` returned `permission_denied: The token provided does not match expected scopes` (GHCR token lacks package-write scope). Image remains local on PC; the laptop can rebuild it from the committed `main.Dockerfile` or the PC can re-attempt push after fixing GHCR credentials.
 **Installer EXE SHA256:** `e5ac8ebcea6c4f0c72a22925cfb461144015efb546e7017e777f9d664019ee24`
 **Package SHA256:** `181e5aca3aac19ff0657b315ec1b99e3ac7b08f4940b78e6a015e856dd25688d`
 **Private signing key:** NOT in Git — remains external at `C:\ProgramData\ShortStudio\licensing\` on PC only
