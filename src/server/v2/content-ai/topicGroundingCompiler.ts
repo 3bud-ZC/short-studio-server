@@ -1,5 +1,6 @@
 import type { ProductionSceneSpec } from "../../../types/productionSpec";
 import type { PromptIntentContract } from "./promptIntentContract";
+import { stripMetaInstructions } from "./promptIntentContract";
 
 interface TopicMatch {
   matches: (prompt: string, contract: PromptIntentContract) => boolean;
@@ -788,7 +789,7 @@ export function compileGroundedScenes(
         sceneIndex: 0,
         purpose: "hook",
         durationSeconds: dur,
-        narration: contract.explicitHook || `${tonePrefix}${factAt(0)}.`,
+        narration: stripMetaInstructions(contract.explicitHook || `${tonePrefix}${factAt(0)}.`, true),
         onScreenText: quoteTagline || entity,
         stockSearchTerms: [visualTermAt(0), visualTermAt(1)].filter(Boolean),
         visualPrompt: `High quality focused view of ${visualTermAt(0)} for: ${factAt(0)}`,
@@ -800,7 +801,7 @@ export function compileGroundedScenes(
         sceneIndex: 1,
         purpose: "solution",
         durationSeconds: dur,
-        narration: middle.endsWith(".") || middle.endsWith("؟") ? middle : `${middle}.`,
+        narration: stripMetaInstructions(middle.endsWith(".") || middle.endsWith("؟") ? middle : `${middle}.`, true),
         onScreenText: contract.subjectEntities[1] || entity,
         stockSearchTerms: [visualTermAt(1), visualTermAt(2)].filter(Boolean),
         visualPrompt: `Detailed scene showing ${visualTermAt(1)} while explaining: ${middle}`,
@@ -814,7 +815,7 @@ export function compileGroundedScenes(
         durationSeconds: dur,
         narration: cta
           ? cta
-          : `الخلاصة: ${factAt(Math.min(2, facts.length - 1))}.`,
+          : stripMetaInstructions(`الخلاصة: ${factAt(Math.min(2, facts.length - 1))}.`, true),
         onScreenText: quoteTagline || contract.subjectEntities[2] || entity,
         stockSearchTerms: [visualTermAt(2), visualTermAt(0)].filter(Boolean),
         visualPrompt: `Relevant closing visual of ${visualTermAt(2)} connected to: ${contract.requestedTopic}`,
@@ -832,7 +833,7 @@ export function compileGroundedScenes(
       sceneIndex: 0,
       purpose: "hook",
       durationSeconds: dur,
-      narration: contract.explicitHook || `${tonePrefix}${factAt(0)}.`,
+      narration: stripMetaInstructions(contract.explicitHook || `${tonePrefix}${factAt(0)}.`, false),
       onScreenText: quoteTagline || entity,
       stockSearchTerms: [visualTermAt(0), visualTermAt(1)].filter(Boolean),
       visualPrompt: `High quality crisp visual of ${visualTermAt(0)} for: ${factAt(0)}`,
@@ -844,7 +845,7 @@ export function compileGroundedScenes(
       sceneIndex: 1,
       purpose: "solution",
       durationSeconds: dur,
-      narration: middle.endsWith(".") || middle.endsWith("?") ? middle : `${middle}.`,
+      narration: stripMetaInstructions(middle.endsWith(".") || middle.endsWith("?") ? middle : `${middle}.`, false),
       onScreenText: contract.subjectEntities[1] || entity,
       stockSearchTerms: [visualTermAt(1), visualTermAt(2)].filter(Boolean),
       visualPrompt: `Focused scene showing ${visualTermAt(1)} while explaining: ${middle}`,
@@ -858,7 +859,7 @@ export function compileGroundedScenes(
       durationSeconds: dur,
       narration: cta
         ? cta
-        : `The takeaway: ${factAt(Math.min(2, facts.length - 1))}.`,
+        : stripMetaInstructions(`The takeaway: ${factAt(Math.min(2, facts.length - 1))}.`, false),
       onScreenText: quoteTagline || contract.subjectEntities[2] || entity,
       stockSearchTerms: [visualTermAt(2), visualTermAt(0)].filter(Boolean),
       visualPrompt: `Relevant closing visual of ${visualTermAt(2)} connected to: ${contract.requestedTopic}`,

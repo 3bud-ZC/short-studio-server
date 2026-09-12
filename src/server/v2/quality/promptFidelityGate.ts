@@ -2,16 +2,18 @@ import type { ProductionSceneSpec, ProductionSpec } from "../../../types/product
 import {
   type PromptIntentContract,
   buildPromptIntentContract,
+  stripMetaInstructions,
 } from "../content-ai/promptIntentContract";
 import { inventsUngroundedClaim } from "../creative/ctaPolicy";
 
 export interface PromptFidelityIssue {
   rule:
-    | "quoted_text_missing"
-    | "negative_constraint_violated"
-    | "topic_drift"
-    | "unrequested_claim_invented"
-    | "abstract_stock_query";
+  | "quoted_text_missing"
+  | "negative_constraint_violated"
+  | "topic_drift"
+  | "unrequested_claim_invented"
+  | "abstract_stock_query"
+  | "raw_prompt_leak";
   message: string;
   severity: "error" | "warning";
   sceneIndex?: number;
@@ -141,6 +143,20 @@ export function verifyPromptFidelity(
         });
       }
     }
+
+    // 6. Check for raw prompt/meta-instruction leakage in narration
+    const isAr = contract.language === "ar";
+    const stripped = stripMetaInstructions(scene.narration, isAr);
+    if (stripped !== scene.narration && stripped.length < scene.narration.length) {
+      issues.push({
+        rule: "raw_prompt_leak",
+        message: `Scene ${scene.sceneIndex} narration contains meta/orchestration instructions that should not be spoken.`,
+        severity: "error",
+        sceneIndex: scene.sceneIndex,
+        field: "narration",
+        details: { original: scene.narration, stripped },
+      });
+    }
   }
 
   // Score calculation
@@ -148,6 +164,7 @@ export function verifyPromptFidelity(
   deduction += quotedPhrasesMissing.length * 25;
   deduction += negativeViolations.length * 30;
   deduction += inventedClaims.length * 15;
+  deduction += issues.filter((i) => i.rule === "raw_prompt_leak").length * 20;
   if (topicGroundingScore < 50) deduction += 20;
 
   const score = Math.max(0, Math.min(100, 100 - deduction));
@@ -183,6 +200,14 @@ export function enforceAndRepairPromptFidelity(
     let narration = scene.narration;
     let onScreenText = scene.onScreenText;
     let stockTerms = [...(scene.stockSearchTerms || [])];
+    const isAr = contract.language === "ar";
+
+    // Strip raw prompt/meta-instruction leakage from narration
+    const metaStripped = stripMetaInstructions(narration, isAr);
+    if (metaStripped !== narration && metaStripped.length > 0) {
+      narration = metaStripped;
+      repaired = true;
+    }
 
     // Filter abstract stock queries and replace with concrete subjects
     const concretePool = contract.concreteVisualSubjects;

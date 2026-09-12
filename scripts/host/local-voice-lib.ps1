@@ -65,7 +65,8 @@ function Invoke-LocalVoiceNative {
     $ErrorActionPreference = "Continue"
     try {
         & $Path @ArgumentList 2>&1 | ForEach-Object { "$_" }
-    } finally {
+    }
+    finally {
         $ErrorActionPreference = $previous
     }
 }
@@ -84,7 +85,8 @@ function Get-LocalVoiceHardwareProfile {
     try {
         $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
         $ramTotalMb = [math]::Round($cs.TotalPhysicalMemory / 1MB)
-    } catch { }
+    }
+    catch { }
 
     $gpuName = $null
     $cudaCapable = $false
@@ -92,7 +94,8 @@ function Get-LocalVoiceHardwareProfile {
         $gpus = Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop
         $nvidia = $gpus | Where-Object { $_.Name -match "NVIDIA" } | Select-Object -First 1
         if ($nvidia) { $gpuName = $nvidia.Name; $cudaCapable = $true }
-    } catch { }
+    }
+    catch { }
 
     $vramMb = $null
     $driverVersion = $null
@@ -113,7 +116,8 @@ function Get-LocalVoiceHardwareProfile {
                     $driverVersion = $parts[1].Trim()
                 }
             }
-        } catch { }
+        }
+        catch { }
     }
 
     return [ordered]@{
@@ -134,7 +138,8 @@ function Get-LocalVoiceDiskFreeGb {
         $qualifier = (Split-Path -Qualifier $Path -ErrorAction Stop).TrimEnd(":")
         $drive = Get-PSDrive -Name $qualifier -ErrorAction Stop
         return [math]::Round($drive.Free / 1GB, 1)
-    } catch {
+    }
+    catch {
         return 0
     }
 }
@@ -207,7 +212,8 @@ function Test-LocalVoiceOwnsPort {
     try {
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 2 -ErrorAction Stop
         return ($health.PSObject.Properties.Name -contains "hardware")
-    } catch {
+    }
+    catch {
         return $false
     }
 }
@@ -221,7 +227,8 @@ function Resolve-LocalVoicePort {
             $probe = New-Object System.Net.Sockets.TcpClient
             $probe.Connect("127.0.0.1", $candidate)
             $probe.Close()
-        } catch {
+        }
+        catch {
             $busy = $false
         }
         if (-not $busy) { return $candidate }
@@ -239,7 +246,12 @@ function Test-LocalVoiceRuntimeReady {
     if (-not (Test-Path $python)) { return $false }
     $probe = Invoke-LocalVoiceNative $python @("-c", "import torch, voicetut_tts; print(torch.__version__)")
     if ($LASTEXITCODE -ne 0 -or -not $probe) { return $false }
-    return (@($probe)[-1]).Trim() -eq $script:LocalVoicePinned.TorchVersion
+    $version = (@($probe)[-1]).Trim()
+    # Accept both the CUDA variant (e.g. "2.5.1+cu121") and the CPU variant
+    # (e.g. "2.5.1") - both are valid installed runtimes, the CUDA one is
+    # just preferred when available.
+    $baseVersion = ($script:LocalVoicePinned.TorchVersion -replace '\+cu121', '')
+    return ($version -eq $script:LocalVoicePinned.TorchVersion -or $version -eq $baseVersion)
 }
 
 <#
@@ -346,16 +358,35 @@ function Install-LocalVoiceRuntime {
     Invoke-LocalVoiceNative $python @("-m", "pip", "install", "--upgrade", "pip", "--quiet") | Out-Null
     Invoke-LocalVoiceNative $python @("-m", "pip", "install", "-r", (Join-Path $AppSourceDir "requirements.txt"), "--quiet") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not install the Local Voice service's base dependencies." }
-    Invoke-LocalVoiceNative $python @("-m", "pip", "install", "torch==$($script:LocalVoicePinned.TorchVersion)", "torchaudio==$($script:LocalVoicePinned.TorchaudioVersion)", "--index-url", $script:LocalVoicePinned.TorchIndexUrl, "--quiet") | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not install the pinned PyTorch CUDA runtime ($($script:LocalVoicePinned.TorchVersion))." }
+
+    # Try CUDA PyTorch first; fall back to CPU PyTorch if the CUDA wheels
+    # cannot be installed (no compatible GPU, network issue, or the
+    # multi-gigabyte download times out). VoiceTut works on CPU - slower
+    # inference, but the service is fully functional and the model loads
+    # the same way. The runtime manifest records which variant was installed
+    # so the health endpoint reports truthfully.
+    $cudaInstalled = $false
+    try {
+        Invoke-LocalVoiceNative $python @("-m", "pip", "install", "torch==$($script:LocalVoicePinned.TorchVersion)", "torchaudio==$($script:LocalVoicePinned.TorchaudioVersion)", "--index-url", $script:LocalVoicePinned.TorchIndexUrl, "--quiet") | Out-Null
+        if ($LASTEXITCODE -eq 0) { $cudaInstalled = $true }
+    }
+    catch { }
+
+    if (-not $cudaInstalled) {
+        Write-Host "      CUDA PyTorch install failed; falling back to CPU PyTorch..." -ForegroundColor Yellow
+        $cpuTorchVersion = ($script:LocalVoicePinned.TorchVersion -replace '\+cu121', '')
+        Invoke-LocalVoiceNative $python @("-m", "pip", "install", "torch==$cpuTorchVersion", "torchaudio==$cpuTorchVersion", "--quiet") | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not install PyTorch (tried both CUDA and CPU variants)." }
+    }
+
     Invoke-LocalVoiceNative $python @("-m", "pip", "install", $script:LocalVoicePinned.OmniVoiceSource, "voicetut-tts==$($script:LocalVoicePinned.VoicetutTtsVersion)", "--quiet") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not install VoiceTut-TTS $($script:LocalVoicePinned.VoicetutTtsVersion)." }
 
     if (-not (Test-LocalVoiceRuntimeReady -Paths $Paths)) {
         throw "The Local Voice runtime installed but does not report the expected pinned versions."
     }
-    Write-LocalVoiceRuntimeManifest -Paths $Paths -Source "fresh_install"
-    return [ordered]@{ status = "installed"; reused = $false }
+    Write-LocalVoiceRuntimeManifest -Paths $Paths -Source $(if ($cudaInstalled) { "fresh_install_cuda" } else { "fresh_install_cpu" })
+    return [ordered]@{ status = "installed"; reused = $false; cuda = $cudaInstalled }
 }
 
 # ---------------------------------------------------------------------------
@@ -383,11 +414,12 @@ function Get-LocalVoiceServiceStatus {
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Paths.Port)/health" -TimeoutSec 3 -ErrorAction Stop
         $result.healthy = [bool]$health.ok
         if ($health.models_ready) { $result.modelsReady = @($health.models_ready) }
-    } catch { }
+    }
+    catch { }
     try {
         $listener = Get-NetTCPConnection -State Listen -LocalPort $Paths.Port -ErrorAction Stop |
-            Where-Object { $_.OwningProcess -gt 0 } |
-            Select-Object -First 1
+        Where-Object { $_.OwningProcess -gt 0 } |
+        Select-Object -First 1
         if ($listener) {
             $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction Stop
             $expectedPort = "--port $($Paths.Port)"
@@ -399,7 +431,8 @@ function Get-LocalVoiceServiceStatus {
                 $result.processId = [int]$listener.OwningProcess
             }
         }
-    } catch { }
+    }
+    catch { }
     return $result
 }
 
@@ -440,7 +473,8 @@ function Start-LocalVoiceService {
             -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput $Paths.LogFile `
             -RedirectStandardError "$($Paths.LogFile).err"
-    } finally {
+    }
+    finally {
         $env:PORT = $previousPort
         $env:ABUD_MODEL_CACHE_DIR = $previousCache
         $env:INTERNAL_SERVICE_TOKEN = $previousToken
@@ -458,10 +492,10 @@ function Start-LocalVoiceService {
         Set-Content -Path $Paths.PidFile -Value "$($running.processId)" -Encoding ascii -NoNewline
     }
     return [ordered]@{
-        started = $true
-        alreadyRunning = $false
-        ready = ($ready -and $running.running)
-        processId = $running.processId
+        started           = $true
+        alreadyRunning    = $false
+        ready             = ($ready -and $running.running)
+        processId         = $running.processId
         launcherProcessId = $proc.Id
     }
 }
@@ -560,7 +594,8 @@ function Register-LocalVoiceStartupFolderFallback {
         $shortcut.Description = "Starts Short Studio Local Voice at login"
         $shortcut.Save()
         return (Test-Path $shortcutPath)
-    } catch {
+    }
+    catch {
         return $false
     }
 }
@@ -625,7 +660,7 @@ function Test-LocalVoiceAutoStartRegistered {
         $scheduledTask = ($LASTEXITCODE -eq 0)
     }
     $startupFolder = (Test-Path (Get-LocalVoiceStartupShortcutPath -Name $script:LocalVoiceTaskName)) -or
-                      (Test-Path (Get-LocalVoiceStartupShortcutPath -Name $script:LegacyLocalVoiceTaskName))
+    (Test-Path (Get-LocalVoiceStartupShortcutPath -Name $script:LegacyLocalVoiceTaskName))
     $mechanism = if ($scheduledTask) { "scheduled_task" } elseif ($startupFolder) { "startup_folder" } else { "none" }
     return [ordered]@{ scheduledTask = $scheduledTask; startupFolder = $startupFolder; any = ($scheduledTask -or $startupFolder); mechanism = $mechanism }
 }
@@ -701,7 +736,8 @@ function Invoke-LocalVoiceSetup {
         $autoStart = Register-LocalVoiceAutoStart -AbudShared $AbudShared
         $result.autoStartRegistered = $autoStart.registered
         $result.autoStartMechanism = $autoStart.mechanism
-    } catch {
+    }
+    catch {
         $result.error = $_.Exception.Message
     }
     return $result

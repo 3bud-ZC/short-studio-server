@@ -182,7 +182,7 @@ services:
     # the model over the network when /app/data/libs/whisper isn't already
     # populated correctly, which is exactly what must happen on a fresh
     # install if this seed step is ever broken again.
-    entrypoint: [ "sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js" ]
+    entrypoint: [ "sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; if [ ! -f /models/openclip/ViT-B-32-openclip-state.pt ] && [ -f /app/bootstrap/openclip/ViT-B-32-openclip-state.pt ]; then mkdir -p /models/openclip && cp /app/bootstrap/openclip/ViT-B-32-openclip-state.pt /models/openclip/ || true; fi; node dist/index.js" ]
     healthcheck:
       test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:3125/health >/dev/null || exit 1" ]
       interval: 15s
@@ -279,7 +279,7 @@ services:
     # the model over the network when /app/data/libs/whisper isn't already
     # populated correctly, which is exactly what must happen on a fresh
     # install if this seed step is ever broken again.
-    entrypoint: [ "sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; node dist/index.js" ]
+    entrypoint: [ "sh", "-c", "if [ ! -f /app/data/libs/whisper/models/ggml-small.bin ]; then rm -rf /app/data/libs/whisper && mkdir -p /app/data/libs && cp -R /app/bootstrap/whisper /app/data/libs/whisper || true; fi; if [ ! -f /models/openclip/ViT-B-32-openclip-state.pt ] && [ -f /app/bootstrap/openclip/ViT-B-32-openclip-state.pt ]; then mkdir -p /models/openclip && cp /app/bootstrap/openclip/ViT-B-32-openclip-state.pt /models/openclip/ || true; fi; node dist/index.js" ]
     healthcheck:
       test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:3123/health >/dev/null || exit 1" ]
       interval: 15s

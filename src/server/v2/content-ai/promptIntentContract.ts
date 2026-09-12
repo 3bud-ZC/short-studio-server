@@ -175,6 +175,58 @@ function cleanPromptDirectives(prompt: string, isAr: boolean): string {
   return cleaned.trim();
 }
 
+/**
+ * Strips meta/orchestration instructions from a piece of text that is intended
+ * to become spoken narration or on-screen text. Unlike cleanPromptDirectives
+ * (which only strips from the start of the whole prompt), this function strips
+ * meta wording from ANY position in the text, so individual factual-requirement
+ * lines like "Create a 15 second short about green tea" become "green tea".
+ *
+ * This is the canonical Prompt Intent Normalization layer: it separates the
+ * SUBJECT the customer wants content about from the orchestration/meta wording
+ * they used to request it ("make a video", "15 seconds", "for TikTok", etc.).
+ * Meta wording must NEVER appear in narration or captions.
+ */
+export function stripMetaInstructions(text: string, isAr: boolean): string {
+  let cleaned = text.trim();
+  if (!cleaned) return cleaned;
+
+  if (isAr) {
+    // Arabic meta-instruction patterns - strip from any position
+    cleaned = cleaned
+      .replace(/(?:اعمل|أنشئ|اصنع|صمم|سوي|سويلي|اكتب|اعملي|سوي لي)\s+(?:لي\s+)?(?:فيديو|شورت|مقطع|سكريبت|إعلان)?\s*(?:عن|حول|بخصوص|يناقش)?\s*/gi, "")
+      .replace(/عايز\s+(فيديو|شورت|مقطع|إعلان)?\s*(عن|حول|بخصوص)?\s*/gi, "")
+      .replace(/عاوز\s+(فيديو|شورت|مقطع|إعلان)?\s*(عن|حول|بخصوص)?\s*/gi, "")
+      .replace(/فيديو\s+(?:مدته|طوله|بمدة)?\s*\d+\s*(?:ثانية|ثواني|ثوان|ثوانى|دقيقة|دقائق)?\s*(?:عن|حول|بخصوص)?\s*/gi, "")
+      .replace(/مدته?\s+\d+\s*(?:ثانية|ثواني|ثوان|ثوانى|دقيقة|دقائق)?\s*/gi, "")
+      .replace(/(?:باللهجة|لهجة)\s*(?:المصرية|السعودية|الخليجية|العامية|الشامية|المغربية)?\s*/gi, "")
+      .replace(/(?:بدقة|بجودة)\s*(?:عالية|1080p|4k)?\s*/gi, "")
+      .replace(/(?:رأسي|عمودي|9:16|16:9)\s*/gi, "")
+      .replace(/(?:ابدأ|افتح|اختم)\s+(?:بـ|ب|بجملة|بـ)?\s*/gi, "")
+      .replace(/(?:ممنوع|لا تذكر|بدون|من غير|بلا)\s+/gi, "")
+      .replace(/(?:الجمهور|الهدف|المستهدفين)\s*[:：]?\s*/gi, "")
+      .replace(/(?:الهوك|المقدمة|الرسالة|النص|الدعوة|CTA|الكابشن|الترجمة|التعليق|المشاهد|المرئيات|الصوت)\s*[:：]\s*/gi, "");
+  } else {
+    // English meta-instruction patterns - strip from any position
+    cleaned = cleaned
+      .replace(/(?:create|make|generate|produce|write|build)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:video|short|tiktok|reel|script|ad|commercial|content|post)?\s*(?:about|for|on|of|that|which|to)?\s*/gi, "")
+      .replace(/(?:video|short|tiktok|reel|content|post)\s+(?:duration|length|that's|that is|of)?\s*\d+\s*(?:seconds|secs|sec|s|minutes|mins)?\s*(?:long|duration|about|for|on|of)?\s*/gi, "")
+      .replace(/\d+\s*(?:seconds|secs|sec|s)\s*(?:long|video|short|about|for|on|of)?\s*/gi, "")
+      .replace(/(?:in|with)\s*(?:1080p|4k|high quality|vertical format|9:16|16:9|portrait|landscape)\s*/gi, "")
+      .replace(/(?:style|tone|mood|audience|hook|CTA|voice|captions?|visuals?)\s*[:：]\s*\S+/gi, "")
+      .replace(/(?:focus on|explain|mention|describe|show|cover|include|emphasize|highlight|talk about|discuss)\s+/gi, "")
+      .replace(/(?:no|without|do not include|don't include|exclude|never mention|avoid)\s+/gi, "")
+      .replace(/(?:the audience is|your job is|the goal is|the purpose is|the video should|the short should)\s+/gi, "");
+  }
+
+  // Clean up extra whitespace and leading punctuation left behind
+  cleaned = cleaned.replace(/^[\s,.;:،؛]+/, "").replace(/\s{2,}/g, " ").trim();
+
+  // If stripping removed everything, return the original text rather than empty
+  if (!cleaned) return text.trim();
+  return cleaned;
+}
+
 function detectIntentType(prompt: string, isAr: boolean): PromptIntentContract["intentType"] {
   const lower = prompt.toLowerCase();
   if (/\b(top\s*\d+|\d+\s*tips|\d+\s*ways|\d+\s*reasons|أفضل\s*\d+|\d+\s*نصائح|\d+\s*طرق|\d+\s*أسباب)\b/i.test(prompt)) {
@@ -300,6 +352,7 @@ function escapeRegex(value: string): string {
 }
 
 function extractFactualRequirements(prompt: string, negatives: string[]): string[] {
+  const isAr = /[\u0600-\u06FF]/.test(prompt);
   const lines = prompt
     .split(/[\n.;؟?]+/)
     .map((line) => line.trim())
@@ -313,7 +366,11 @@ function extractFactualRequirements(prompt: string, negatives: string[]): string
       }
       return cleaned.replace(/[،,;؛\s]+$/g, "").trim();
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    // Strip meta instructions from each factual line so narration never
+    // contains "Create a 15 second short about..." or its Arabic equivalents
+    .map((line) => stripMetaInstructions(line, isAr))
+    .filter((line) => line.length > 0);
   return Array.from(new Set(lines)).slice(0, 8);
 }
 

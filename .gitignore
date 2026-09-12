@@ -79,3 +79,4 @@ commercial_root_key.json
 commercial_root_private*.pem
 commercial_root_private*.json
 
+assets/ViT-B-32-openclip-state.pt

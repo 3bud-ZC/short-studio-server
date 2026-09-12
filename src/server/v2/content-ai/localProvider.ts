@@ -30,7 +30,7 @@ import {
   composeNarrationForDuration,
   type NarrationUnit,
 } from "./scriptDurationController";
-import { buildPromptIntentContract } from "./promptIntentContract";
+import { buildPromptIntentContract, stripMetaInstructions } from "./promptIntentContract";
 import { compileGroundedScenes } from "./topicGroundingCompiler";
 import { enforceAndRepairPromptFidelity } from "../quality/promptFidelityGate";
 
@@ -138,13 +138,16 @@ function enforcePromptTruthSafety(
     }
 
     const safeNarration = stripInventedClaims(scene.narration, prompt, isAr);
+    // Also strip any residual meta/orchestration instructions from narration
+    // (e.g. "Create a 15 second short about..." that survived earlier cleaning)
+    const metaStrippedNarration = stripMetaInstructions(safeNarration || scene.narration, isAr);
     const safeOnScreen =
       scene.onScreenText && !looksLikeRawInstruction(scene.onScreenText, prompt)
         ? stripInventedClaims(scene.onScreenText, prompt, isAr)
         : undefined;
     return {
       ...scene,
-      narration: safeNarration || scene.narration,
+      narration: metaStrippedNarration || scene.narration,
       onScreenText: safeOnScreen || (isCtaScene ? resolvedCta.text : undefined),
       visualPrompt: scene.visualPrompt ? stripInventedClaims(scene.visualPrompt, prompt, isAr) : scene.visualPrompt,
       stockSearchTerms: safeStockSearchTerms(scene.stockSearchTerms, prompt),
@@ -313,19 +316,19 @@ export class LocalContentAIProvider implements ContentAIProvider {
         factPackId: factPackMatch?.pack.id,
         scriptPipeline: isAr
           ? {
-              stages: [
-                "draft",
-                "dialect_rewrite",
-                "spoken_language_normalization",
-                "duration_fit",
-                "hook_check",
-                "repetition_cleanup",
-                "cta_check",
-                "scene_segmentation",
-              ],
-              dialect,
-              subjectiveQualityScore: null,
-            }
+            stages: [
+              "draft",
+              "dialect_rewrite",
+              "spoken_language_normalization",
+              "duration_fit",
+              "hook_check",
+              "repetition_cleanup",
+              "cta_check",
+              "scene_segmentation",
+            ],
+            dialect,
+            subjectiveQualityScore: null,
+          }
           : undefined,
       },
     };
@@ -1118,105 +1121,105 @@ export class LocalContentAIProvider implements ContentAIProvider {
       transition: ProductionSceneSpec["transition"];
       units: NarrationUnit[];
     }> = [
-      {
-        id: "hook",
-        essential: true,
-        purpose: "hook",
-        onScreenText: "60% of Businesses Lose Data",
-        stockSearchTerms: ["server room blinking", "cyber security tech", "business computer"],
-        visualPrompt: "Dramatic illuminated server rack with blinking security lights",
-        transition: "cut",
-        units: [
-          {
-            role: "required",
-            text: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?",
-          },
-          {
-            role: "optional",
-            text: "It rarely happens with any warning - one bad drive, one power surge, and years of records are gone.",
-          },
-          {
-            role: "optional",
-            text: "Client contracts, financial records, years of project files - all of it can vanish in a single moment.",
-          },
-        ],
-      },
-      {
-        id: "problem",
-        essential: false,
-        purpose: "problem",
-        onScreenText: "The Real Cost of Downtime",
-        stockSearchTerms: ["stressed worker computer", "cyber attack graphic", "technology failure"],
-        visualPrompt: "Stressed professional staring at frozen screen with error warning",
-        transition: "cut",
-        units: [
-          {
-            role: "required",
-            text: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations.",
-          },
-          {
-            role: "optional",
-            text: "Every hour spent trying to recover lost files is an hour not spent serving customers.",
-          },
-          {
-            role: "optional",
-            text: "And by the time you notice something is wrong, the version you need to restore might already be overwritten.",
-          },
-        ],
-      },
-      {
-        id: "solution",
-        essential: false,
-        purpose: "solution",
-        onScreenText: "Automated Encrypted Backups",
-        stockSearchTerms: ["cloud computing data", "secure backup progress", "cyber security"],
-        visualPrompt: "Sleek holographic backup synchronization with green checkmarks",
-        transition: "fade",
-        units: [
-          {
-            role: "required",
-            text: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress.",
-          },
-          {
-            role: "optional",
-            text: "A good backup routine runs quietly in the background, so protecting your work never becomes another task on your list.",
-          },
-          {
-            role: "optional",
-            text: "Whether it is a laptop, a shared drive, or a cloud folder, the same simple habit keeps everything recoverable.",
-          },
-        ],
-      },
-      {
-        id: "cta",
-        essential: true,
-        purpose: "cta",
-        onScreenText: "Follow For Daily Tech Tips",
-        stockSearchTerms: ["technology team success", "smiling engineer", "software development"],
-        visualPrompt: "Confident IT professional giving thumbs up with clean modern office background",
-        transition: "cut",
-        units: [
-          {
-            role: "required",
-            // Explicitly names "back up" and "files" (not just generic "tech
-            // tips") so the topic stays clear even when a tight budget drops
-            // the "problem"/"solution" beats and this required sentence ends
-            // up carrying the CTA alone (allocateBeatDurations).
-            text: "Follow for more tips on backing up your business files and keeping your work protected.",
-          },
-          {
-            role: "optional",
-            text: brand
-              ? `${brand} can help you set up a reliable backup routine in less time than you think.`
-              : "Setting up a reliable backup routine takes less time than you think.",
-          },
-          {
-            role: "optional",
-            text: "Start today, before the next hardware failure decides the timeline for you.",
-          },
-        ],
-      },
-    ];
+        {
+          id: "hook",
+          essential: true,
+          purpose: "hook",
+          onScreenText: "60% of Businesses Lose Data",
+          stockSearchTerms: ["server room blinking", "cyber security tech", "business computer"],
+          visualPrompt: "Dramatic illuminated server rack with blinking security lights",
+          transition: "cut",
+          units: [
+            {
+              role: "required",
+              text: "Did you know that 60% of small businesses lose critical data due to simple hardware failure?",
+            },
+            {
+              role: "optional",
+              text: "It rarely happens with any warning - one bad drive, one power surge, and years of records are gone.",
+            },
+            {
+              role: "optional",
+              text: "Client contracts, financial records, years of project files - all of it can vanish in a single moment.",
+            },
+          ],
+        },
+        {
+          id: "problem",
+          essential: false,
+          purpose: "problem",
+          onScreenText: "The Real Cost of Downtime",
+          stockSearchTerms: ["stressed worker computer", "cyber attack graphic", "technology failure"],
+          visualPrompt: "Stressed professional staring at frozen screen with error warning",
+          transition: "cut",
+          units: [
+            {
+              role: "required",
+              text: "Without automated off-site backups, one accidental deletion or ransomware attack can halt operations.",
+            },
+            {
+              role: "optional",
+              text: "Every hour spent trying to recover lost files is an hour not spent serving customers.",
+            },
+            {
+              role: "optional",
+              text: "And by the time you notice something is wrong, the version you need to restore might already be overwritten.",
+            },
+          ],
+        },
+        {
+          id: "solution",
+          essential: false,
+          purpose: "solution",
+          onScreenText: "Automated Encrypted Backups",
+          stockSearchTerms: ["cloud computing data", "secure backup progress", "cyber security"],
+          visualPrompt: "Sleek holographic backup synchronization with green checkmarks",
+          transition: "fade",
+          units: [
+            {
+              role: "required",
+              text: "Implementing encrypted daily backups ensures your files are restored in minutes, zero stress.",
+            },
+            {
+              role: "optional",
+              text: "A good backup routine runs quietly in the background, so protecting your work never becomes another task on your list.",
+            },
+            {
+              role: "optional",
+              text: "Whether it is a laptop, a shared drive, or a cloud folder, the same simple habit keeps everything recoverable.",
+            },
+          ],
+        },
+        {
+          id: "cta",
+          essential: true,
+          purpose: "cta",
+          onScreenText: "Follow For Daily Tech Tips",
+          stockSearchTerms: ["technology team success", "smiling engineer", "software development"],
+          visualPrompt: "Confident IT professional giving thumbs up with clean modern office background",
+          transition: "cut",
+          units: [
+            {
+              role: "required",
+              // Explicitly names "back up" and "files" (not just generic "tech
+              // tips") so the topic stays clear even when a tight budget drops
+              // the "problem"/"solution" beats and this required sentence ends
+              // up carrying the CTA alone (allocateBeatDurations).
+              text: "Follow for more tips on backing up your business files and keeping your work protected.",
+            },
+            {
+              role: "optional",
+              text: brand
+                ? `${brand} can help you set up a reliable backup routine in less time than you think.`
+                : "Setting up a reliable backup routine takes less time than you think.",
+            },
+            {
+              role: "optional",
+              text: "Start today, before the next hardware failure decides the timeline for you.",
+            },
+          ],
+        },
+      ];
 
     // Scene-level rebalancing (section 9): a single required sentence at
     // Kokoro's real calibrated rate can take longer than an equal 1/4 share
@@ -1289,76 +1292,76 @@ export class LocalContentAIProvider implements ContentAIProvider {
       transition: ProductionSceneSpec["transition"];
       units: NarrationUnit[];
     }> = [
-      {
-        id: "hook",
-        essential: true,
-        purpose: "hook",
-        onScreenText: "ملفات المشاريع الصغيرة",
-        stockSearchTerms: ["laptop typing files close up", "small business office desk"],
-        visualPrompt: "Close-up of hands typing on a laptop with business files visible",
-        transition: "cut",
-        units: [
-          { role: "required", text: "النسخ الاحتياطي لملفات المشاريع الصغيرة يعني نسخة احتياطية تحميك وقت أي عطل مفاجئ." },
-          { role: "optional", text: "عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية." },
-          { role: "optional", text: "عقود عملائك، حساباتك، وكل ملفات مشروعك، ممكن تختفي في لحظة واحدة." },
-        ],
-      },
-      {
-        id: "problem",
-        essential: false,
-        purpose: "problem",
-        onScreenText: "خسارة الملفات بتكلفك وقتك",
-        stockSearchTerms: ["stressed business owner laptop", "frustrated worker computer"],
-        visualPrompt: "Frustrated small business owner staring at a frozen laptop screen",
-        transition: "cut",
-        units: [
-          { role: "required", text: "من غير نسخة احتياطية، أي مشكلة بسيطة ممكن توقفك عن شغلك تماماً." },
-          { role: "optional", text: "كل ساعة بتضيع في محاولة استرجاع ملفاتك، هي ساعة كنت ممكن تخدم فيها عملائك." },
-          { role: "optional", text: "وأحياناً لما تكتشف المشكلة، بيكون الوقت اتأخر والنسخة اللي محتاجها راحت خلاص." },
-        ],
-      },
-      {
-        id: "solution",
-        essential: false,
-        purpose: "solution",
-        onScreenText: "نسخة احتياطية يومية تلقائية",
-        stockSearchTerms: ["external hard drive close up", "cloud storage sync laptop"],
-        visualPrompt: "External hard drive connected to a laptop with a sync progress indicator",
-        transition: "fade",
-        units: [
-          { role: "required", text: "عشان كده لازم تعمل نسخة احتياطية لملفاتك بشكل دوري، وتحافظ على شغلك من الضياع." },
-          { role: "optional", text: "نسخة احتياطية منظمة بتشتغل من غير ما تحس، وتضمنلك إنك ترجع شغلك في دقايق." },
-          { role: "optional", text: "سواء الملفات على اللاب توب أو على السحابة، نفس العادة البسيطة بتحافظ على كل حاجة." },
-        ],
-      },
-      {
-        id: "cta",
-        essential: true,
-        purpose: "cta",
-        onScreenText: "ابدأ النسخ الاحتياطي",
-        stockSearchTerms: ["small business owner smiling laptop", "satisfied entrepreneur office"],
-        visualPrompt: "Small business owner smiling confidently while working on a laptop",
-        transition: "cut",
-        units: [
-          // Explicitly names "نسخة احتياطية" (backup copy) - not just generic
-          // "protect your files" - so the topic stays clear even when a
-          // tight budget drops the problem/solution beats (allocateBeatDurations)
-          // and this required sentence ends up carrying the CTA alone. Same
-          // length as the sentence it replaced (60 chars) to keep the same
-          // duration profile; mirrors the equivalent English CTA fix
-          // (buildTechEducationalScenesEnglish's own comment on this same
-          // pattern).
-          { role: "required", text: "ابدأ دلوقتي بخطة بسيطة للنسخ الاحتياطي، عشان ملفات مشروعك تفضل محفوظة." },
-          {
-            role: "optional",
-            text: brand
-              ? `${brand} بيساعدك تظبط نظام نسخ احتياطي موثوق في وقت أقل مما تتخيل.`
-              : "تنظيم نسخة احتياطية موثوقة بياخد وقت أقل بكتير مما تتخيل.",
-          },
-          { role: "optional", text: "ابدأ من دلوقتي، قبل ما عطل مفاجئ يحدد لك الميعاد بدل ما تختاره إنت." },
-        ],
-      },
-    ];
+        {
+          id: "hook",
+          essential: true,
+          purpose: "hook",
+          onScreenText: "ملفات المشاريع الصغيرة",
+          stockSearchTerms: ["laptop typing files close up", "small business office desk"],
+          visualPrompt: "Close-up of hands typing on a laptop with business files visible",
+          transition: "cut",
+          units: [
+            { role: "required", text: "النسخ الاحتياطي لملفات المشاريع الصغيرة يعني نسخة احتياطية تحميك وقت أي عطل مفاجئ." },
+            { role: "optional", text: "عطل بسيط في الجهاز أو غلطة صغيرة، وشغل شهور كامل بيروح في ثانية." },
+            { role: "optional", text: "عقود عملائك، حساباتك، وكل ملفات مشروعك، ممكن تختفي في لحظة واحدة." },
+          ],
+        },
+        {
+          id: "problem",
+          essential: false,
+          purpose: "problem",
+          onScreenText: "خسارة الملفات بتكلفك وقتك",
+          stockSearchTerms: ["stressed business owner laptop", "frustrated worker computer"],
+          visualPrompt: "Frustrated small business owner staring at a frozen laptop screen",
+          transition: "cut",
+          units: [
+            { role: "required", text: "من غير نسخة احتياطية، أي مشكلة بسيطة ممكن توقفك عن شغلك تماماً." },
+            { role: "optional", text: "كل ساعة بتضيع في محاولة استرجاع ملفاتك، هي ساعة كنت ممكن تخدم فيها عملائك." },
+            { role: "optional", text: "وأحياناً لما تكتشف المشكلة، بيكون الوقت اتأخر والنسخة اللي محتاجها راحت خلاص." },
+          ],
+        },
+        {
+          id: "solution",
+          essential: false,
+          purpose: "solution",
+          onScreenText: "نسخة احتياطية يومية تلقائية",
+          stockSearchTerms: ["external hard drive close up", "cloud storage sync laptop"],
+          visualPrompt: "External hard drive connected to a laptop with a sync progress indicator",
+          transition: "fade",
+          units: [
+            { role: "required", text: "عشان كده لازم تعمل نسخة احتياطية لملفاتك بشكل دوري، وتحافظ على شغلك من الضياع." },
+            { role: "optional", text: "نسخة احتياطية منظمة بتشتغل من غير ما تحس، وتضمنلك إنك ترجع شغلك في دقايق." },
+            { role: "optional", text: "سواء الملفات على اللاب توب أو على السحابة، نفس العادة البسيطة بتحافظ على كل حاجة." },
+          ],
+        },
+        {
+          id: "cta",
+          essential: true,
+          purpose: "cta",
+          onScreenText: "ابدأ النسخ الاحتياطي",
+          stockSearchTerms: ["small business owner smiling laptop", "satisfied entrepreneur office"],
+          visualPrompt: "Small business owner smiling confidently while working on a laptop",
+          transition: "cut",
+          units: [
+            // Explicitly names "نسخة احتياطية" (backup copy) - not just generic
+            // "protect your files" - so the topic stays clear even when a
+            // tight budget drops the problem/solution beats (allocateBeatDurations)
+            // and this required sentence ends up carrying the CTA alone. Same
+            // length as the sentence it replaced (60 chars) to keep the same
+            // duration profile; mirrors the equivalent English CTA fix
+            // (buildTechEducationalScenesEnglish's own comment on this same
+            // pattern).
+            { role: "required", text: "ابدأ دلوقتي بخطة بسيطة للنسخ الاحتياطي، عشان ملفات مشروعك تفضل محفوظة." },
+            {
+              role: "optional",
+              text: brand
+                ? `${brand} بيساعدك تظبط نظام نسخ احتياطي موثوق في وقت أقل مما تتخيل.`
+                : "تنظيم نسخة احتياطية موثوقة بياخد وقت أقل بكتير مما تتخيل.",
+            },
+            { role: "optional", text: "ابدأ من دلوقتي، قبل ما عطل مفاجئ يحدد لك الميعاد بدل ما تختاره إنت." },
+          ],
+        },
+      ];
 
     // Scene-level rebalancing (mirrors buildTechEducationalScenesEnglish
     // exactly): allocate each beat's share of contentBudget proportional to
