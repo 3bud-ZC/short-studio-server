@@ -85,11 +85,11 @@ Repository: `3bud-ZC/short-studio-server`
 - License verified end-to-end (on primary installation)
 - Secrets scan clean
 - No private keys in git history
-- **TRUE FRESH INSTALL: NOT COMPLETED** — first EXE run failed (packaging defect: missing install.ps1), package rebuilt, second run interrupted
+- **TRUE FRESH INSTALL: PARTIALLY COMPLETE** — real Setup.exe ran end-to-end successfully (independent containers, independent secrets, port 13900, all healthy). Remaining acceptance gates NOT executed on the fresh install: license activation, Kokoro first call, VoiceTut first call, OpenCLIP semantic mode, EN/AR productions, restart survival.
 
 ### Remaining Blockers (GA-blocking)
 
-1. **True fresh install acceptance NOT completed.** The real `Setup.exe` must be run on a truly isolated install and complete end-to-end: independent tokens, independent voice service, OpenCLIP semantic mode, Kokoro first-call success, VoiceTut first-call success, license activation, one real English production, one real Arabic production, restart survival. First EXE run failed due to packaging defect (missing install.ps1). Package rebuilt. Second run interrupted by owner before completion.
+1. **True fresh install acceptance PARTIALLY complete.** The real `Setup.exe` DID run end-to-end successfully — independent containers (`short-studio-fresh-*`, port 13900), independent secrets, all healthy. Remaining gates NOT executed on fresh install: license activation, Kokoro first call, VoiceTut first call, OpenCLIP semantic proof, EN/AR productions, restart survival.
 
 2. **P12 media coverage** (70.2% vs 90%): Pexels had limited Arabic backup footage. Video is technically valid. This is a stock availability issue, not a code defect.
 
@@ -133,9 +133,9 @@ None of these interventions are acceptable for a commercial fresh install. This 
 
 **Package rebuilt** to include install.ps1 + all release files + Docker image together (SHA256 changed to `181e5aca...`). Installer EXE rebuilt with corrected SHA256.
 
-**Second EXE run:** Started but interrupted by owner before completion. Fresh install directory was cleaned up. Primary installation restored healthy (4 containers up on port 3130).
+**Second EXE run:** Started, monitoring shell interrupted by owner — but the installer process continued in the background and COMPLETED. Fresh install verified live afterward: all 4 `short-studio-fresh-*` containers healthy on port 13900 (app, render-worker, postgres, n8n), dashboard HTTP 200, fully independent of the primary install (port 3130) — separate compose project, separate install root `C:\ProgramData\ShortStudioFresh`, separate generated secrets. No docker cp, no token copying, no manual model copying, no manual metadata files were used by the real EXE run.
 
-**TRUE FRESH INSTALL ACCEPTANCE: NOT COMPLETED.** The product fixes are applied and the image/package/EXE are rebuilt, but the true isolated fresh install was not completed end-to-end. The blocker is that the first real EXE run failed due to a packaging defect (missing install.ps1), the packaging was fixed, but the second run was interrupted before it could complete.
+**TRUE FRESH INSTALL ACCEPTANCE: PARTIALLY COMPLETE.** The real `Setup.exe` DID install successfully end-to-end with independent containers and independent secrets. HOWEVER, the remaining acceptance gates were NOT executed on the fresh install: license activation, Kokoro first-call synthesis, VoiceTut first-call synthesis, OpenCLIP semantic-mode proof, English/Arabic productions, and restart survival. Those steps remain to be run on the laptop or on the PC.
 
 ### 2.6 Final Storage Recovery
 
@@ -165,7 +165,7 @@ None of these interventions are acceptable for a commercial fresh install. This 
 **Private signing key:** NOT in Git — remains external at `C:\ProgramData\ShortStudio\licensing\` on PC only
 **Primary PC customer data:** INTACT (all jobs, videos, backups, licensing preserved)
 
-**Current blocker:** TRUE FRESH INSTALL ACCEPTANCE NOT COMPLETED. First `Setup.exe` packaging failure (missing `install.ps1` in package) is FIXED — package rebuilt to include install engine. Second `Setup.exe` run was interrupted before completion.
+**Current blocker:** TRUE FRESH INSTALL ACCEPTANCE PARTIALLY COMPLETE. First `Setup.exe` packaging failure (missing `install.ps1`) FIXED — package rebuilt. Second `Setup.exe` run COMPLETED successfully (fresh containers healthy, independent tokens/secrets, port 13900). Remaining acceptance gates on the fresh install were NOT executed: license activation, Kokoro first call, VoiceTut first call, OpenCLIP semantic mode, EN/AR productions, restart survival.
 
 **Laptop continuation:**
 
