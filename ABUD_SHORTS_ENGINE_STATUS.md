@@ -90,7 +90,18 @@ Repository: `3bud-ZC/Abud-Shorts-Engine`
 
 - P12 media coverage (70.2% vs 90%): Pexels had limited Arabic backup footage. Video is technically valid. This is a stock availability issue, not a code defect.
 - Fresh install from final EXE (recommended for final sign-off)
-- Workspace cleanup (after acceptance)
+
+### 2.6 Final Storage Recovery
+
+**C: free:** 155.28 GiB → 185.01 GiB (29.73 GB recovered)
+**Docker VHDX:** 78.63 GiB → 62.5 GiB (16.13 GB physical reduction, auto-compacted on container restart)
+**Logical cleanup:** shared/data/cache (1.7 GB stock footage cache) + shared/data/temp (0.53 GB benchmark temp) + TEMP/short-studio-build (5 GB release staging) = 7.23 GB
+**Docker images:** 8 before, 8 after. No obsolete 2.6 images found (earlier 41c435f build already replaced). No images deleted. Prune commands: 0.
+**Build cache:** 22.6 GB (13.62 GB reclaimable) — not pruned per instructions. OPTIONAL: `docker builder prune --filter type=regular` would reclaim ~13.6 GB if run manually.
+**OPTIONAL_RECLAIMABLE (not deleted):** .venv-quality (0.73 GB, referenced by qualify_openclip.py), data-dev/models/tts/voicetut (2.31 GB, dev copy), shared/qa (5.06 GB, 2.5-era QA artifacts from Sep 7-8).
+**VHDX compaction script:** `C:\Users\Abud\AppData\Local\Temp\compact_docker_vhdx.ps1` (targets only docker_data.vhdx, Optimize-VHD Full). UAC elevation could not be completed by agent. VHDX auto-compacted on restart instead. For further compaction, owner can run:
+`Start-Process PowerShell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "C:\Users\Abud\AppData\Local\Temp\compact_docker_vhdx.ps1"'`
+**Data loss: 0.** All jobs (40), videos (63), backups (1), licensing keys, Provider Vault, VoiceTut, Kokoro, Ollama qwen2.5:7b-instruct preserved.
 
 ---
 
