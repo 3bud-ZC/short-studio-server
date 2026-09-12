@@ -16,9 +16,9 @@
 
 Product: Short Studio Server 2.6.0
 
-Stage: Commercial Quality Recovery Candidate
+Stage: RELEASE CANDIDATE SIGN-OFF COMPLETE
 
-Release: IN PROGRESS — 2.6 commercial recovery from branch `commercial/v2.6-quality-recovery`
+Release: READY FOR OWNER GA / COMMERCIAL USE — 2.6 commercial recovery from branch `commercial/v2.6-quality-recovery`
 
 Repository: `3bud-ZC/Abud-Shorts-Engine`
 
@@ -89,7 +89,24 @@ Repository: `3bud-ZC/Abud-Shorts-Engine`
 ### Remaining (non-blocking)
 
 - P12 media coverage (70.2% vs 90%): Pexels had limited Arabic backup footage. Video is technically valid. This is a stock availability issue, not a code defect.
-- Fresh install from final EXE (recommended for final sign-off)
+
+### 2.6 Fresh Install Sign-Off
+
+**Fresh isolated install:** Performed from final EXE package on port 13900, project `short-studio-fresh`, install root `C:\ProgramData\ShortStudioFresh`. All 4 services healthy. Dashboard HTTP 200. Version 2.6.0.
+
+**Installer artifact correction:** `update-manifest.json` and `release.json` had stale image digest (`41c435fff...`). Corrected to final accepted digest (`9c8d306366d9...`). Package and EXE rebuilt. New SHA256s: EXE `f425c7d6...`, package `87af5aa2...`. No secrets in EXE, package, or installer.
+
+**License flow:** Fresh fingerprint `SS-9C5E-4103-C08D-792B`. Unlicensed gate blocks production cleanly. License generated with owner private key, activated successfully. Wrong-device blocked (fingerprint mismatch). Tampered token blocked (invalid_signature). Private key never shipped in installer/runtime.
+
+**English final video:** Green tea benefits prompt. Kokoro local voice. 1080x1920 H.264/AAC, 30s. Status: ready. Narration prompt-specific.
+
+**Arabic final video:** Early sleep importance prompt. VoiceTut local voice. 1080x1920 H.264/AAC, 30s. Status: ready. Arabic narration and captions.
+
+**Final installer artifacts:**
+- EXE: `dist-commercial/ShortStudio-Setup-2.6.0.exe` SHA256 `f425c7d62f5507f6a132fcd49092828ed919b47247e589df2e4abb600e98beb7`
+- Package: `Short-Studio-Server-2.6.0-Client/Short-Studio-Server-2.6.0.tar.gz` SHA256 `87af5aa2bc9f454b6475bbbafeb061f9a4cdf4e029af88e3b26a22462621e77b`
+- Manifest: `update-manifest.json` version 2.6.0, imageDigest `sha256:9c8d306366d9...`
+- Secrets scan: CLEAN (no private keys in EXE, package, or installer)
 
 ### 2.6 Final Storage Recovery
 
